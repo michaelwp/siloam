@@ -1,0 +1,39 @@
+app = 'siloam'
+primary_region = 'sin'
+
+# Built from ./Dockerfile (frontend + Go binary, distroless image).
+[build]
+
+# Non-secret settings. Secrets (MONGODB_URI, optionally INITIAL_ADMIN_PASSWORD)
+# are set with `make fly-secrets` / `fly secrets set`, never in this file.
+[env]
+  # passkeys are bound to this domain; change all three if you add a custom domain
+  WEBAUTHN_RP_ID = 'siloam.fly.dev'
+  WEBAUTHN_ORIGINS = 'https://siloam.fly.dev'
+  COOKIE_SECURE = 'true'
+  # Fly's edge proxy puts the real client IP in this header (used for rate limiting)
+  CLIENT_IP_HEADER = 'Fly-Client-IP'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+  # A deploy fails if the new machine doesn't pass this, instead of going live
+  # broken. /api/health pings MongoDB, so it also fails when the database is
+  # unreachable (e.g. Fly's IP not allowed in Atlas Network Access).
+  [[http_service.checks]]
+    method = 'GET'
+    path = '/api/health'
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '30s'
+
+# Fly's smallest machine (shared-cpu-1x, 256 MB). It stops when idle (above),
+# so it's only billed while serving requests.
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'

@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-webauthn/webauthn/webauthn"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -101,67 +100,4 @@ func (l *limiter) reset(key string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	delete(l.hits, key)
-}
-
-// maxCeremonies caps in-progress WebAuthn ceremonies held in memory.
-const maxCeremonies = 10_000
-
-// ceremonyCache holds in-progress WebAuthn ceremonies, keyed by a random
-// id stored in a short-lived cookie.
-type ceremonyCache struct {
-	mu        sync.Mutex
-	ttl       time.Duration
-	max       int
-	entries   map[string]ceremony
-	lastSweep time.Time
-}
-
-type ceremony struct {
-	data    webauthn.SessionData
-	expires time.Time
-}
-
-func newCeremonyCache(ttl time.Duration) *ceremonyCache {
-	return &ceremonyCache{ttl: ttl, max: maxCeremonies, entries: map[string]ceremony{}, lastSweep: time.Now()}
-}
-
-func (c *ceremonyCache) sweep(now time.Time, force bool) {
-	if !force && now.Sub(c.lastSweep) < sweepEvery {
-		return
-	}
-	c.lastSweep = now
-	for k, e := range c.entries {
-		if now.After(e.expires) {
-			delete(c.entries, k)
-		}
-	}
-}
-
-// put stores a ceremony; it returns false when the cache is full of live
-// ceremonies (the caller answers "busy" instead of growing memory).
-func (c *ceremonyCache) put(id string, data webauthn.SessionData) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	now := time.Now()
-	c.sweep(now, false)
-	if len(c.entries) >= c.max {
-		c.sweep(now, true)
-		if len(c.entries) >= c.max {
-			return false
-		}
-	}
-	c.entries[id] = ceremony{data: data, expires: now.Add(c.ttl)}
-	return true
-}
-
-// take returns and removes the ceremony, so a challenge can be used only once.
-func (c *ceremonyCache) take(id string) (webauthn.SessionData, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	e, ok := c.entries[id]
-	delete(c.entries, id)
-	if !ok || time.Now().After(e.expires) {
-		return webauthn.SessionData{}, false
-	}
-	return e.data, true
 }

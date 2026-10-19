@@ -17,12 +17,13 @@ import (
 var ErrNotFound = errors.New("not found")
 
 type Store struct {
-	client   *mongo.Client
-	db       string
-	families *mongo.Collection
-	members  *mongo.Collection
-	users    *mongo.Collection
-	sessions *mongo.Collection
+	client     *mongo.Client
+	db         string
+	families   *mongo.Collection
+	members    *mongo.Collection
+	users      *mongo.Collection
+	sessions   *mongo.Collection
+	ceremonies *mongo.Collection
 }
 
 // DefaultDatabase is used when the URI has no database path.
@@ -60,12 +61,13 @@ func Connect(ctx context.Context, uri, dbName string) (*Store, error) {
 	}
 	db := client.Database(dbName)
 	return &Store{
-		client:   client,
-		db:       dbName,
-		families: db.Collection("families"),
-		members:  db.Collection("members"),
-		users:    db.Collection("users"),
-		sessions: db.Collection("sessions"),
+		client:     client,
+		db:         dbName,
+		families:   db.Collection("families"),
+		members:    db.Collection("members"),
+		users:      db.Collection("users"),
+		sessions:   db.Collection("sessions"),
+		ceremonies: db.Collection("webauthn_ceremonies"),
 	}, nil
 }
 
@@ -82,6 +84,10 @@ func Open(ctx context.Context, uri, dbName string) (*Store, error) {
 		return nil, err
 	}
 	if err := s.ensureAuthIndexes(ctx); err != nil {
+		_ = s.Close(ctx)
+		return nil, err
+	}
+	if err := s.ensureCeremonyIndexes(ctx); err != nil {
 		_ = s.Close(ctx)
 		return nil, err
 	}

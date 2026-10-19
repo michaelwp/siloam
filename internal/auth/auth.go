@@ -41,18 +41,18 @@ type Config struct {
 	APIRatePerMinute     int            // /api requests per client IP per minute (default 600)
 	AuthRatePerMinute    int            // sign-in attempts per client IP per minute (default 20)
 	TrustedProxies       []netip.Prefix // reverse proxies whose X-Forwarded-For is believed
+	ClientIPHeader       string         // header set by the platform's edge proxy, e.g. "Fly-Client-IP"
 	InitialAdminUser     string
 	InitialAdminPassword string
 }
 
 type Service struct {
-	cfg        Config
-	store      *store.Store
-	webauthn   *webauthn.WebAuthn
-	ceremonies *ceremonyCache
-	limiter    *limiter
-	apiRate    *tokenBucket
-	authRate   *tokenBucket
+	cfg      Config
+	store    *store.Store
+	webauthn *webauthn.WebAuthn
+	limiter  *limiter
+	apiRate  *tokenBucket
+	authRate *tokenBucket
 }
 
 func New(s *store.Store, cfg Config) (*Service, error) {
@@ -80,11 +80,10 @@ func New(s *store.Store, cfg Config) (*Service, error) {
 		return nil, fmt.Errorf("webauthn config: %w", err)
 	}
 	return &Service{
-		cfg:        cfg,
-		store:      s,
-		webauthn:   wa,
-		ceremonies: newCeremonyCache(5 * time.Minute),
-		limiter:    newLimiter(15 * time.Minute),
+		cfg:      cfg,
+		store:    s,
+		webauthn: wa,
+		limiter:  newLimiter(15 * time.Minute),
 		// bursts: a page load makes a few requests; a sign-in is 1–2
 		apiRate:  newTokenBucket(cfg.APIRatePerMinute, max(cfg.APIRatePerMinute/5, 20)),
 		authRate: newTokenBucket(cfg.AuthRatePerMinute, max(cfg.AuthRatePerMinute/2, 5)),
@@ -315,10 +314,20 @@ func (s *Service) sameOrigin(r *http.Request) bool {
 	return err == nil && strings.EqualFold(u.Host, r.Host)
 }
 
-// clientIP is the address used for rate limiting. Behind a reverse proxy
-// listed in TrustedProxies it is the right-most X-Forwarded-For entry that is
-// not itself a trusted proxy; otherwise the TCP peer address.
+// clientIP is the address used for rate limiting: the ClientIPHeader value
+// when configured; behind a reverse proxy listed in TrustedProxies, the
+// right-most X-Forwarded-For entry that is not itself a trusted proxy;
+// otherwise the TCP peer address.
 func (s *Service) clientIP(r *http.Request) string {
+	// a platform edge proxy (Fly.io: Fly-Client-IP) that always overwrites
+	// this header is authoritative; only configure it on such a platform
+	if s.cfg.ClientIPHeader != "" {
+		if v := strings.TrimSpace(r.Header.Get(s.cfg.ClientIPHeader)); v != "" {
+			if addr, err := netip.ParseAddr(v); err == nil {
+				return addr.Unmap().String()
+			}
+		}
+	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		host = r.RemoteAddr
