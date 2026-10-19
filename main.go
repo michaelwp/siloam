@@ -78,7 +78,7 @@ func run() error {
 			log.Printf("disconnect mongodb: %v", err)
 		}
 	}()
-	log.Printf("mongodb %s (database %q)", redact(*mongoURI), s.Database())
+	log.Printf("mongodb successfully connected")
 
 	if *copyFrom != "" {
 		return runCopy(ctx, s, *copyFrom, strings.Split(*copyOnly, ","), *replace)
