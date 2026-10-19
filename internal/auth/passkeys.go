@@ -46,23 +46,38 @@ func credentialID(c *webauthn.Credential) string {
 	return base64.RawURLEncoding.EncodeToString(c.ID)
 }
 
-// beginCeremony stores the ceremony and sets its cookie; false if the cache is full.
-func (s *Service) beginCeremony(w http.ResponseWriter, data *webauthn.SessionData) bool {
-	id := base64.RawURLEncoding.EncodeToString(randomBytes(24))
-	if !s.ceremonies.put(id, *data) {
-		return false
+const ceremonyTTL = 5 * time.Minute
+
+// beginCeremony stores the ceremony and sets its cookie.
+func (s *Service) beginCeremony(w http.ResponseWriter, r *http.Request, data *webauthn.SessionData) error {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return err
 	}
-	s.setCookie(w, ceremonyCookie, id, "/api/auth", 5*time.Minute)
-	return true
+	id := base64.RawURLEncoding.EncodeToString(randomBytes(24))
+	if err := s.store.PutCeremony(r.Context(), id, b, time.Now().Add(ceremonyTTL)); err != nil {
+		return err
+	}
+	s.setCookie(w, ceremonyCookie, id, "/api/auth", ceremonyTTL)
+	return nil
 }
 
+// finishCeremony returns the ceremony started by this browser (once).
 func (s *Service) finishCeremony(w http.ResponseWriter, r *http.Request) (webauthn.SessionData, bool) {
 	s.clearCookie(w, ceremonyCookie, "/api/auth")
+	var data webauthn.SessionData
 	c, err := r.Cookie(ceremonyCookie)
 	if err != nil {
-		return webauthn.SessionData{}, false
+		return data, false
 	}
-	return s.ceremonies.take(c.Value)
+	b, err := s.store.TakeCeremony(r.Context(), c.Value, time.Now())
+	if err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			log.Printf("passkey ceremony: %v", err)
+		}
+		return data, false
+	}
+	return data, json.Unmarshal(b, &data) == nil
 }
 
 // ---- sign in with a passkey (usernameless / discoverable) ----
@@ -78,8 +93,8 @@ func (s *Service) passkeyLoginBegin(w http.ResponseWriter, r *http.Request) {
 		httpx.ServerError(w, err)
 		return
 	}
-	if !s.beginCeremony(w, data) {
-		httpx.WriteError(w, http.StatusServiceUnavailable, "server sedang sibuk, coba lagi sebentar")
+	if err := s.beginCeremony(w, r, data); err != nil {
+		httpx.ServerError(w, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, assertion)
@@ -164,8 +179,8 @@ func (s *Service) passkeyRegisterBegin(w http.ResponseWriter, r *http.Request) {
 		httpx.ServerError(w, err)
 		return
 	}
-	if !s.beginCeremony(w, data) {
-		httpx.WriteError(w, http.StatusServiceUnavailable, "server sedang sibuk, coba lagi sebentar")
+	if err := s.beginCeremony(w, r, data); err != nil {
+		httpx.ServerError(w, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, creation)

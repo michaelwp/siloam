@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/go-webauthn/webauthn/webauthn"
 )
 
 func TestNormalizeUsername(t *testing.T) {
@@ -85,17 +83,6 @@ func TestLimiter(t *testing.T) {
 	}
 }
 
-func TestCeremonyIsSingleUse(t *testing.T) {
-	c := newCeremonyCache(time.Minute)
-	c.put("id", webauthn.SessionData{Challenge: "x"})
-	if d, ok := c.take("id"); !ok || d.Challenge != "x" {
-		t.Fatal("ceremony not returned")
-	}
-	if _, ok := c.take("id"); ok {
-		t.Error("ceremony reusable")
-	}
-}
-
 func TestGeneratePasswordMeetsRules(t *testing.T) {
 	for range 500 {
 		p := generatePassword(14)
@@ -129,23 +116,6 @@ func TestClientIPTrustedProxies(t *testing.T) {
 	}
 	if _, err := ParseTrustedProxies("not-an-ip"); err == nil {
 		t.Error("bad proxy accepted")
-	}
-}
-
-func TestCeremonyCacheIsBounded(t *testing.T) {
-	c := newCeremonyCache(time.Minute)
-	c.max = 3
-	for i := range 3 {
-		if !c.put(string(rune('a'+i)), webauthn.SessionData{}) {
-			t.Fatal("put failed below the cap")
-		}
-	}
-	if c.put("d", webauthn.SessionData{}) {
-		t.Fatal("cache grew past its cap")
-	}
-	c.take("a")
-	if !c.put("d", webauthn.SessionData{}) {
-		t.Fatal("put failed after a slot freed up")
 	}
 }
 
@@ -216,5 +186,19 @@ func TestRateLimitMiddleware(t *testing.T) {
 		if c := do("GET", p).Code; c != 204 {
 			t.Fatalf("%s limited: %d", p, c)
 		}
+	}
+}
+
+func TestClientIPHeader(t *testing.T) {
+	s := &Service{cfg: Config{ClientIPHeader: "Fly-Client-IP"}}
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.RemoteAddr = "[fdaa::1]:443" // Fly's proxy
+	r.Header.Set("Fly-Client-IP", "198.51.100.7")
+	if got := s.clientIP(r); got != "198.51.100.7" {
+		t.Fatalf("clientIP = %s", got)
+	}
+	r.Header.Set("Fly-Client-IP", "garbage")
+	if got := s.clientIP(r); got != "fdaa::1" {
+		t.Fatalf("invalid header should fall back to peer, got %s", got)
 	}
 }

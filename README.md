@@ -143,6 +143,32 @@ gets the new IP.
 
 Use `PORT=9000` with any `*-up` target to change the host port.
 
+### Fly.io
+
+`fly.toml` is ready for the app `siloam` (region `sin`, https://siloam.fly.dev).
+It builds the Dockerfile, sets the passkey domain, `COOKIE_SECURE` and
+`CLIENT_IP_HEADER=Fly-Client-IP` (so rate limiting sees real client IPs), and
+health-checks `/api/health`, which fails when MongoDB is unreachable — a broken
+deploy stops instead of going live. Machines stop when idle.
+
+```sh
+make fly-secrets   # MONGODB_URI (and INITIAL_ADMIN_PASSWORD if set) from .env → Fly secrets
+make fly-deploy    # build and deploy
+make fly-status    # machines + health checks
+make fly-logs
+```
+
+**Atlas must allow Fly's IPs.** In Atlas: *Security → Network Access → IP Access
+List → Add IP Address*. Either allow `0.0.0.0/0` (simplest; then a strong
+database password is what protects it), or give the app fixed outgoing IPs with
+`fly ips allocate-egress` (paid) and add exactly those. Without this the app
+logs `tls: internal error` and keeps restarting.
+
+Running more than one machine is fine: sessions, lockouts and passkey sign-in
+state are all in MongoDB. Rate limits are per machine. With a custom domain,
+change `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGINS` in `fly.toml` (existing passkeys
+must then be registered again).
+
 ## Development
 
 ```sh
@@ -192,6 +218,7 @@ git-ignored and excluded from Docker builds — keep credentials there only.
 | `API_RATE_LIMIT`                 | `600` — `/api` requests per client IP per minute |
 | `AUTH_RATE_LIMIT`                | `20` — sign-in attempts per client IP per minute |
 | `TRUSTED_PROXIES`                | none — comma-separated IPs/CIDRs of reverse proxies, e.g. `10.0.0.0/8,127.0.0.1` |
+| `CLIENT_IP_HEADER`               | none — client-IP header set by a platform edge proxy (Fly.io: `Fly-Client-IP`) |
 | `-import file.xlsx [-replace]`   | import the workbook and exit              |
 | `-copy-from <uri> [-collections families,members] [-replace]` | copy data from another MongoDB and exit |
 | `-reset-user <name>`             | unlock an account, print a temporary password and exit |

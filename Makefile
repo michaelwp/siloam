@@ -300,3 +300,27 @@ endif
 mac-clean: mac-down ## Remove containers, network and DELETE the bundled MongoDB volume
 	-container volume rm $(MAC_VOLUME) 2>/dev/null
 	-container network rm $(MAC_NET) 2>/dev/null
+
+##@ Fly.io (fly.toml)
+
+.PHONY: fly-secrets
+fly-secrets: ## Copy MONGODB_URI (and INITIAL_ADMIN_PASSWORD if set) from .env to Fly secrets
+	@test -n "$(MONGODB_URI)" || (echo "MONGODB_URI is not set in .env" && exit 1)
+	@{ echo 'MONGODB_URI=$(MONGODB_URI)'; $(if $(filter-out admin,$(INITIAL_ADMIN_PASSWORD)),echo 'INITIAL_ADMIN_PASSWORD=$(INITIAL_ADMIN_PASSWORD)';) } | fly secrets import --stage
+	@echo "secrets staged — they take effect on the next 'make fly-deploy'"
+
+.PHONY: fly-deploy
+fly-deploy: ## Build remotely and deploy (stops if a new machine fails its health check)
+	fly deploy
+
+.PHONY: fly-status
+fly-status: ## Show machines and health checks
+	fly status
+
+.PHONY: fly-logs
+fly-logs: ## Show recent logs
+	fly logs --no-tail
+
+.PHONY: fly-open
+fly-open: ## Open the deployed app
+	fly open

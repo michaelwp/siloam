@@ -219,3 +219,22 @@ func TestNumberingAndCounts(t *testing.T) {
 		t.Fatalf("counts = %v, %v", counts, err)
 	}
 }
+
+func TestCeremonyIsSingleUseAndExpires(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	if err := s.PutCeremony(ctx, "c1", []byte("state"), now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := s.TakeCeremony(ctx, "c1", now); err != nil || string(b) != "state" {
+		t.Fatalf("take = %q, %v", b, err)
+	}
+	if _, err := s.TakeCeremony(ctx, "c1", now); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("second take = %v, want ErrNotFound", err)
+	}
+	_ = s.PutCeremony(ctx, "c2", []byte("x"), now.Add(time.Minute))
+	if _, err := s.TakeCeremony(ctx, "c2", now.Add(2*time.Minute)); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expired take = %v, want ErrNotFound", err)
+	}
+}

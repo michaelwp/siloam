@@ -108,7 +108,7 @@ func run() error {
 	api.New(s).Register(mux)
 	mux.Handle("/", spaHandler(web.Dist()))
 
-	handler := logRequests(securityHeaders(authSvc.RateLimit(authSvc.Middleware(mux))))
+	handler := logRequests(securityHeaders(authSvc.RateLimit(authSvc.Middleware(mux)), env("COOKIE_SECURE", "false") == "true"))
 	srv := &http.Server{Addr: *addr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()
@@ -251,6 +251,7 @@ func logRequests(next http.Handler) http.Handler {
 //	API_RATE_LIMIT          /api requests per client IP per minute (default 600)
 //	AUTH_RATE_LIMIT         sign-in attempts per client IP per minute (default 20)
 //	TRUSTED_PROXIES         reverse proxies (IPs/CIDRs) whose X-Forwarded-For gives the client IP
+//	CLIENT_IP_HEADER        header with the client IP set by the platform's edge (Fly.io: Fly-Client-IP)
 func authConfig(addr string) auth.Config {
 	_, port, _ := net.SplitHostPort(addr)
 	if port == "" {
@@ -291,12 +292,18 @@ func authConfig(addr string) auth.Config {
 		APIRatePerMinute:     envInt("API_RATE_LIMIT", 600),
 		AuthRatePerMinute:    envInt("AUTH_RATE_LIMIT", 20),
 		TrustedProxies:       proxies,
+		ClientIPHeader:       os.Getenv("CLIENT_IP_HEADER"),
 	}
 }
 
-func securityHeaders(next http.Handler) http.Handler {
+// securityHeaders sets defensive headers; hsts (when serving over HTTPS) tells
+// browsers to never use plain HTTP for this site.
+func securityHeaders(next http.Handler, hsts bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
+		if hsts {
+			h.Set("Strict-Transport-Security", "max-age=31536000")
+		}
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "same-origin")
