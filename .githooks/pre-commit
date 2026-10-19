@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Runs Go and React linters before each commit. Skip once with: git commit --no-verify
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$staged" ] && exit 0
+
+if grep -qE '(\.go$|^go\.(mod|sum)$|^\.golangci\.yml$)' <<<"$staged"; then
+  echo "pre-commit: linting Go…"
+  make --no-print-directory lint-go
+fi
+
+if grep -qE '^web/' <<<"$staged"; then
+  echo "pre-commit: linting React…"
+  make --no-print-directory lint-web
+fi

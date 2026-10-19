@@ -1,0 +1,43 @@
+name: siloam
+
+services:
+  mongo:
+    image: mongo:8
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    image: ${IMAGE:-siloam:latest}
+    build: .
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      # `make docker-up` sets CONTAINER_MONGODB_URI to MONGODB_URI from .env when
+      # that points to another machine; otherwise the bundled mongo service is used
+      MONGODB_URI: ${CONTAINER_MONGODB_URI:-mongodb://mongo:27017/siloam}
+      # passkeys: the domain and exact URL(s) users open in the browser
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localhost}
+      WEBAUTHN_ORIGINS: ${WEBAUTHN_ORIGINS:-http://localhost:${PORT:-8080}}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # first admin, created only when there are no users yet
+      INITIAL_ADMIN_USER: ${INITIAL_ADMIN_USER:-admin}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-admin}
+      # sign-in protection
+      MAX_FAILED_LOGINS: ${MAX_FAILED_LOGINS:-3}
+      LOCK_DURATION: ${LOCK_DURATION:-3m}
+      API_RATE_LIMIT: ${API_RATE_LIMIT:-600}
+      AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-20}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+    ports:
+      - "${PORT:-8080}:8080"
+
+volumes:
+  mongo-data:

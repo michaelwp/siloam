@@ -1,0 +1,28 @@
+# build output
+/bin/
+/web/dist/
+*.test
+coverage.out
+
+# dependencies
+/web/node_modules/
+
+# local data (the workbook is staged here for container imports)
+/.import/
+*.xlsx
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp

@@ -1,0 +1,10 @@
+.git
+.import
+.env
+.env.*
+!.env.example
+bin
+web/node_modules
+web/dist
+*.log
+.DS_Store
