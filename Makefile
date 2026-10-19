@@ -131,6 +131,20 @@ lint-fix: ## Auto-fix lint issues and format code where possible
 	$(GOLANGCI_LINT) run --fix ./...
 	cd web && npm run lint:fix
 
+.PHONY: ci
+ci: lint test web ## Run what GitHub Actions runs (lint, tests, web build)
+
+.PHONY: release
+release: ## Tag and push a release, which runs CI and deploys: make release VERSION=v1.0.0
+	@echo "$(VERSION)" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$$' || (echo "usage: make release VERSION=v1.2.3" && exit 1)
+	@test "$$(git branch --show-current)" = main || (echo "release from main (current: $$(git branch --show-current))" && exit 1)
+	@test -z "$$(git status --porcelain)" || (echo "commit or stash your changes first" && exit 1)
+	@git fetch -q origin main && test "$$(git rev-parse HEAD)" = "$$(git rev-parse origin/main)" || (echo "main is not in sync with origin/main — push or pull first" && exit 1)
+	@! git rev-parse -q --verify "refs/tags/$(VERSION)" >/dev/null || (echo "tag $(VERSION) already exists" && exit 1)
+	git tag -a "$(VERSION)" -m "Release $(VERSION)"
+	git push origin "$(VERSION)"
+	@echo "→ CI: https://github.com/michaelwp/siloam/actions"
+
 .PHONY: fmt
 fmt: ## Format Go code (gofmt + goimports)
 	$(GOLANGCI_LINT) fmt ./...

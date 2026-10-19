@@ -192,10 +192,50 @@ fail the React lint (`--deny-warnings`).
 
 ### Git hook
 
-`make hooks` (also part of `make setup`) points git at `.githooks/`. The
-`pre-commit` hook runs `lint-go` when Go files are staged and `lint-web` when
-files under `web/` are staged; a lint failure blocks the commit. Bypass once
-with `git commit --no-verify`. Requires `golangci-lint` (`brew install golangci-lint`).
+`make hooks` (also part of `make setup`) points git at `.githooks/`; every
+clone needs it once. The `pre-commit` hook runs `lint-go` when Go files are
+staged and `lint-web` when files under `web/` are staged, and always prints
+what it did (`pre-commit: …`); a lint failure blocks the commit. It also works
+from Git GUIs/IDEs, which often run hooks with a minimal `PATH`.
+
+If you don't see `pre-commit:` lines when committing, check
+`git config core.hooksPath` (should print `.githooks`) and that your Git client
+isn't set to skip hooks (`--no-verify`, "bypass hooks" options). CI runs the
+same checks regardless.
+
+### CI (GitHub Actions) and releases
+
+`.github/workflows/ci.yml` runs **only when a version tag (`v*`) is pushed**, or
+when started by hand (*Actions → CI → Run workflow*). Ordinary pushes and pull
+requests do not trigger it; the pre-commit hook lints every commit locally.
+
+| Job | What |
+|-----|------|
+| Go lint | golangci-lint (same version and config as locally) |
+| Go tests | `go vet` + `go test -race`, with a MongoDB service so the store tests run |
+| Web | `npm ci`, oxlint, TypeScript type check, production build |
+| Docker | builds the image for `linux/amd64`, as Fly.io runs it |
+| Deploy | after all checks pass, if the tagged commit is on `main`: `flyctl deploy` |
+
+To release, from an up-to-date, clean `main`:
+
+```sh
+make ci                       # optional: run the same checks locally first
+make release VERSION=v1.0.0   # creates and pushes the tag → CI → deploy
+```
+
+`make release` refuses unless you are on `main`, have no uncommitted changes,
+are in sync with `origin/main`, and the tag is new.
+
+To enable the deploy job, create a deploy token and store it as a repository
+secret (without it the deploy job is skipped with a notice):
+
+```sh
+fly tokens create deploy -a siloam | gh secret set FLY_API_TOKEN -R michaelwp/siloam
+```
+
+Deploys use the `production` environment, so you can add required reviewers in
+the repository's *Settings → Environments* to approve each release.
 
 ## Configuration
 

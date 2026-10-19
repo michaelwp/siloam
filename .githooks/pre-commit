@@ -1,17 +1,37 @@
 #!/usr/bin/env bash
-# Runs Go and React linters before each commit. Skip once with: git commit --no-verify
+# Runs Go and React linters on staged changes before each commit.
+# Installed by `make hooks` (git config core.hooksPath .githooks).
+# Skip once with: git commit --no-verify — CI runs the same checks anyway.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-staged=$(git diff --cached --name-only --diff-filter=ACMR)
-[ -z "$staged" ] && exit 0
+# Git GUIs and IDEs often run hooks with a minimal PATH; add the usual
+# locations of golangci-lint, go and npm (Homebrew, Go, Volta, nvm).
+export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/go/bin:$HOME/.volta/bin:$PATH"
+if [ -d "$HOME/.nvm/versions/node" ]; then
+  PATH="$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | tail -1):$PATH"
+fi
 
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+if [ -z "$staged" ]; then
+  exit 0
+fi
+
+ran=0
 if grep -qE '(\.go$|^go\.(mod|sum)$|^\.golangci\.yml$)' <<<"$staged"; then
   echo "pre-commit: linting Go…"
   make --no-print-directory lint-go
+  ran=1
 fi
 
 if grep -qE '^web/' <<<"$staged"; then
   echo "pre-commit: linting React…"
   make --no-print-directory lint-web
+  ran=1
+fi
+
+if [ "$ran" -eq 0 ]; then
+  echo "pre-commit: no Go or web changes staged, nothing to lint"
+else
+  echo "pre-commit: lint passed"
 fi

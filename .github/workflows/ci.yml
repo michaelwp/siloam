@@ -1,0 +1,125 @@
+name: CI
+
+# Runs only for version tags (e.g. v1.2.0) — see `make release` — or when
+# started by hand from the Actions tab. Pushes and PRs do not trigger it.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# a newer run for the same ref cancels the older one
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go-lint:
+    name: Go lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      # go:embed needs web/dist to exist; the real build is checked in "web"
+      - run: make web/dist/index.html
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.7.2 # keep in sync with the local version (golangci-lint version)
+
+  go-test:
+    name: Go tests
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:8
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1}).ok'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      MONGODB_TEST_URI: mongodb://localhost:27017
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: make web/dist/index.html
+      - run: go vet ./...
+      - name: go test (store tests run against the MongoDB service)
+        run: go test -race -count=1 ./...
+
+  web:
+    name: Web lint, typecheck, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+
+  docker:
+    name: Docker image (linux/amd64, as on Fly.io)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Fly.io
+    # only for version tags, after every check passed, and only when the
+    # FLY_API_TOKEN secret exists
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [go-lint, go-test, web, docker]
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: fly-deploy
+      cancel-in-progress: false
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - name: Check deploy token
+        id: token
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "::notice::FLY_API_TOKEN secret not set — skipping deploy"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v5
+        if: steps.token.outputs.ok == 'true'
+        with:
+          fetch-depth: 0 # full history, to check the tag is on main
+      - name: Tag must be on main
+        if: steps.token.outputs.ok == 'true'
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME is not on main — refusing to deploy"
+            exit 1
+          fi
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        if: steps.token.outputs.ok == 'true'
+      # fly.toml's health check (/api/health) stops a broken release
+      - run: flyctl deploy --remote-only --image-label "$GITHUB_REF_NAME"
+        if: steps.token.outputs.ok == 'true'
