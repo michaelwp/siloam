@@ -15,10 +15,12 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Runners are pinned to ubuntu-24.04: ubuntu-latest moves to Ubuntu 26 from
+# Oct 2026, which should be an explicit change here, not a surprise.
 jobs:
   go-lint:
     name: Go lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -26,16 +28,18 @@ jobs:
           go-version-file: go.mod
       # go:embed needs web/dist to exist; the real build is checked in "web"
       - run: make web/dist/index.html
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.7.2 # keep in sync with the local version (golangci-lint version)
 
   go-test:
     name: Go tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       mongo:
-        image: mongo:8
+        # 7.0, not 8: MongoDB 8.x refuses to start on Linux kernel 6.19+
+        # (the runners' kernel since Oct 2026), see SERVER-121912
+        image: mongo:7.0
         ports: ["27017:27017"]
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1}).ok'"
@@ -54,7 +58,7 @@ jobs:
 
   web:
     name: Web lint, typecheck, build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: web
@@ -72,7 +76,7 @@ jobs:
 
   docker:
     name: Docker image (linux/amd64, as on Fly.io)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - uses: docker/setup-buildx-action@v3
@@ -90,7 +94,7 @@ jobs:
     # FLY_API_TOKEN secret exists
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [go-lint, go-test, web, docker]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
     concurrency:
       group: fly-deploy

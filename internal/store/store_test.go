@@ -14,15 +14,20 @@ import (
 	"siloam/internal/model"
 )
 
-// These tests need a MongoDB; they use MONGODB_TEST_URI (default local) and a
-// throwaway database, and are skipped when none is reachable.
-func testStore(t *testing.T) (*Store, string) {
-	t.Helper()
+// testBaseURI is the MongoDB server the tests use: MONGODB_TEST_URI, default local.
+func testBaseURI() string {
 	base := os.Getenv("MONGODB_TEST_URI")
 	if base == "" {
 		base = "mongodb://localhost:27017"
 	}
-	base = strings.TrimRight(base, "/")
+	return strings.TrimRight(base, "/")
+}
+
+// These tests need a MongoDB; they use MONGODB_TEST_URI (default local) and a
+// throwaway database, and are skipped when none is reachable.
+func testStore(t *testing.T) (*Store, string) {
+	t.Helper()
+	base := testBaseURI()
 	name := "siloam_test_" + bson.NewObjectID().Hex()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -187,7 +192,10 @@ func TestCopyRefusesSameDatabaseUnderAnotherName(t *testing.T) {
 		t.Fatal(err)
 	}
 	// the same server spelled differently
-	alias, err := Connect(ctx, "mongodb://127.0.0.1:27017/"+name, "")
+	if !strings.Contains(testBaseURI(), "localhost") {
+		t.Skip("needs a localhost MONGODB_TEST_URI to spell it as 127.0.0.1")
+	}
+	alias, err := Connect(ctx, strings.Replace(testBaseURI(), "localhost", "127.0.0.1", 1)+"/"+name, "")
 	if err != nil {
 		t.Skip(err)
 	}
