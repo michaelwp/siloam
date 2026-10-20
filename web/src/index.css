@@ -960,7 +960,8 @@ a.stat {
 /* ---- homepage: birthdays today ---- */
 .today-card {
   margin-bottom: 20px;
-  padding: 18px 20px;
+  padding: 22px 24px;
+  font-size: 1.2rem;
   border-left: 4px solid var(--accent);
 }
 .today-card.has-birthdays {
@@ -973,13 +974,17 @@ a.stat {
   gap: 12px;
 }
 .today-head h2 {
-  font-size: 1.2rem;
+  font-size: 1.75rem;
+}
+/* the date and "Berikutnya" use .small; keep them readable here */
+.today-card .small {
+  font-size: 1.05rem;
 }
 .today-head p {
   margin: 2px 0 0;
 }
 .today-icon {
-  font-size: 2rem;
+  font-size: 2.7rem;
   line-height: 1;
 }
 .today-list {
@@ -987,7 +992,7 @@ a.stat {
   margin: 14px 0 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
   gap: 10px;
 }
 .today-list li {
@@ -1000,13 +1005,13 @@ a.stat {
   border: 1px solid var(--border);
 }
 .today-list strong {
-  font-size: 1.05rem;
+  font-size: 1.3rem;
 }
 .today-empty {
   margin-top: 12px;
 }
 .today-empty p {
-  margin: 0 0 4px;
+  margin: 0 0 6px;
 }
 
 /* ---- filter bar ---- */
@@ -1302,4 +1307,49 @@ td.actions .btn + .btn {
 .field :is(input, select):disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+@media (max-width: 480px) {
+  .today-head h2 {
+    font-size: 1.5rem;
+  }
+  .today-icon {
+    font-size: 2.4rem;
+  }
+}
+
+/* upcoming birthdays as chips */
+.next-birthdays {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-top: 10px;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 100%;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+  font-size: 1rem;
+}
+.chip strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.chip-date {
+  color: var(--muted);
+  white-space: nowrap;
+  font-size: 0.9em;
 }

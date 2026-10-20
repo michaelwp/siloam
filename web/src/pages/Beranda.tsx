@@ -224,15 +224,17 @@ function TodayBirthdays({ members, today }: { members: Member[]; today: Date }) 
         <div className="today-empty">
           <p>Tidak ada anggota jemaat yang berulang tahun hari ini.</p>
           {upcoming.length > 0 && (
-            <p className="muted small">
-              Berikutnya:{' '}
-              {upcoming.map(({ m, days }, i) => (
-                <span key={m.id}>
-                  {i > 0 && ', '}
-                  <strong>{m.name}</strong> ({days === 1 ? 'besok' : dayMonth(m.birthDay, m.birthMonth)})
-                </span>
-              ))}
-            </p>
+            <div className="next-birthdays">
+              <span className="muted small">Berikutnya:</span>
+              <ul className="chips">
+                {upcoming.map(({ m, days }) => (
+                  <li key={m.id} className="chip">
+                    <strong>{m.name}</strong>
+                    <span className="chip-date">{days === 1 ? 'besok' : dayMonth(m.birthDay, m.birthMonth)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       )}
