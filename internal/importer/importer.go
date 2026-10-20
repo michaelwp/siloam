@@ -34,7 +34,8 @@ type parsedFamily struct {
 	members []model.Member
 }
 
-func Import(ctx context.Context, s *store.Store, path string) (Result, error) {
+// Import loads the workbook's families into the given kolom.
+func Import(ctx context.Context, s *store.Store, path string, kolom int) (Result, error) {
 	f, err := excelize.OpenFile(path)
 	if err != nil {
 		return Result{}, err
@@ -54,6 +55,7 @@ func Import(ctx context.Context, s *store.Store, path string) (Result, error) {
 
 	var res Result
 	for _, pf := range families {
+		pf.family.Kolom = kolom
 		fam, err := s.CreateFamily(ctx, pf.family)
 		if err != nil {
 			return res, err

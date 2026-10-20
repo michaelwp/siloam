@@ -5,9 +5,16 @@ import type {
   RegistrationResponseJSON,
 } from '@simplewebauthn/browser'
 
+/** A neighbourhood group; families belong to one (by number). */
+export type Kolom = {
+  id: string
+  number: number
+}
+
 export type Family = {
   id: string
-  no: number
+  kolom: number
+  no: number // within the kolom
   name: string
   note: string
   domicile: string
@@ -31,6 +38,7 @@ export type Member = {
   baptized: boolean | null
   confirmed: boolean | null
   familyName: string
+  kolom: number // the family's kolom
   age: number | null
   ageText: string
   category: string
@@ -39,7 +47,7 @@ export type Member = {
   birthDay: number | null
 }
 
-export type FamilyInput = Pick<Family, 'name' | 'note' | 'domicile' | 'weddingDate'> & { no?: number }
+export type FamilyInput = Pick<Family, 'kolom' | 'name' | 'note' | 'domicile' | 'weddingDate'> & { no?: number }
 
 export type MemberInput = Pick<
   Member,
@@ -103,12 +111,15 @@ async function getWithView<T>(url: string): Promise<[T, DataView]> {
 export const api = {
   /** Families and members, plus which view the server actually returned. */
   load: async () => {
-    const [[families, fv], [members, mv]] = await Promise.all([
+    const [koloms, [families, fv], [members, mv]] = await Promise.all([
+      request<Kolom[]>('GET', '/api/koloms'),
       getWithView<Family[]>('/api/families'),
       getWithView<Member[]>('/api/members'),
     ])
-    return { families, members, view: (fv === 'full' && mv === 'full' ? 'full' : 'public') as DataView }
+    return { koloms, families, members, view: (fv === 'full' && mv === 'full' ? 'full' : 'public') as DataView }
   },
+  createKolom: (number: number) => request<Kolom>('POST', '/api/koloms', { number }),
+  deleteKolom: (id: string) => request<void>('DELETE', `/api/koloms/${id}`),
   families: () => request<Family[]>('GET', '/api/families'),
   createFamily: (f: FamilyInput) => request<Family>('POST', '/api/families', f),
   updateFamily: (id: string, f: FamilyInput) => request<Family>('PUT', `/api/families/${id}`, f),
@@ -121,7 +132,7 @@ export const api = {
 }
 
 export function familyToInput(f: Family): FamilyInput {
-  return { no: f.no, name: f.name, note: f.note, domicile: f.domicile, weddingDate: f.weddingDate }
+  return { kolom: f.kolom, no: f.no, name: f.name, note: f.note, domicile: f.domicile, weddingDate: f.weddingDate }
 }
 
 export function memberToInput(m: Member): MemberInput {

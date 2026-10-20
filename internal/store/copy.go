@@ -7,6 +7,8 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+
+	"siloam/internal/model"
 )
 
 // CopyResult counts the documents copied per collection.
@@ -14,10 +16,12 @@ type CopyResult map[string]int
 
 // CopyCollections are the collections CopyFrom can copy. Sessions are never
 // copied: users sign in again on the new database.
-var CopyCollections = []string{"families", "members", "users"}
+var CopyCollections = []string{"koloms", "families", "members", "users"}
 
 func (s *Store) collection(name string) (*mongo.Collection, error) {
 	switch name {
+	case "koloms":
+		return s.koloms, nil
 	case "families":
 		return s.families, nil
 	case "members":
@@ -32,7 +36,8 @@ func (s *Store) collection(name string) (*mongo.Collection, error) {
 // empty) from src into s, keeping document IDs so references between them stay
 // valid. The target collections must be empty unless replace is set, in which
 // case they are cleared first (and sessions too, when users are replaced).
-// Collections not named are left untouched.
+// Koloms are merged by number instead (a new database is already seeded with
+// koloms 1..12). Collections not named are left untouched.
 func (s *Store) CopyFrom(ctx context.Context, src *Store, names []string, replace bool) (CopyResult, error) {
 	if len(names) == 0 {
 		names = CopyCollections
@@ -56,7 +61,7 @@ func (s *Store) CopyFrom(ctx context.Context, src *Store, names []string, replac
 		if err != nil {
 			return nil, err
 		}
-		if n > 0 && !replace {
+		if n > 0 && !replace && dst != s.koloms {
 			return nil, fmt.Errorf("target collection %q already has %d documents; pass -replace to overwrite", name, n)
 		}
 		pairs = append(pairs, pair{from, dst})
@@ -76,13 +81,37 @@ func (s *Store) CopyFrom(ctx context.Context, src *Store, names []string, replac
 
 	res := CopyResult{}
 	for _, p := range pairs {
-		n, err := copyCollection(ctx, p.src, p.dst)
+		copyFn := copyCollection
+		if p.dst == s.koloms {
+			copyFn = s.mergeKoloms
+		}
+		n, err := copyFn(ctx, p.src, p.dst)
 		res[p.dst.Name()] = n
 		if err != nil {
 			return res, fmt.Errorf("copy %s: %w", p.dst.Name(), err)
 		}
 	}
-	return res, nil
+	// families from a database without koloms get one; used koloms are listed
+	return res, s.MigrateKoloms(ctx)
+}
+
+// mergeKoloms adds every kolom number of src that dst lacks; families refer
+// to koloms by number, so their IDs need not match.
+func (s *Store) mergeKoloms(ctx context.Context, src, _ *mongo.Collection) (int, error) {
+	var ks []model.Kolom
+	cur, err := src.Find(ctx, bson.D{})
+	if err != nil {
+		return 0, err
+	}
+	if err := cur.All(ctx, &ks); err != nil {
+		return 0, err
+	}
+	for _, k := range ks {
+		if err := s.upsertKolom(ctx, k.Number); err != nil {
+			return 0, err
+		}
+	}
+	return len(ks), nil
 }
 
 var ErrSameDatabase = errors.New("source and target are the same database")

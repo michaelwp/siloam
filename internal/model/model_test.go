@@ -61,29 +61,30 @@ func TestPublicViewsHidePrivateData(t *testing.T) {
 		BirthDate: ptr(date(1992, 11, 13)), MaritalStatus: "Menikah",
 		Relationship: "Kepala Keluarga", Baptized: &yes, Confirmed: &yes,
 	}
-	pub := NewMemberView(m, "Najoan Ismawi", now).Public()
+	pub := NewMemberView(m, Family{Name: "Najoan Ismawi", Kolom: 11}, now).Public()
 	b, _ := json.Marshal(pub)
 	for _, private := range []string{"Gorontalo", "1992", "Kepala Keluarga", "Tahun", `"age":3`} {
 		if strings.Contains(string(b), private) {
 			t.Errorf("public member JSON leaks %q: %s", private, b)
 		}
 	}
-	if pub.Name != m.Name || pub.FamilyName != "Najoan Ismawi" || pub.Category != "PKB" ||
+	if pub.Name != m.Name || pub.FamilyName != "Najoan Ismawi" || pub.Kolom != 11 || pub.Category != "PKB" ||
 		*pub.BirthMonth != 11 || *pub.BirthDay != 13 ||
 		pub.MaritalStatus != "Menikah" || pub.Baptized == nil || !*pub.Baptized || pub.Confirmed == nil || !*pub.Confirmed {
 		t.Errorf("public member lost public fields: %+v", pub)
 	}
 
-	f := Family{Name: "Najoan Ismawi", Domicile: "Kairagi", WeddingDate: ptr(date(2021, 9, 10))}
+	f := Family{Kolom: 11, Name: "Najoan Ismawi", Domicile: "Kairagi", WeddingDate: ptr(date(2021, 9, 10))}
 	fv := NewFamilyView(f, 3, now)
-	fv.Members = []MemberView{NewMemberView(m, f.Name, now)}
+	fv.Members = []MemberView{NewMemberView(m, f, now)}
 	fb, _ := json.Marshal(fv.Public())
 	for _, private := range []string{"Kairagi", "2021", `"weddingYears":5`, "Gorontalo"} {
 		if strings.Contains(string(fb), private) {
 			t.Errorf("public family JSON leaks %q: %s", private, fb)
 		}
 	}
-	if !strings.Contains(string(fb), `"weddingMonth":9`) || !strings.Contains(string(fb), `"memberCount":3`) {
+	if !strings.Contains(string(fb), `"weddingMonth":9`) || !strings.Contains(string(fb), `"memberCount":3`) ||
+		!strings.Contains(string(fb), `"kolom":11`) {
 		t.Errorf("public family lost public fields: %s", fb)
 	}
 }

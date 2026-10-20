@@ -19,6 +19,7 @@ var ErrNotFound = errors.New("not found")
 type Store struct {
 	client     *mongo.Client
 	db         string
+	koloms     *mongo.Collection
 	families   *mongo.Collection
 	members    *mongo.Collection
 	users      *mongo.Collection
@@ -63,6 +64,7 @@ func Connect(ctx context.Context, uri, dbName string) (*Store, error) {
 	return &Store{
 		client:     client,
 		db:         dbName,
+		koloms:     db.Collection("koloms"),
 		families:   db.Collection("families"),
 		members:    db.Collection("members"),
 		users:      db.Collection("users"),
@@ -80,6 +82,14 @@ func Open(ctx context.Context, uri, dbName string) (*Store, error) {
 	if _, err := s.members.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{{Key: "familyId", Value: 1}, {Key: "order", Value: 1}},
 	}); err != nil {
+		_ = s.Close(ctx)
+		return nil, err
+	}
+	if err := s.ensureKolomIndexes(ctx); err != nil {
+		_ = s.Close(ctx)
+		return nil, err
+	}
+	if err := s.MigrateKoloms(ctx); err != nil {
 		_ = s.Close(ctx)
 		return nil, err
 	}
@@ -107,7 +117,7 @@ func (s *Store) Ping(ctx context.Context) error { return s.client.Ping(ctx, nil)
 // ---- families ----
 
 func (s *Store) ListFamilies(ctx context.Context) ([]model.Family, error) {
-	cur, err := s.families.Find(ctx, bson.D{}, options.Find().SetSort(bson.D{{Key: "no", Value: 1}}))
+	cur, err := s.families.Find(ctx, bson.D{}, options.Find().SetSort(bson.D{{Key: "kolom", Value: 1}, {Key: "no", Value: 1}}))
 	if err != nil {
 		return nil, err
 	}
@@ -124,12 +134,17 @@ func (s *Store) GetFamily(ctx context.Context, id bson.ObjectID) (model.Family, 
 	return f, err
 }
 
+// CreateFamily adds a family to an existing kolom, numbered last in that
+// kolom unless f.No is set.
 func (s *Store) CreateFamily(ctx context.Context, f model.Family) (model.Family, error) {
+	if err := s.requireKolom(ctx, f.Kolom); err != nil {
+		return f, err
+	}
 	now := time.Now().UTC()
 	f.ID = bson.NewObjectID()
 	f.CreatedAt, f.UpdatedAt = now, now
 	if f.No <= 0 {
-		n, err := s.nextNumber(ctx, s.families, bson.D{}, "no")
+		n, err := s.nextNumber(ctx, s.families, bson.D{{Key: "kolom", Value: f.Kolom}}, "no")
 		if err != nil {
 			return f, err
 		}
@@ -146,27 +161,66 @@ func (s *Store) UpdateFamily(ctx context.Context, f model.Family) (model.Family,
 	}
 	f.CreatedAt = old.CreatedAt
 	f.UpdatedAt = time.Now().UTC()
-	if f.No <= 0 {
+	moved := f.Kolom != old.Kolom
+	switch {
+	case moved:
+		// moved to another kolom: numbered last there
+		if err := s.requireKolom(ctx, f.Kolom); err != nil {
+			return f, err
+		}
+		n, err := s.nextNumber(ctx, s.families, bson.D{{Key: "kolom", Value: f.Kolom}}, "no")
+		if err != nil {
+			return f, err
+		}
+		f.No = n
+	case f.No <= 0:
 		f.No = old.No
 	}
-	_, err = s.families.ReplaceOne(ctx, bson.D{{Key: "_id", Value: f.ID}}, f)
-	return f, err
+	if _, err := s.families.ReplaceOne(ctx, bson.D{{Key: "_id", Value: f.ID}}, f); err != nil {
+		return f, err
+	}
+	if moved {
+		return f, s.renumberFamilies(ctx, old.Kolom)
+	}
+	return f, nil
 }
 
-// DeleteFamily removes the family and its members, then renumbers the rest.
-func (s *Store) DeleteFamily(ctx context.Context, id bson.ObjectID) error {
-	res, err := s.families.DeleteOne(ctx, bson.D{{Key: "_id", Value: id}})
+func (s *Store) requireKolom(ctx context.Context, number int) error {
+	ok, err := s.KolomExists(ctx, number)
 	if err != nil {
 		return err
 	}
-	if res.DeletedCount == 0 {
+	if !ok {
+		return ErrNoKolom
+	}
+	return nil
+}
+
+// DeleteFamily removes the family and its members, then renumbers the rest
+// of its kolom.
+func (s *Store) DeleteFamily(ctx context.Context, id bson.ObjectID) error {
+	var f model.Family
+	err := s.families.FindOneAndDelete(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&f)
+	if errors.Is(err, mongo.ErrNoDocuments) {
 		return ErrNotFound
+	}
+	if err != nil {
+		return err
 	}
 	if _, err := s.members.DeleteMany(ctx, bson.D{{Key: "familyId", Value: id}}); err != nil {
 		return err
 	}
-	fams, err := s.ListFamilies(ctx)
+	return s.renumberFamilies(ctx, f.Kolom)
+}
+
+// renumberFamilies numbers the families of a kolom 1..n, keeping their order.
+func (s *Store) renumberFamilies(ctx context.Context, kolom int) error {
+	cur, err := s.families.Find(ctx, bson.D{{Key: "kolom", Value: kolom}}, options.Find().SetSort(bson.D{{Key: "no", Value: 1}}))
 	if err != nil {
+		return err
+	}
+	var fams []model.Family
+	if err := cur.All(ctx, &fams); err != nil {
 		return err
 	}
 	for i, f := range fams {
@@ -352,6 +406,7 @@ func (s *Store) IsEmpty(ctx context.Context) (bool, error) {
 	return n == 0, err
 }
 
+// Reset deletes all families and members (the kolom list is kept).
 func (s *Store) Reset(ctx context.Context) error {
 	if _, err := s.members.DeleteMany(ctx, bson.D{}); err != nil {
 		return err

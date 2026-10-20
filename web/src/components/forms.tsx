@@ -1,16 +1,34 @@
 import { useState } from 'react'
 import { api, familyToInput, memberToInput, type Family, type FamilyInput, type Member, type MemberInput } from '../api'
-import { useData } from '../data'
+import { familyOption, useData } from '../data'
 import { fromInputDate, GENDERS, MARITAL_STATUSES, RELATIONSHIPS, toInputDate } from '../format'
 import { ConfirmDelete, Field, FormShell, Modal } from './ui'
 
-const emptyFamily: FamilyInput = { name: '', note: '', domicile: '', weddingDate: null }
+/** Kolom picker; forms ask for it first and keep the other fields off until chosen. */
+export function KolomField({ value, onChange }: { value: number; onChange: (k: number) => void }) {
+  const { koloms } = useData()
+  return (
+    <Field label="Kolom" wide>
+      <select required value={value || ''} onChange={(e) => onChange(Number(e.target.value))}>
+        <option value="">— pilih kolom terlebih dahulu —</option>
+        {koloms.map((k) => (
+          <option key={k.id} value={k.number}>
+            Kolom {k.number}
+          </option>
+        ))}
+      </select>
+    </Field>
+  )
+}
 
-/** Create (family undefined) or edit a family. */
+/** Create (family undefined) or edit a family. A new family starts in the viewed kolom, if any. */
 export function FamilyForm({ family, onClose }: { family?: Family; onClose: () => void }) {
-  const { reload } = useData()
-  const [f, setF] = useState<FamilyInput>(family ? familyToInput(family) : emptyFamily)
+  const { reload, kolom } = useData()
+  const [f, setF] = useState<FamilyInput>(
+    family ? familyToInput(family) : { kolom: kolom ?? 0, name: '', note: '', domicile: '', weddingDate: null },
+  )
   const set = (patch: Partial<FamilyInput>) => setF((prev) => ({ ...prev, ...patch }))
+  const off = !f.kolom
 
   return (
     <Modal title={family ? 'Ubah Keluarga' : 'Tambah Keluarga'} onClose={onClose}>
@@ -23,21 +41,36 @@ export function FamilyForm({ family, onClose }: { family?: Family; onClose: () =
           onClose()
         }}
       >
+        <KolomField value={f.kolom} onChange={(k) => set({ kolom: k })} />
         <Field label="Nama Keluarga" wide>
-          <input required value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder="mis. Najoan Ismawi" />
+          <input
+            required
+            disabled={off}
+            value={f.name}
+            onChange={(e) => set({ name: e.target.value })}
+            placeholder="mis. Najoan Ismawi"
+          />
         </Field>
         <Field label="Domisili">
-          <input value={f.domicile} onChange={(e) => set({ domicile: e.target.value })} />
+          <input disabled={off} value={f.domicile} onChange={(e) => set({ domicile: e.target.value })} />
         </Field>
         <Field label="Keterangan">
-          <input value={f.note} list="note-options" onChange={(e) => set({ note: e.target.value })} />
+          <input disabled={off} value={f.note} list="note-options" onChange={(e) => set({ note: e.target.value })} />
           <datalist id="note-options">
             <option value="Simpatisan">Simpatisan</option>
           </datalist>
         </Field>
         <Field label="Tanggal Pernikahan">
-          <input type="date" value={toInputDate(f.weddingDate)} onChange={(e) => set({ weddingDate: fromInputDate(e.target.value) })} />
+          <input
+            type="date"
+            disabled={off}
+            value={toInputDate(f.weddingDate)}
+            onChange={(e) => set({ weddingDate: fromInputDate(e.target.value) })}
+          />
         </Field>
+        {family && f.kolom !== family.kolom && (
+          <p className="muted small wide">Keluarga ini akan dipindahkan ke Kolom {f.kolom} dan diberi nomor terakhir di sana.</p>
+        )}
       </FormShell>
     </Modal>
   )
@@ -96,9 +129,15 @@ export function MemberForm({
   familyId?: string
   onClose: () => void
 }) {
-  const { families, reload } = useData()
+  const { allFamilies, kolom: viewed, reload } = useData()
   const [m, setM] = useState<MemberInput>(member ? memberToInput(member) : emptyMember(familyId))
   const set = (patch: Partial<MemberInput>) => setM((prev) => ({ ...prev, ...patch }))
+  // the kolom is picked first; it narrows the families to choose from
+  const [kolom, setKolom] = useState(
+    () => allFamilies.find((f) => f.id === (member?.familyId ?? familyId))?.kolom ?? viewed ?? 0,
+  )
+  const choices = allFamilies.filter((f) => f.kolom === kolom)
+  const off = !kolom
 
   return (
     <Modal title={member ? 'Ubah Anggota' : 'Tambah Anggota'} onClose={onClose}>
@@ -111,27 +150,39 @@ export function MemberForm({
           onClose()
         }}
       >
-        <Field label="Nama Lengkap" wide>
-          <input required value={m.name} onChange={(e) => set({ name: e.target.value })} />
-        </Field>
+        <KolomField
+          value={kolom}
+          onChange={(k) => {
+            setKolom(k)
+            if (!allFamilies.some((f) => f.id === m.familyId && f.kolom === k)) set({ familyId: '' })
+          }}
+        />
         <Field label="Keluarga" wide>
-          <select required value={m.familyId} onChange={(e) => set({ familyId: e.target.value })}>
-            <option value="">— pilih keluarga —</option>
-            {families.map((f) => (
+          <select required disabled={off} value={m.familyId} onChange={(e) => set({ familyId: e.target.value })}>
+            <option value="">{choices.length || off ? '— pilih keluarga —' : '— belum ada keluarga di kolom ini —'}</option>
+            {choices.map((f) => (
               <option key={f.id} value={f.id}>
-                {f.no}. Kel. {f.name}
+                {familyOption(f, false)}
               </option>
             ))}
           </select>
         </Field>
+        <Field label="Nama Lengkap" wide>
+          <input required disabled={off} value={m.name} onChange={(e) => set({ name: e.target.value })} />
+        </Field>
         <Field label="Tempat Lahir">
-          <input value={m.birthPlace} onChange={(e) => set({ birthPlace: e.target.value })} />
+          <input disabled={off} value={m.birthPlace} onChange={(e) => set({ birthPlace: e.target.value })} />
         </Field>
         <Field label="Tanggal Lahir">
-          <input type="date" value={toInputDate(m.birthDate)} onChange={(e) => set({ birthDate: fromInputDate(e.target.value) })} />
+          <input
+            type="date"
+            disabled={off}
+            value={toInputDate(m.birthDate)}
+            onChange={(e) => set({ birthDate: fromInputDate(e.target.value) })}
+          />
         </Field>
         <Field label="Jenis Kelamin">
-          <select value={m.gender} onChange={(e) => set({ gender: e.target.value })}>
+          <select disabled={off} value={m.gender} onChange={(e) => set({ gender: e.target.value })}>
             <option value="">—</option>
             {GENDERS.map((g) => (
               <option key={g}>{g}</option>
@@ -139,7 +190,7 @@ export function MemberForm({
           </select>
         </Field>
         <Field label="Status">
-          <select value={m.maritalStatus} onChange={(e) => set({ maritalStatus: e.target.value })}>
+          <select disabled={off} value={m.maritalStatus} onChange={(e) => set({ maritalStatus: e.target.value })}>
             <option value="">—</option>
             {MARITAL_STATUSES.map((s) => (
               <option key={s}>{s}</option>
@@ -147,7 +198,7 @@ export function MemberForm({
           </select>
         </Field>
         <Field label="Hubungan Keluarga">
-          <input list="relationship-options" value={m.relationship} onChange={(e) => set({ relationship: e.target.value })} />
+          <input disabled={off} list="relationship-options" value={m.relationship} onChange={(e) => set({ relationship: e.target.value })} />
           <datalist id="relationship-options">
             {RELATIONSHIPS.map((r) => (
               <option key={r} value={r}>
@@ -157,14 +208,14 @@ export function MemberForm({
           </datalist>
         </Field>
         <Field label="Baptis">
-          <select value={boolValue(m.baptized)} onChange={(e) => set({ baptized: parseBool(e.target.value) })}>
+          <select disabled={off} value={boolValue(m.baptized)} onChange={(e) => set({ baptized: parseBool(e.target.value) })}>
             <option value="">—</option>
             <option value="true">Baptis</option>
             <option value="false">Belum</option>
           </select>
         </Field>
         <Field label="Sidi">
-          <select value={boolValue(m.confirmed)} onChange={(e) => set({ confirmed: parseBool(e.target.value) })}>
+          <select disabled={off} value={boolValue(m.confirmed)} onChange={(e) => set({ confirmed: parseBool(e.target.value) })}>
             <option value="">—</option>
             <option value="true">Sidi</option>
             <option value="false">Belum</option>

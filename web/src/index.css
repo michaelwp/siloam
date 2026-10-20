@@ -1263,3 +1263,43 @@ a.stat {
 .birthday-toast-actions .btn {
   text-decoration: none;
 }
+
+/* ---- kolom ---- */
+.kolom-picker {
+  display: block;
+  padding: 0 4px 14px;
+}
+.kolom-picker select {
+  width: 100%;
+  font-weight: 600;
+}
+.kolom-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.kolom-add .field {
+  width: 180px;
+}
+.kolom-add .form-error {
+  flex-basis: 100%;
+  margin: 0;
+}
+td.actions .btn + .btn {
+  margin-left: 6px;
+}
+@media (max-width: 860px) {
+  .kolom-picker {
+    padding: 0 0 10px;
+  }
+}
+.kolom-table td {
+  vertical-align: middle;
+}
+.field :is(input, select):disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

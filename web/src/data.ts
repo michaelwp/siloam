@@ -1,9 +1,17 @@
 import { createContext, useContext } from 'react'
-import type { DataView, Family, Member } from './api'
+import type { DataView, Family, Kolom, Member } from './api'
 
 export type Data = {
+  koloms: Kolom[]
+  /** the kolom being viewed; null = all koloms */
+  kolom: number | null
+  setKolom: (k: number | null) => void
+  /** families and members of the viewed kolom (all when kolom is null) */
   families: Family[]
   members: Member[]
+  /** every family, whatever kolom is viewed (forms pick from these) */
+  allFamilies: Family[]
+  allMembers: Member[]
   /** what the server sent: 'full' (signed in) or the redacted 'public' view */
   view: DataView | null
   loading: boolean
@@ -17,4 +25,13 @@ export function useData() {
   const ctx = useContext(DataContext)
   if (!ctx) throw new Error('useData must be used inside DataProvider')
   return ctx
+}
+
+export function kolomLabel(k: number | null) {
+  return k === null ? 'Semua Kolom' : `Kolom ${k}`
+}
+
+/** "3. Kel. Najoan" — prefixed with the kolom when several koloms are listed. */
+export function familyOption(f: Family, withKolom: boolean) {
+  return `${withKolom ? `${kolomLabel(f.kolom)} · ` : ''}${f.no}. Kel. ${f.name}`
 }

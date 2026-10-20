@@ -161,7 +161,8 @@ func publicRead(r *http.Request) bool {
 		return false
 	}
 	p := r.URL.Path
-	return p == "/api/families" || strings.HasPrefix(p, "/api/families/") ||
+	return p == "/api/koloms" ||
+		p == "/api/families" || strings.HasPrefix(p, "/api/families/") ||
 		p == "/api/members" || strings.HasPrefix(p, "/api/members/")
 }
 

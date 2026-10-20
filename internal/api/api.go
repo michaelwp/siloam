@@ -24,6 +24,10 @@ func New(s *store.Store) *API { return &API{store: s} }
 func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/health", a.health)
 
+	mux.HandleFunc("GET /api/koloms", a.listKoloms)
+	mux.HandleFunc("POST /api/koloms", a.createKolom)
+	mux.HandleFunc("DELETE /api/koloms/{id}", a.deleteKolom)
+
 	mux.HandleFunc("GET /api/families", a.listFamilies)
 	mux.HandleFunc("POST /api/families", a.createFamily)
 	mux.HandleFunc("GET /api/families/{id}", a.getFamily)
@@ -49,9 +53,64 @@ func (a *API) health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// ---- koloms ----
+
+// MaxKolom bounds kolom numbers to something a congregation could have.
+const MaxKolom = 999
+
+func (a *API) listKoloms(w http.ResponseWriter, r *http.Request) {
+	ks, err := a.store.ListKoloms(r.Context())
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, ks)
+}
+
+func (a *API) createKolom(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Number int `json:"number"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	if in.Number < 1 || in.Number > MaxKolom {
+		writeError(w, http.StatusBadRequest, "nomor kolom harus antara 1 dan 999")
+		return
+	}
+	k, err := a.store.CreateKolom(r.Context(), in.Number)
+	if errors.Is(err, store.ErrKolomExists) {
+		writeError(w, http.StatusConflict, "kolom ini sudah ada")
+		return
+	}
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, k)
+}
+
+func (a *API) deleteKolom(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	err := a.store.DeleteKolom(r.Context(), id)
+	if errors.Is(err, store.ErrKolomInUse) {
+		writeError(w, http.StatusConflict, "kolom masih memiliki keluarga; pindahkan atau hapus keluarganya terlebih dahulu")
+		return
+	}
+	if err != nil {
+		storeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // ---- families ----
 
 type familyInput struct {
+	Kolom       int        `json:"kolom"`
 	No          int        `json:"no"`
 	Name        string     `json:"name"`
 	Note        string     `json:"note"`
@@ -61,11 +120,15 @@ type familyInput struct {
 
 func (in familyInput) toModel() (model.Family, error) {
 	f := model.Family{
+		Kolom:       in.Kolom,
 		No:          in.No,
 		Name:        clean(in.Name),
 		Note:        clean(in.Note),
 		Domicile:    clean(in.Domicile),
 		WeddingDate: dateOnly(in.WeddingDate),
+	}
+	if f.Kolom <= 0 {
+		return f, errors.New("kolom wajib dipilih")
 	}
 	if f.Name == "" {
 		return f, errors.New("nama keluarga wajib diisi")
@@ -115,7 +178,7 @@ func (a *API) getFamily(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	v := model.NewFamilyView(f, len(members), now)
 	for _, m := range members {
-		v.Members = append(v.Members, model.NewMemberView(m, f.Name, now))
+		v.Members = append(v.Members, model.NewMemberView(m, f, now))
 	}
 	if !dataView(w, r) {
 		v = v.Public()
@@ -135,7 +198,7 @@ func (a *API) createFamily(w http.ResponseWriter, r *http.Request) {
 	}
 	f, err = a.store.CreateFamily(r.Context(), f)
 	if err != nil {
-		serverError(w, err)
+		storeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, model.NewFamilyView(f, 0, time.Now()))
@@ -227,15 +290,15 @@ func (a *API) memberViews(r *http.Request, members []model.Member) ([]model.Memb
 	if err != nil {
 		return nil, err
 	}
-	names := map[bson.ObjectID]string{}
+	byID := map[bson.ObjectID]model.Family{}
 	for _, f := range fams {
-		names[f.ID] = f.Name
+		byID[f.ID] = f
 	}
 	now := time.Now()
 	full := auth.SignedIn(r)
 	out := make([]model.MemberView, 0, len(members))
 	for _, m := range members {
-		v := model.NewMemberView(m, names[m.FamilyID], now)
+		v := model.NewMemberView(m, byID[m.FamilyID], now)
 		if !full {
 			v = v.Public()
 		}
@@ -340,7 +403,7 @@ func (a *API) writeMember(w http.ResponseWriter, r *http.Request, status int, m 
 		storeError(w, err)
 		return
 	}
-	v := model.NewMemberView(m, f.Name, time.Now())
+	v := model.NewMemberView(m, f, time.Now())
 	if !dataView(w, r) {
 		v = v.Public()
 	}
@@ -384,6 +447,10 @@ func pathID(w http.ResponseWriter, r *http.Request) (bson.ObjectID, bool) {
 func storeError(w http.ResponseWriter, err error) {
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
+		return
+	}
+	if errors.Is(err, store.ErrNoKolom) {
+		writeError(w, http.StatusBadRequest, "kolom tidak ditemukan; tambahkan kolom terlebih dahulu")
 		return
 	}
 	serverError(w, err)

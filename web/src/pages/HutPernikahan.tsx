@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { api, familyToInput, type Family } from '../api'
 import { ActionsHeader, ConfirmDelete, EditOnly, Field, FormShell, Modal, PageHeader, RowActions, Status } from '../components/ui'
 import { useFullView } from '../auth'
-import { useData } from '../data'
+import { familyOption, useData } from '../data'
 import { dayMonth, fromInputDate, longDate, MONTHS, toInputDate } from '../format'
 
 type Dialog = { kind: 'add' } | { kind: 'edit' | 'delete'; family: Family } | null
@@ -75,7 +75,7 @@ export default function HutPernikahan() {
 }
 
 function WeddingForm({ family, onClose }: { family?: Family; onClose: () => void }) {
-  const { families, reload } = useData()
+  const { families, kolom, reload } = useData()
   const [familyId, setFamilyId] = useState(family?.id ?? '')
   const [date, setDate] = useState(toInputDate(family?.weddingDate ?? null))
   const choices = family ? [family] : families.filter((f) => !f.weddingDate)
@@ -97,7 +97,7 @@ function WeddingForm({ family, onClose }: { family?: Family; onClose: () => void
             <option value="">— pilih keluarga —</option>
             {choices.map((f) => (
               <option key={f.id} value={f.id}>
-                {f.no}. Kel. {f.name}
+                {familyOption(f, kolom === null)}
               </option>
             ))}
           </select>

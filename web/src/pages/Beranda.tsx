@@ -3,12 +3,12 @@ import type { Member } from '../api'
 import { Link } from 'react-router-dom'
 import { ChartCard, ColumnChart, StackedBarChart } from '../components/charts'
 import { PageHeader, Status } from '../components/ui'
-import { useData } from '../data'
+import { kolomLabel, useData } from '../data'
 import { byText, CATEGORIES, dayMonth, daysUntil, MONTHS, parts } from '../format'
 
 /** Public homepage: totals plus this month's birthdays and wedding anniversaries. */
 export default function Beranda() {
-  const { families, members, loading, error } = useData()
+  const { families, members, kolom, loading, error } = useData()
   const [today] = useState(() => new Date())
   const month = today.getMonth()
   const day = today.getDate()
@@ -38,7 +38,7 @@ export default function Beranda() {
 
   return (
     <>
-      <PageHeader title="Beranda" subtitle="GMIM Siloam · Jemaat Kolom 9" />
+      <PageHeader title="Beranda" subtitle={`GMIM Siloam · ${kolomLabel(kolom)}`} />
       <Status loading={loading} error={error} />
 
       {!loading && !error && (

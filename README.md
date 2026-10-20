@@ -1,7 +1,13 @@
-# Data Base Jemaat Kolom 9
+# Data Base Jemaat
 
-Web app for managing the congregation data of Jemaat Kolom 9 (2027 – 2031),
+Web app for managing the congregation data of GMIM Siloam, grouped by kolom,
 replacing the `Data Base Jemaat Kolom 9 2027 - 2031.xlsx` workbook.
+
+Families belong to a kolom (a new database starts with Kolom 1–12; signed-in
+users add or remove koloms on **Kelola Kolom**). The sidebar picker chooses
+which kolom every page shows, and new families and members must pick their
+kolom first. Data from before koloms existed is moved to Kolom 11 at startup,
+and `-import` loads the workbook into Kolom 11 unless you pass `-kolom N`.
 
 - **Backend:** Go 1.25 (`net/http`), MongoDB
 - **Frontend:** React 19 + TypeScript (Vite), embedded into the Go binary with `go:embed`

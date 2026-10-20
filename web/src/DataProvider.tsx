@@ -1,9 +1,37 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { api, type DataView, type Family, type Member } from './api'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { api, type DataView, type Family, type Kolom, type Member } from './api'
 import { useAuth } from './auth'
 import { DataContext } from './data'
 
-type State = { families: Family[]; members: Member[]; view: DataView | null; loading: boolean; error: string | null }
+type State = {
+  koloms: Kolom[]
+  families: Family[]
+  members: Member[]
+  view: DataView | null
+  loading: boolean
+  error: string | null
+}
+
+// The viewed kolom is remembered per browser (a convenience; never required).
+const KOLOM_KEY = 'kolom-filter'
+
+function savedKolom(): number | null {
+  try {
+    const n = Number(localStorage.getItem(KOLOM_KEY))
+    return Number.isInteger(n) && n > 0 ? n : null
+  } catch {
+    return null
+  }
+}
+
+function saveKolom(k: number | null) {
+  try {
+    if (k === null) localStorage.removeItem(KOLOM_KEY)
+    else localStorage.setItem(KOLOM_KEY, String(k))
+  } catch {
+    // storage blocked: the choice lasts until the page is reloaded
+  }
+}
 
 /**
  * Shares families and members across all pages. It is keyed by the signed-in
@@ -11,15 +39,16 @@ type State = { families: Family[]; members: Member[]; view: DataView | null; loa
  * for one user — or the redacted public view — is never reused for another.
  */
 function DataProvider({ children, expectFull, onStale }: { children: ReactNode; expectFull: boolean; onStale: () => void }) {
-  const [state, setState] = useState<State>({ families: [], members: [], view: null, loading: true, error: null })
+  const [state, setState] = useState<State>({ koloms: [], families: [], members: [], view: null, loading: true, error: null })
+  const [chosen, setChosen] = useState(savedKolom)
   const latest = useRef(0) // ignore responses of superseded loads
 
   const load = useCallback(() => {
     const n = ++latest.current
     return api.load().then(
-      ({ families, members, view }) => {
+      ({ koloms, families, members, view }) => {
         if (n !== latest.current) return
-        setState({ families, members, view, loading: false, error: null })
+        setState({ koloms, families, members, view, loading: false, error: null })
         // signed in, but the server sent the public view: the session is gone
         if (expectFull && view !== 'full') onStale()
       },
@@ -33,7 +62,41 @@ function DataProvider({ children, expectFull, onStale }: { children: ReactNode; 
     void load()
   }, [load])
 
-  return <DataContext.Provider value={{ ...state, reload: load }}>{children}</DataContext.Provider>
+  const setKolom = useCallback((k: number | null) => {
+    saveKolom(k)
+    setChosen(k)
+  }, [])
+
+  // a remembered kolom that no longer exists falls back to all koloms
+  const kolom = chosen !== null && state.koloms.some((k) => k.number === chosen) ? chosen : null
+  const families = useMemo(
+    () => (kolom === null ? state.families : state.families.filter((f) => f.kolom === kolom)),
+    [state.families, kolom],
+  )
+  const members = useMemo(
+    () => (kolom === null ? state.members : state.members.filter((m) => m.kolom === kolom)),
+    [state.members, kolom],
+  )
+
+  return (
+    <DataContext.Provider
+      value={{
+        koloms: state.koloms,
+        kolom,
+        setKolom,
+        families,
+        members,
+        allFamilies: state.families,
+        allMembers: state.members,
+        view: state.view,
+        loading: state.loading,
+        error: state.error,
+        reload: load,
+      }}
+    >
+      {children}
+    </DataContext.Provider>
+  )
 }
 
 /** Provides data for the current user; waits until the sign-in state is known. */

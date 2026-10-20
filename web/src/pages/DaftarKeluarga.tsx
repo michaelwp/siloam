@@ -3,12 +3,12 @@ import { Link } from 'react-router-dom'
 import { FamilyDialogs, type FamilyDialog } from '../components/forms'
 import { ActionsHeader, Badge, EditOnly, PageHeader, RowActions, Search, Status } from '../components/ui'
 import { useFullView } from '../auth'
-import { useData } from '../data'
+import { kolomLabel, useData } from '../data'
 import { matches } from '../format'
 
 export default function DaftarKeluarga() {
   const full = useFullView()
-  const { families, members, loading, error } = useData()
+  const { families, members, kolom, loading, error } = useData()
   const [q, setQ] = useState('')
   const [dialog, setDialog] = useState<FamilyDialog>(null)
   const rows = families.filter((f) => matches(q, f.name, f.domicile, f.note))
@@ -17,7 +17,7 @@ export default function DaftarKeluarga() {
     <>
       <PageHeader
         title="Daftar Keluarga"
-        subtitle={`${families.length} keluarga · ${members.length} jiwa`}
+        subtitle={`${kolomLabel(kolom)} · ${families.length} keluarga · ${members.length} jiwa`}
       >
         <Search value={q} onChange={setQ} placeholder="Cari keluarga / domisili…" />
         <EditOnly>
@@ -33,6 +33,7 @@ export default function DaftarKeluarga() {
           <table>
             <thead>
               <tr>
+                {kolom === null && <th className="num">Kolom</th>}
                 <th className="num">No</th>
                 <th>Nama Keluarga</th>
                 <th>Keterangan</th>
@@ -44,6 +45,7 @@ export default function DaftarKeluarga() {
             <tbody>
               {rows.map((f) => (
                 <tr key={f.id}>
+                  {kolom === null && <td className="num">{f.kolom}</td>}
                   <td className="num">{f.no}</td>
                   <td>
                     <Link to={`/database#${f.id}`} className="strong">

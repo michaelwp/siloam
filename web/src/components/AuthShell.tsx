@@ -18,10 +18,10 @@ export function AuthShell({
       </div>
       <section className="auth-card">
         <div className="brand">
-          <span className="brand-mark">K9</span>
+          <span className="brand-mark">GS</span>
           <div>
             <strong>GMIM Siloam</strong>
-            <small>Jemaat Kolom 9</small>
+            <small>Data Base Jemaat</small>
           </div>
         </div>
         <h1>{title}</h1>

@@ -5,6 +5,7 @@ import { AuthProvider } from './AuthProvider'
 import { BirthdayToast } from './components/BirthdayToast'
 import { ThemeToggle } from './components/ThemeToggle'
 import { DataScope } from './DataProvider'
+import { kolomLabel, useData } from './data'
 import Account from './pages/Account'
 import AdminUsers from './pages/AdminUsers'
 import AnggotaJemaat from './pages/AnggotaJemaat'
@@ -15,6 +16,7 @@ import DataBaseKeluarga from './pages/DataBaseKeluarga'
 import HutJemaat from './pages/HutJemaat'
 import HutPernikahan from './pages/HutPernikahan'
 import KategorialBipra from './pages/KategorialBipra'
+import Kolom from './pages/Kolom'
 import Login from './pages/Login'
 
 // The homepage plus one page per sheet of the original workbook. Visitors see
@@ -82,12 +84,13 @@ function Shell() {
     <div className="layout">
       <aside className="sidebar no-print">
         <Link to="/" className="brand">
-          <span className="brand-mark">K9</span>
+          <span className="brand-mark">GS</span>
           <div>
             <strong>GMIM Siloam</strong>
-            <small>Jemaat Kolom 9</small>
+            <small>Data Base Jemaat</small>
           </div>
         </Link>
+        <KolomPicker />
         <nav>
           {PAGES.map((p) => (
             <NavLink key={p.path} to={p.path} end={p.path === '/'}>
@@ -109,6 +112,7 @@ function Shell() {
                 <ThemeToggle />
               </div>
               <nav>
+                <NavLink to="/kolom">Kelola Kolom</NavLink>
                 <NavLink to="/akun">Akun Saya</NavLink>
                 {isAdmin && <NavLink to="/admin/pengguna">Pengguna</NavLink>}
                 <button
@@ -141,6 +145,14 @@ function Shell() {
             <Route key={p.path} path={p.path} element={p.element} />
           ))}
           <Route
+            path="/kolom"
+            element={
+              <RequireUser>
+                <Kolom />
+              </RequireUser>
+            }
+          />
+          <Route
             path="/akun"
             element={
               <RequireUser>
@@ -160,5 +172,23 @@ function Shell() {
         </Routes>
       </main>
     </div>
+  )
+}
+
+/** Which kolom every page shows; "Semua Kolom" shows the whole congregation. */
+function KolomPicker() {
+  const { koloms, kolom, setKolom } = useData()
+  return (
+    <label className="kolom-picker">
+      <span className="sr-only">Kolom yang ditampilkan</span>
+      <select value={kolom ?? ''} onChange={(e) => setKolom(e.target.value ? Number(e.target.value) : null)}>
+        <option value="">{kolomLabel(null)}</option>
+        {koloms.map((k) => (
+          <option key={k.id} value={k.number}>
+            {kolomLabel(k.number)}
+          </option>
+        ))}
+      </select>
+    </label>
   )
 }

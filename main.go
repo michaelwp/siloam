@@ -1,8 +1,9 @@
-// Command siloam serves the Jemaat Kolom 9 database app: a REST API backed by
-// MongoDB plus the React frontend embedded in the binary.
+// Command siloam serves the GMIM Siloam congregation database app (families
+// grouped by kolom): a REST API backed by MongoDB plus the React frontend
+// embedded in the binary.
 //
 //	siloam                                  # serve on :8080
-//	siloam -import data.xlsx [-replace]     # load the spreadsheet, then exit
+//	siloam -import data.xlsx [-kolom 11] [-replace]  # load the spreadsheet into a kolom, then exit
 //	siloam -copy-from <mongodb-uri> [-replace]  # copy all data into MONGODB_URI, then exit
 //
 // Settings come from environment variables, falling back to a .env file in the
@@ -53,6 +54,7 @@ func run() error {
 	mongoURI := flag.String("mongo", env("MONGODB_URI", "mongodb://localhost:27017/"+store.DefaultDatabase), "MongoDB connection URI (MONGODB_URI)")
 	dbName := flag.String("db", "", "MongoDB database name (default: from the URI path, else \""+store.DefaultDatabase+"\")")
 	importPath := flag.String("import", "", "import an .xlsx workbook and exit")
+	importKolom := flag.Int("kolom", store.LegacyKolom, "with -import: the kolom the workbook's families belong to")
 	copyFrom := flag.String("copy-from", "", "copy families, members and users from this MongoDB URI into MONGODB_URI and exit")
 	resetUser := flag.String("reset-user", "", "unlock this account, set a temporary password, print it and exit")
 	copyOnly := flag.String("collections", strings.Join(store.CopyCollections, ","), "with -copy-from: comma-separated collections to copy")
@@ -84,7 +86,7 @@ func run() error {
 		return runCopy(ctx, s, *copyFrom, strings.Split(*copyOnly, ","), *replace)
 	}
 	if *importPath != "" {
-		return runImport(ctx, s, *importPath, *replace)
+		return runImport(ctx, s, *importPath, *importKolom, *replace)
 	}
 
 	authSvc, err := auth.New(s, authConfig(*addr))
@@ -123,7 +125,7 @@ func run() error {
 	return nil
 }
 
-func runImport(ctx context.Context, s *store.Store, file string, replace bool) error {
+func runImport(ctx context.Context, s *store.Store, file string, kolom int, replace bool) error {
 	empty, err := s.IsEmpty(ctx)
 	if err != nil {
 		return err
@@ -136,11 +138,14 @@ func runImport(ctx context.Context, s *store.Store, file string, replace bool) e
 			return err
 		}
 	}
-	res, err := importer.Import(ctx, s, file)
+	if err := s.CreateKolomIfMissing(ctx, kolom); err != nil {
+		return err
+	}
+	res, err := importer.Import(ctx, s, file, kolom)
 	if err != nil {
 		return fmt.Errorf("import: %w", err)
 	}
-	log.Printf("imported %d families, %d members", res.Families, res.Members)
+	log.Printf("imported %d families, %d members into kolom %d", res.Families, res.Members, kolom)
 	return nil
 }
 
@@ -282,7 +287,7 @@ func authConfig(addr string) auth.Config {
 	}
 	return auth.Config{
 		RPID:                 env("WEBAUTHN_RP_ID", "localhost"),
-		RPName:               "Jemaat Kolom 9",
+		RPName:               "GMIM Siloam",
 		Origins:              origins,
 		SecureCookie:         env("COOKIE_SECURE", "false") == "true",
 		InitialAdminUser:     env("INITIAL_ADMIN_USER", "admin"),

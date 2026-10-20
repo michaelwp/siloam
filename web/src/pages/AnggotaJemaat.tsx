@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { MemberDialogs, type MemberDialog } from '../components/forms'
 import { ActionsHeader, EditOnly, PageHeader, RowActions, Search, Status } from '../components/ui'
 import { useFullView } from '../auth'
-import { useData } from '../data'
+import { kolomLabel, useData } from '../data'
 import { birthLine, byText, dayMonth, GENDERS, MARITAL_STATUSES, matches, triState } from '../format'
 
 type TriFilter = '' | 'yes' | 'no' | 'unknown'
@@ -16,7 +16,7 @@ const NO_FILTERS = { gender: '', status: '', baptized: '' as TriFilter, confirme
 
 export default function AnggotaJemaat() {
   const full = useFullView()
-  const { members, loading, error } = useData()
+  const { members, kolom, loading, error } = useData()
   const [q, setQ] = useState('')
   const [filters, setFilters] = useState(NO_FILTERS)
   const [dialog, setDialog] = useState<MemberDialog>(null)
@@ -37,7 +37,7 @@ export default function AnggotaJemaat() {
 
   return (
     <>
-      <PageHeader title="Daftar Anggota Jemaat" subtitle={`${rows.length} dari ${members.length} jiwa, urut abjad`}>
+      <PageHeader title="Daftar Anggota Jemaat" subtitle={`${kolomLabel(kolom)} · ${rows.length} dari ${members.length} jiwa, urut abjad`}>
         <Search value={q} onChange={setQ} />
         <EditOnly>
           <button className="btn primary" onClick={() => setDialog({ kind: 'add' })}>
@@ -105,6 +105,7 @@ export default function AnggotaJemaat() {
                 <th>Baptis</th>
                 <th>Sidi</th>
                 <th>Nama Keluarga</th>
+                {kolom === null && <th className="num">Kolom</th>}
                 <ActionsHeader />
               </tr>
             </thead>
@@ -120,6 +121,7 @@ export default function AnggotaJemaat() {
                   <td>{triState(m.baptized, 'Baptis')}</td>
                   <td>{triState(m.confirmed, 'Sidi')}</td>
                   <td>Kel. {m.familyName}</td>
+                  {kolom === null && <td className="num">{m.kolom}</td>}
                   <RowActions
                     onEdit={() => setDialog({ kind: 'edit', member: m })}
                     onDelete={() => setDialog({ kind: 'delete', member: m })}

@@ -16,11 +16,20 @@ const (
 	StatusSingle = "Belum Menikah"
 )
 
+// Kolom is a neighbourhood group of the congregation. Families belong to one
+// kolom (by number); members belong to it through their family.
+type Kolom struct {
+	ID        bson.ObjectID `bson:"_id,omitempty" json:"id"`
+	Number    int           `bson:"number" json:"number"`
+	CreatedAt time.Time     `bson:"createdAt" json:"createdAt,omitzero"`
+}
+
 // Family is one row of "Daftar Keluarga" plus the wedding date from
 // "Data Base Keluarga" / "Daftar HUT Pernikahan".
 type Family struct {
 	ID          bson.ObjectID `bson:"_id,omitempty" json:"id"`
-	No          int           `bson:"no" json:"no"`
+	Kolom       int           `bson:"kolom" json:"kolom"`
+	No          int           `bson:"no" json:"no"` // numbered within the kolom
 	Name        string        `bson:"name" json:"name"`
 	Note        string        `bson:"note" json:"note"` // keterangan, e.g. "Simpatisan"
 	Domicile    string        `bson:"domicile" json:"domicile"`
@@ -60,6 +69,7 @@ type FamilyView struct {
 type MemberView struct {
 	Member
 	FamilyName string `json:"familyName"`
+	Kolom      int    `json:"kolom"` // the family's kolom
 	Age        *int   `json:"age"`
 	AgeText    string `json:"ageText"`
 	Category   string `json:"category"`
@@ -117,8 +127,8 @@ func Category(age int, gender, maritalStatus string) (category string, elderly b
 	return category, age >= 60
 }
 
-func NewMemberView(m Member, familyName string, now time.Time) MemberView {
-	v := MemberView{Member: m, FamilyName: familyName}
+func NewMemberView(m Member, f Family, now time.Time) MemberView {
+	v := MemberView{Member: m, FamilyName: f.Name, Kolom: f.Kolom}
 	if m.BirthDate != nil {
 		y, mo, d := Diff(*m.BirthDate, now)
 		v.Age = &y
@@ -134,7 +144,7 @@ func monthDay(t time.Time) (*int, *int) {
 	return &m, &d
 }
 
-// Public returns the view for visitors who are not signed in: name, family,
+// Public returns the view for visitors who are not signed in: name, family, kolom,
 // gender, marital status, baptism/sidi, BIPRA category and birthday (day and
 // month). Birth year, age, birth place and family relationship are removed.
 func (v MemberView) Public() MemberView {
@@ -150,6 +160,7 @@ func (v MemberView) Public() MemberView {
 			Confirmed:     v.Confirmed,
 		},
 		FamilyName: v.FamilyName,
+		Kolom:      v.Kolom,
 		Category:   v.Category,
 		Elderly:    v.Elderly,
 		BirthMonth: v.BirthMonth,
@@ -157,12 +168,12 @@ func (v MemberView) Public() MemberView {
 	}
 }
 
-// Public returns the family view for visitors: name, number, note, member
+// Public returns the family view for visitors: kolom, name, number, note, member
 // count and anniversary (day and month) only. Domicile, the wedding year and
 // years married are removed.
 func (v FamilyView) Public() FamilyView {
 	out := FamilyView{
-		Family:       Family{ID: v.ID, No: v.No, Name: v.Name, Note: v.Note},
+		Family:       Family{ID: v.ID, Kolom: v.Kolom, No: v.No, Name: v.Name, Note: v.Note},
 		MemberCount:  v.MemberCount,
 		WeddingMonth: v.WeddingMonth,
 		WeddingDay:   v.WeddingDay,

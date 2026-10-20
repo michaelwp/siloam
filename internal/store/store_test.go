@@ -183,7 +183,7 @@ func TestLastAdminCannotBeRemovedConcurrently(t *testing.T) {
 func TestCopyRefusesSameDatabaseUnderAnotherName(t *testing.T) {
 	s, name := testStore(t)
 	ctx := context.Background()
-	if _, err := s.CreateFamily(ctx, model.Family{Name: "Keep"}); err != nil {
+	if _, err := s.CreateFamily(ctx, model.Family{Kolom: 1, Name: "Keep"}); err != nil {
 		t.Fatal(err)
 	}
 	// the same server spelled differently
@@ -203,9 +203,9 @@ func TestCopyRefusesSameDatabaseUnderAnotherName(t *testing.T) {
 func TestNumberingAndCounts(t *testing.T) {
 	s, _ := testStore(t)
 	ctx := context.Background()
-	f1, _ := s.CreateFamily(ctx, model.Family{Name: "A", No: 1})
-	_, _ = s.CreateFamily(ctx, model.Family{Name: "B", No: 5}) // gap, e.g. from an import
-	f3, err := s.CreateFamily(ctx, model.Family{Name: "C"})
+	f1, _ := s.CreateFamily(ctx, model.Family{Kolom: 1, Name: "A", No: 1})
+	_, _ = s.CreateFamily(ctx, model.Family{Kolom: 1, Name: "B", No: 5}) // gap, e.g. from an import
+	f3, err := s.CreateFamily(ctx, model.Family{Kolom: 1, Name: "C"})
 	if err != nil || f3.No != 6 {
 		t.Fatalf("next family no = %d, %v; want 6", f3.No, err)
 	}
@@ -217,6 +217,92 @@ func TestNumberingAndCounts(t *testing.T) {
 	counts, err := s.MemberCounts(ctx)
 	if err != nil || counts[f1.ID] != 2 || counts[f3.ID] != 0 {
 		t.Fatalf("counts = %v, %v", counts, err)
+	}
+}
+
+func TestKolomsSeededAndLegacyFamiliesMigrated(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	ks, err := s.ListKoloms(ctx)
+	if err != nil || len(ks) != DefaultKoloms || ks[0].Number != 1 || ks[DefaultKoloms-1].Number != DefaultKoloms {
+		t.Fatalf("seeded koloms = %v, %v", ks, err)
+	}
+	// a family from before koloms existed, and one in a kolom not in the list
+	if _, err := s.families.InsertMany(ctx, []any{
+		bson.D{{Key: "_id", Value: bson.NewObjectID()}, {Key: "no", Value: 1}, {Key: "name", Value: "Old"}},
+		bson.D{{Key: "_id", Value: bson.NewObjectID()}, {Key: "kolom", Value: 40}, {Key: "no", Value: 1}, {Key: "name", Value: "Far"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MigrateKoloms(ctx); err != nil {
+		t.Fatal(err)
+	}
+	fams, _ := s.ListFamilies(ctx)
+	if len(fams) != 2 || fams[0].Kolom != LegacyKolom || fams[1].Kolom != 40 {
+		t.Fatalf("families after migration = %+v", fams)
+	}
+	if ok, _ := s.KolomExists(ctx, 40); !ok {
+		t.Fatal("kolom used by a family was not added to the list")
+	}
+	// a deleted default kolom is not re-seeded
+	ks, _ = s.ListKoloms(ctx)
+	if err := s.DeleteKolom(ctx, ks[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	_ = s.MigrateKoloms(ctx)
+	if ok, _ := s.KolomExists(ctx, 1); ok {
+		t.Fatal("deleted kolom came back")
+	}
+}
+
+func TestFamiliesNumberedPerKolom(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	a1, _ := s.CreateFamily(ctx, model.Family{Kolom: 1, Name: "A1"})
+	a2, _ := s.CreateFamily(ctx, model.Family{Kolom: 1, Name: "A2"})
+	b1, err := s.CreateFamily(ctx, model.Family{Kolom: 2, Name: "B1"})
+	if err != nil || a1.No != 1 || a2.No != 2 || b1.No != 1 {
+		t.Fatalf("numbers = %d %d %d, %v", a1.No, a2.No, b1.No, err)
+	}
+	if _, err := s.CreateFamily(ctx, model.Family{Kolom: 77, Name: "X"}); !errors.Is(err, ErrNoKolom) {
+		t.Fatalf("create in unknown kolom = %v, want ErrNoKolom", err)
+	}
+	// moving A1 to kolom 2 numbers it last there and closes the gap in kolom 1
+	a1.Kolom = 2
+	moved, err := s.UpdateFamily(ctx, a1)
+	if err != nil || moved.No != 2 {
+		t.Fatalf("moved no = %d, %v", moved.No, err)
+	}
+	if got, _ := s.GetFamily(ctx, a2.ID); got.No != 1 {
+		t.Fatalf("kolom 1 not renumbered: A2 no = %d", got.No)
+	}
+	// deleting renumbers only within the kolom
+	if err := s.DeleteFamily(ctx, b1.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.GetFamily(ctx, a1.ID); got.No != 1 {
+		t.Fatalf("kolom 2 not renumbered: A1 no = %d", got.No)
+	}
+	if got, _ := s.GetFamily(ctx, a2.ID); got.No != 1 {
+		t.Fatalf("kolom 1 changed by a delete in kolom 2: A2 no = %d", got.No)
+	}
+}
+
+func TestKolomCreateAndDeleteRules(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	if _, err := s.CreateKolom(ctx, 3); !errors.Is(err, ErrKolomExists) {
+		t.Fatalf("duplicate kolom = %v, want ErrKolomExists", err)
+	}
+	k, err := s.CreateKolom(ctx, 13)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateFamily(ctx, model.Family{Kolom: 13, Name: "F"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteKolom(ctx, k.ID); !errors.Is(err, ErrKolomInUse) {
+		t.Fatalf("delete used kolom = %v, want ErrKolomInUse", err)
 	}
 }
 
