@@ -21,7 +21,7 @@ const (
 
 var (
 	ErrKolomExists = errors.New("kolom already exists")
-	ErrKolomInUse  = errors.New("kolom still has families")
+	ErrKolomInUse  = errors.New("kolom still has families or services")
 	ErrNoKolom     = errors.New("kolom does not exist")
 )
 
@@ -114,6 +114,12 @@ func (s *Store) DeleteKolom(ctx context.Context, id bson.ObjectID) error {
 	n, err := s.families.CountDocuments(ctx, bson.D{{Key: "kolom", Value: k.Number}})
 	if err != nil {
 		return err
+	}
+	if n == 0 {
+		n, err = s.services.CountDocuments(ctx, bson.D{{Key: "kolom", Value: k.Number}})
+		if err != nil {
+			return err
+		}
 	}
 	if n > 0 {
 		return ErrKolomInUse

@@ -25,6 +25,9 @@ type Store struct {
 	users      *mongo.Collection
 	sessions   *mongo.Collection
 	ceremonies *mongo.Collection
+
+	worshipTypes *mongo.Collection
+	services     *mongo.Collection
 }
 
 // DefaultDatabase is used when the URI has no database path.
@@ -70,6 +73,9 @@ func Connect(ctx context.Context, uri, dbName string) (*Store, error) {
 		users:      db.Collection("users"),
 		sessions:   db.Collection("sessions"),
 		ceremonies: db.Collection("webauthn_ceremonies"),
+
+		worshipTypes: db.Collection("worship_types"),
+		services:     db.Collection("services"),
 	}, nil
 }
 
@@ -90,6 +96,10 @@ func Open(ctx context.Context, uri, dbName string) (*Store, error) {
 		return nil, err
 	}
 	if err := s.MigrateKoloms(ctx); err != nil {
+		_ = s.Close(ctx)
+		return nil, err
+	}
+	if err := s.ensureScheduleIndexes(ctx); err != nil {
 		_ = s.Close(ctx)
 		return nil, err
 	}

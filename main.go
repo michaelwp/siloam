@@ -4,6 +4,7 @@
 //
 //	siloam                                  # serve on :8080
 //	siloam -import data.xlsx [-kolom 11] [-replace]  # load the spreadsheet into a kolom, then exit
+//	siloam -import-jadwal jadwal.xlsx [-kolom 11] [-replace]  # load a worship schedule, then exit
 //	siloam -copy-from <mongodb-uri> [-replace]  # copy all data into MONGODB_URI, then exit
 //
 // Settings come from environment variables, falling back to a .env file in the
@@ -28,6 +29,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	_ "time/tzdata" // APP_TIMEZONE works in minimal containers too
 
 	"siloam/internal/api"
 	"siloam/internal/auth"
@@ -54,11 +56,12 @@ func run() error {
 	mongoURI := flag.String("mongo", env("MONGODB_URI", "mongodb://localhost:27017/"+store.DefaultDatabase), "MongoDB connection URI (MONGODB_URI)")
 	dbName := flag.String("db", "", "MongoDB database name (default: from the URI path, else \""+store.DefaultDatabase+"\")")
 	importPath := flag.String("import", "", "import an .xlsx workbook and exit")
-	importKolom := flag.Int("kolom", store.LegacyKolom, "with -import: the kolom the workbook's families belong to")
+	importSchedule := flag.String("import-jadwal", "", "import a worship schedule (.xlsx) and exit")
+	importKolom := flag.Int("kolom", store.LegacyKolom, "with -import / -import-jadwal: the kolom the data belongs to")
 	copyFrom := flag.String("copy-from", "", "copy families, members and users from this MongoDB URI into MONGODB_URI and exit")
 	resetUser := flag.String("reset-user", "", "unlock this account, set a temporary password, print it and exit")
 	copyOnly := flag.String("collections", strings.Join(store.CopyCollections, ","), "with -copy-from: comma-separated collections to copy")
-	replace := flag.Bool("replace", false, "with -import / -copy-from: delete existing data first")
+	replace := flag.Bool("replace", false, "with -import / -import-jadwal / -copy-from: delete existing data first")
 	flag.Parse()
 
 	if loaded {
@@ -88,6 +91,16 @@ func run() error {
 	if *importPath != "" {
 		return runImport(ctx, s, *importPath, *importKolom, *replace)
 	}
+	if err := s.SeedWorshipTypes(ctx); err != nil {
+		return fmt.Errorf("seed worship types: %w", err)
+	}
+	if *importSchedule != "" {
+		return runImportSchedule(ctx, s, *importSchedule, *importKolom, *replace)
+	}
+	loc, err := time.LoadLocation(env("APP_TIMEZONE", "Asia/Makassar"))
+	if err != nil {
+		return fmt.Errorf("APP_TIMEZONE: %w", err)
+	}
 
 	authSvc, err := auth.New(s, authConfig(*addr))
 	if err != nil {
@@ -107,7 +120,7 @@ func run() error {
 
 	mux := http.NewServeMux()
 	authSvc.Register(mux)
-	api.New(s).Register(mux)
+	api.New(s, loc).Register(mux)
 	mux.Handle("/", spaHandler(web.Dist()))
 
 	handler := logRequests(securityHeaders(authSvc.RateLimit(authSvc.Middleware(mux)), env("COOKIE_SECURE", "false") == "true"))
@@ -146,6 +159,30 @@ func runImport(ctx context.Context, s *store.Store, file string, kolom int, repl
 		return fmt.Errorf("import: %w", err)
 	}
 	log.Printf("imported %d families, %d members into kolom %d", res.Families, res.Members, kolom)
+	return nil
+}
+
+func runImportSchedule(ctx context.Context, s *store.Store, file string, kolom int, replace bool) error {
+	n, err := s.CountServices(ctx)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		if !replace {
+			return errors.New("the schedule already has services; pass -replace to overwrite it")
+		}
+		if err := s.ResetServices(ctx); err != nil {
+			return err
+		}
+	}
+	if err := s.CreateKolomIfMissing(ctx, kolom); err != nil {
+		return err
+	}
+	n, err = importer.ImportSchedule(ctx, s, file, kolom)
+	if err != nil {
+		return fmt.Errorf("import schedule: %w", err)
+	}
+	log.Printf("imported %d services into kolom %d", n, kolom)
 	return nil
 }
 

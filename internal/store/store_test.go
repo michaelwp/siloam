@@ -324,3 +324,46 @@ func TestCeremonyIsSingleUseAndExpires(t *testing.T) {
 		t.Fatalf("expired take = %v, want ErrNotFound", err)
 	}
 }
+
+func TestScheduleRules(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	if err := s.SeedWorshipTypes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	types, _ := s.ListWorshipTypes(ctx)
+	if len(types) != len(model.DefaultWorshipTypes) || types[0].Name != "Kolom" {
+		t.Fatalf("seeded types = %+v", types)
+	}
+	if _, err := s.CreateWorshipType(ctx, model.WorshipType{Name: "pemuda", Color: "#000000"}); !errors.Is(err, ErrTypeExists) {
+		t.Fatalf("case-insensitive duplicate = %v, want ErrTypeExists", err)
+	}
+	day := time.Date(2026, 1, 21, 0, 0, 0, 0, time.UTC)
+	if _, err := s.CreateService(ctx, model.Service{Kolom: 77, TypeID: types[0].ID, Date: day, Time: "19:00"}); !errors.Is(err, ErrNoKolom) {
+		t.Fatalf("unknown kolom = %v", err)
+	}
+	if _, err := s.CreateService(ctx, model.Service{Kolom: 2, TypeID: bson.NewObjectID(), Date: day, Time: "19:00"}); !errors.Is(err, ErrNoType) {
+		t.Fatalf("unknown type = %v", err)
+	}
+	sv, err := s.CreateService(ctx, model.Service{Kolom: 2, TypeID: types[0].ID, Date: day, Time: "19:00"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteWorshipType(ctx, types[0].ID); !errors.Is(err, ErrTypeInUse) {
+		t.Fatalf("delete used type = %v, want ErrTypeInUse", err)
+	}
+	ks, _ := s.ListKoloms(ctx)
+	if err := s.DeleteKolom(ctx, ks[1].ID); !errors.Is(err, ErrKolomInUse) {
+		t.Fatalf("delete kolom with services = %v, want ErrKolomInUse", err)
+	}
+	renamed, err := s.UpdateWorshipType(ctx, model.WorshipType{ID: types[0].ID, Name: "Ibadah Kolom", Color: "#123456"})
+	if err != nil || renamed.Name != "Ibadah Kolom" || renamed.Order != 1 {
+		t.Fatalf("rename = %+v, %v", renamed, err)
+	}
+	if err := s.DeleteService(ctx, sv.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteWorshipType(ctx, types[0].ID); err != nil {
+		t.Fatalf("delete unused type = %v", err)
+	}
+}

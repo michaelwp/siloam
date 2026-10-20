@@ -15,6 +15,8 @@ import DaftarKeluarga from './pages/DaftarKeluarga'
 import DataBaseKeluarga from './pages/DataBaseKeluarga'
 import HutJemaat from './pages/HutJemaat'
 import HutPernikahan from './pages/HutPernikahan'
+import JadwalIbadah from './pages/JadwalIbadah'
+import JenisIbadah from './pages/JenisIbadah'
 import KategorialBipra from './pages/KategorialBipra'
 import Kolom from './pages/Kolom'
 import Login from './pages/Login'
@@ -23,6 +25,7 @@ import Login from './pages/Login'
 // them read-only; signed-in users can also edit.
 const PAGES = [
   { path: '/', label: 'Beranda', element: <Beranda /> },
+  { path: '/jadwal', label: 'Jadwal Ibadah', element: <JadwalIbadah /> },
   { path: '/keluarga', label: 'Daftar Keluarga', element: <DaftarKeluarga /> },
   { path: '/database', label: 'Data Base Keluarga', element: <DataBaseKeluarga /> },
   { path: '/hut-jemaat', label: 'Daftar HUT Jemaat', element: <HutJemaat /> },
@@ -113,6 +116,7 @@ function Shell() {
               </div>
               <nav>
                 <NavLink to="/kolom">Kelola Kolom</NavLink>
+                <NavLink to="/jenis-ibadah">Jenis Ibadah</NavLink>
                 <NavLink to="/akun">Akun Saya</NavLink>
                 {isAdmin && <NavLink to="/admin/pengguna">Pengguna</NavLink>}
                 <button
@@ -144,6 +148,14 @@ function Shell() {
           {PAGES.map((p) => (
             <Route key={p.path} path={p.path} element={p.element} />
           ))}
+          <Route
+            path="/jenis-ibadah"
+            element={
+              <RequireUser>
+                <JenisIbadah />
+              </RequireUser>
+            }
+          />
           <Route
             path="/kolom"
             element={

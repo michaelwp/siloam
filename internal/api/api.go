@@ -17,9 +17,10 @@ import (
 
 type API struct {
 	store *store.Store
+	loc   *time.Location // local time of the services (WITA)
 }
 
-func New(s *store.Store) *API { return &API{store: s} }
+func New(s *store.Store, loc *time.Location) *API { return &API{store: s, loc: loc} }
 
 func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/health", a.health)
@@ -39,6 +40,8 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/members/{id}", a.getMember)
 	mux.HandleFunc("PUT /api/members/{id}", a.updateMember)
 	mux.HandleFunc("DELETE /api/members/{id}", a.deleteMember)
+
+	a.registerSchedule(mux)
 
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "endpoint not found")
@@ -97,7 +100,7 @@ func (a *API) deleteKolom(w http.ResponseWriter, r *http.Request) {
 	}
 	err := a.store.DeleteKolom(r.Context(), id)
 	if errors.Is(err, store.ErrKolomInUse) {
-		writeError(w, http.StatusConflict, "kolom masih memiliki keluarga; pindahkan atau hapus keluarganya terlebih dahulu")
+		writeError(w, http.StatusConflict, "kolom masih memiliki keluarga atau jadwal ibadah; pindahkan atau hapus terlebih dahulu")
 		return
 	}
 	if err != nil {

@@ -16,7 +16,7 @@ type CopyResult map[string]int
 
 // CopyCollections are the collections CopyFrom can copy. Sessions are never
 // copied: users sign in again on the new database.
-var CopyCollections = []string{"koloms", "families", "members", "users"}
+var CopyCollections = []string{"koloms", "families", "members", "worship_types", "services", "users"}
 
 func (s *Store) collection(name string) (*mongo.Collection, error) {
 	switch name {
@@ -26,6 +26,10 @@ func (s *Store) collection(name string) (*mongo.Collection, error) {
 		return s.families, nil
 	case "members":
 		return s.members, nil
+	case "worship_types":
+		return s.worshipTypes, nil
+	case "services":
+		return s.services, nil
 	case "users":
 		return s.users, nil
 	}

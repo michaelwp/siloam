@@ -201,3 +201,50 @@ export const usersApi = {
     request<User>('POST', `/api/users/${id}/reset-password`, body),
   remove: (id: string) => request<void>('DELETE', `/api/users/${id}`),
 }
+
+// ---- jadwal ibadah ----
+
+/** A kind of service ("jenis ibadah") with its calendar color. */
+export type WorshipType = {
+  id: string
+  name: string
+  color: string // #rrggbb
+  order: number
+}
+
+export type Service = {
+  id: string
+  kolom: number
+  typeId: string
+  date: string // midnight UTC of the local date
+  time: string // "19:00"
+  host: string // host family, without "Kel."
+  location: string
+  leader: string // pemimpin ibadah
+  mc: string // pembawa acara
+  note: string
+  typeName: string
+  typeColor: string
+  start: string // absolute start/end (RFC 3339), for calendar links
+  end: string
+}
+
+export type ServiceInput = Pick<Service, 'kolom' | 'typeId' | 'time' | 'host' | 'location' | 'leader' | 'mc' | 'note'> & {
+  date: string | null
+}
+
+export function serviceToInput(s: Service): ServiceInput {
+  const { kolom, typeId, date, time, host, location, leader, mc, note } = s
+  return { kolom, typeId, date, time, host, location, leader, mc, note }
+}
+
+export const scheduleApi = {
+  load: () =>
+    Promise.all([request<Service[]>('GET', '/api/services'), request<WorshipType[]>('GET', '/api/worship-types')]),
+  createService: (s: ServiceInput) => request<Service>('POST', '/api/services', s),
+  updateService: (id: string, s: ServiceInput) => request<Service>('PUT', `/api/services/${id}`, s),
+  deleteService: (id: string) => request<void>('DELETE', `/api/services/${id}`),
+  createType: (t: { name: string; color: string }) => request<WorshipType>('POST', '/api/worship-types', t),
+  updateType: (id: string, t: { name: string; color: string }) => request<WorshipType>('PUT', `/api/worship-types/${id}`, t),
+  deleteType: (id: string) => request<void>('DELETE', `/api/worship-types/${id}`),
+}

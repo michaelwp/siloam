@@ -9,6 +9,16 @@ which kolom every page shows, and new families and members must pick their
 kolom first. Data from before koloms existed is moved to Kolom 11 at startup,
 and `-import` loads the workbook into Kolom 11 unless you pass `-kolom N`.
 
+**Jadwal Ibadah** is a Google-Calendar-style schedule (month grid or list)
+of worship services per kolom. Each service can be added to Google Calendar
+or Apple Calendar (`.ics`), and "Tambahkan ke Kalender Saya" subscribes a
+calendar app to `/api/calendar.ics` (optionally `?kolom=N`), so changes show
+up automatically. The kinds of service ("Jenis Ibadah": Kolom, WKI, PKB,
+Pemuda, Remaja, ASM, with their colors) are managed on their own page.
+Service times are in `APP_TIMEZONE` (default `Asia/Makassar`, WITA). Load a
+schedule spreadsheet with
+`siloam -import-jadwal jadwal.xlsx [-kolom 11] [-replace]`.
+
 - **Backend:** Go 1.25 (`net/http`), MongoDB
 - **Frontend:** React 19 + TypeScript (Vite), embedded into the Go binary with `go:embed`
 - **Sign-in:** username/password or passkey (WebAuthn), admin-managed accounts
