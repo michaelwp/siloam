@@ -208,6 +208,11 @@ docker-db-copy: ## Copy the bundled Docker MongoDB into MONGODB_URI from .env; R
 	IMAGE=$(IMAGE) $(COMPOSE) up -d --wait mongo
 	IMAGE=$(IMAGE) $(COMPOSE) run --rm --no-deps -e MONGODB_URI="$(MONGODB_URI)" app -copy-from $(BUNDLED_URI_DOCKER) $(if $(REPLACE),-replace)
 
+.PHONY: docker-user-reset
+docker-user-reset: ## Unlock an account in the containers' MongoDB, print a temporary password: make docker-user-reset NAME=erwin
+	@test -n "$(NAME)" || (echo "usage: make docker-user-reset NAME=<username>" && exit 1)
+	@IMAGE=$(IMAGE) $(if $(REMOTE_DB),CONTAINER_MONGODB_URI="$(MONGODB_URI)") $(COMPOSE) run --rm $(if $(REMOTE_DB),--no-deps) app -reset-user "$(NAME)"
+
 .PHONY: docker-down
 docker-down: ## Stop containers (data is kept)
 	$(COMPOSE) down
@@ -288,6 +293,11 @@ mac-db-copy: mac-mongo ## Copy the bundled Apple container MongoDB into MONGODB_
 	@test -n "$(REMOTE_DB)" || (echo "MONGODB_URI in .env must point to the new (non-localhost) database" && exit 1)
 	container run --rm --network $(MAC_NET) -e MONGODB_URI="$(MONGODB_URI)" \
 		$(IMAGE) -copy-from $(BUNDLED_URI_MAC) $(if $(REPLACE),-replace)
+
+.PHONY: mac-user-reset
+mac-user-reset: $(if $(REMOTE_DB),mac-net,mac-mongo) ## Unlock an account in the containers' MongoDB, print a temporary password: make mac-user-reset NAME=erwin
+	@test -n "$(NAME)" || (echo "usage: make mac-user-reset NAME=<username>" && exit 1)
+	@container run --rm --network $(MAC_NET) -e MONGODB_URI="$(MAC_APP_URI)" $(IMAGE) -reset-user "$(NAME)"
 
 .PHONY: mac-down
 mac-down: ## Stop and remove containers (data volume is kept)
