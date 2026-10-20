@@ -1,10 +1,11 @@
-import { useState } from 'react'
-import type { Member } from '../api'
+import { useState, type CSSProperties } from 'react'
+import type { Member, Service } from '../api'
 import { Link } from 'react-router-dom'
 import { ChartCard, ColumnChart, StackedBarChart } from '../components/charts'
 import { PageHeader, Status } from '../components/ui'
 import { kolomLabel, useData } from '../data'
 import { byText, CATEGORIES, dayMonth, daysUntil, MONTHS, parts } from '../format'
+import { clock, serviceDayKey, serviceTitle, shortDay, upcomingServices, useSchedule } from '../schedule'
 
 /** Public homepage: totals plus this month's birthdays and wedding anniversaries. */
 export default function Beranda() {
@@ -17,11 +18,23 @@ export default function Beranda() {
   const tiles = [
     { label: 'Keluarga', value: families.length, to: '/keluarga' },
     { label: 'Jiwa', value: members.length, to: '/anggota' },
-    { label: 'Laki-laki', value: count((m) => m.gender === 'Laki Laki'), to: '/anggota' },
-    { label: 'Perempuan', value: count((m) => m.gender === 'Perempuan'), to: '/anggota' },
+    {
+      label: 'Laki-laki',
+      value: count((m) => m.gender === 'Laki Laki'),
+      to: '/anggota',
+    },
+    {
+      label: 'Perempuan',
+      value: count((m) => m.gender === 'Perempuan'),
+      to: '/anggota',
+    },
   ]
   const bipra = [
-    ...CATEGORIES.map((c) => ({ label: c.label, range: c.range, value: count((m) => m.category === c.key) })),
+    ...CATEGORIES.map((c) => ({
+      label: c.label,
+      range: c.range,
+      value: count((m) => m.category === c.key),
+    })),
     { label: 'Lansia', range: '60+', value: count((m) => m.elderly) },
   ]
 
@@ -29,11 +42,19 @@ export default function Beranda() {
   const year = today.getFullYear()
   const birthdays = members
     .filter((m) => m.birthMonth === month + 1)
-    .map((m) => ({ m, d: m.birthDay!, turning: m.birthDate ? year - parts(m.birthDate).y : null }))
+    .map((m) => ({
+      m,
+      d: m.birthDay!,
+      turning: m.birthDate ? year - parts(m.birthDate).y : null,
+    }))
     .toSorted((a, b) => a.d - b.d || byText(a.m.name, b.m.name))
   const anniversaries = families
     .filter((f) => f.weddingMonth === month + 1)
-    .map((f) => ({ f, d: f.weddingDay!, years: f.weddingDate ? year - parts(f.weddingDate).y : null }))
+    .map((f) => ({
+      f,
+      d: f.weddingDay!,
+      years: f.weddingDate ? year - parts(f.weddingDate).y : null,
+    }))
     .toSorted((a, b) => a.d - b.d)
 
   return (
@@ -43,7 +64,10 @@ export default function Beranda() {
 
       {!loading && !error && (
         <>
-          <TodayBirthdays members={members} today={today} />
+          <div className="today-grid">
+            <TodayServices today={today} />
+            <TodayBirthdays members={members} today={today} />
+          </div>
 
           <div className="stats">
             {tiles.map((t) => (
@@ -104,11 +128,16 @@ export default function Beranda() {
             </ChartCard>
             <ChartCard title="Ukuran keluarga" subtitle="Jumlah keluarga menurut banyaknya anggota">
               <ColumnChart
-                data={Array.from({ length: Math.max(0, ...families.map((f) => f.memberCount)) }, (_, i) => ({
-                  label: `${i + 1} jiwa`,
-                  short: String(i + 1),
-                  value: families.filter((f) => f.memberCount === i + 1).length,
-                }))}
+                data={Array.from(
+                  {
+                    length: Math.max(0, ...families.map((f) => f.memberCount)),
+                  },
+                  (_, i) => ({
+                    label: `${i + 1} jiwa`,
+                    short: String(i + 1),
+                    value: families.filter((f) => f.memberCount === i + 1).length,
+                  }),
+                )}
                 unit="keluarga"
                 labelHead="Anggota per keluarga"
               />
@@ -176,6 +205,84 @@ export default function Beranda() {
 }
 
 const UPCOMING_DAYS = 7
+
+/** One service line in the Beranda panel. */
+function ServiceItem({ s, withDay }: { s: Service; withDay: boolean }) {
+  return (
+    <li style={{ '--type-color': s.typeColor } as CSSProperties}>
+      <span className="service-when">
+        {withDay && <span className="muted">{shortDay(serviceDayKey(s))} · </span>}
+        {clock(s.time)} · Ibadah {s.typeName}
+      </span>
+      <strong>{serviceTitle(s)}</strong>
+      {(s.leader || s.mc) && (
+        <span className="muted">
+          {s.leader && <>Pemimpin: {s.leader}</>}
+          {s.leader && s.mc && ' · '}
+          {s.mc && <>Pembawa acara: {s.mc}</>}
+        </span>
+      )}
+    </li>
+  )
+}
+
+/** Today's services and the coming week's (of the viewed kolom), beside the birthdays. */
+function TodayServices({ today }: { today: Date }) {
+  const { services, loading } = useSchedule()
+  const { today: todays, week, next } = upcomingServices(services, today, UPCOMING_DAYS - 1)
+  const dateText = `${today.getDate()} ${MONTHS[today.getMonth()]} ${today.getFullYear()}`
+
+  return (
+    <section
+      className={`card today-card services-card ${todays.length ? 'has-services' : ''}`}
+      aria-labelledby="services-title"
+    >
+      <header className="today-head">
+        <span className="today-icon" aria-hidden="true">
+          ⛪
+        </span>
+        <div className="grow">
+          <h2 id="services-title">Ibadah Hari Ini</h2>
+          <p className="muted small">{dateText}</p>
+        </div>
+        <Link to="/jadwal" className="btn small">
+          Jadwal
+        </Link>
+      </header>
+
+      {loading ? (
+        <p className="today-empty muted">Memuat jadwal…</p>
+      ) : (
+        <>
+          {todays.length > 0 ? (
+            <ul className="service-list">
+              {todays.map((s) => (
+                <ServiceItem key={s.id} s={s} withDay={false} />
+              ))}
+            </ul>
+          ) : (
+            <p className="today-empty">Tidak ada ibadah hari ini.</p>
+          )}
+          {week.length > 0 && (
+            <>
+              <h3 className="service-sub">Minggu Ini</h3>
+              <ul className="service-list compact">
+                {week.map((s) => (
+                  <ServiceItem key={s.id} s={s} withDay />
+                ))}
+              </ul>
+            </>
+          )}
+          {week.length === 0 && next && (
+            <p className="muted small">
+              Berikutnya: <strong>{serviceTitle(next)}</strong> ({shortDay(serviceDayKey(next))}, {clock(next.time)})
+            </p>
+          )}
+        </>
+      )}
+    </section>
+  )
+}
 
 /**
  * The homepage's main information: who has a birthday today. When nobody does,

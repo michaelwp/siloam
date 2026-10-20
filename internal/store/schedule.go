@@ -32,20 +32,34 @@ func (s *Store) ensureScheduleIndexes(ctx context.Context) error {
 	return err
 }
 
-// SeedWorshipTypes adds the default types to an empty list. It runs when the
-// server starts (not on Open), so a copy can bring the source's own types.
+// seededMarker records in the meta collection that the default worship types
+// were added once, so types an admin deleted never come back.
+const seededMarker = "worshipTypesSeeded"
+
+// SeedWorshipTypes adds the default types the first time a database is used
+// (an empty list). It runs when the server starts (not on Open), so a copy can
+// bring the source's own types first.
 func (s *Store) SeedWorshipTypes(ctx context.Context) error {
-	n, err := s.worshipTypes.CountDocuments(ctx, bson.D{})
+	meta := s.worshipTypes.Database().Collection("meta")
+	n, err := meta.CountDocuments(ctx, bson.D{{Key: "_id", Value: seededMarker}})
 	if err != nil || n > 0 {
 		return err
 	}
-	for i, t := range model.DefaultWorshipTypes {
-		t.Order = i + 1
-		if _, err := s.CreateWorshipType(ctx, t); err != nil && !errors.Is(err, ErrTypeExists) {
-			return err
+	if n, err = s.worshipTypes.CountDocuments(ctx, bson.D{}); err != nil {
+		return err
+	}
+	if n == 0 {
+		for i, t := range model.DefaultWorshipTypes {
+			t.Order = i + 1
+			if _, err := s.CreateWorshipType(ctx, t); err != nil && !errors.Is(err, ErrTypeExists) {
+				return err
+			}
 		}
 	}
-	return nil
+	_, err = meta.UpdateOne(ctx, bson.D{{Key: "_id", Value: seededMarker}},
+		bson.D{{Key: "$set", Value: bson.D{{Key: "at", Value: time.Now().UTC()}}}},
+		options.UpdateOne().SetUpsert(true))
+	return err
 }
 
 // ---- worship types ----

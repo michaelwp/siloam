@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -45,6 +46,11 @@ func (s *Store) collection(name string) (*mongo.Collection, error) {
 func (s *Store) CopyFrom(ctx context.Context, src *Store, names []string, replace bool) (CopyResult, error) {
 	if len(names) == 0 {
 		names = CopyCollections
+	}
+	// services refer to worship types by ID: copied alone they would point at
+	// types the target does not have
+	if slices.Contains(names, "services") && !slices.Contains(names, "worship_types") {
+		return nil, errors.New(`copy "services" together with "worship_types"`)
 	}
 	same, err := sameDatabase(ctx, src, s)
 	if err != nil {

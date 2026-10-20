@@ -367,3 +367,32 @@ func TestScheduleRules(t *testing.T) {
 		t.Fatalf("delete unused type = %v", err)
 	}
 }
+
+func TestDeletedWorshipTypesStayDeleted(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	if err := s.SeedWorshipTypes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	types, _ := s.ListWorshipTypes(ctx)
+	for _, ty := range types {
+		if err := s.DeleteWorshipType(ctx, ty.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.SeedWorshipTypes(ctx); err != nil { // e.g. the next restart
+		t.Fatal(err)
+	}
+	if types, _ = s.ListWorshipTypes(ctx); len(types) != 0 {
+		t.Fatalf("deleted types came back: %d", len(types))
+	}
+}
+
+func TestCopyRefusesServicesWithoutTypes(t *testing.T) {
+	s, _ := testStore(t)
+	src, _ := testStore(t)
+	_, err := s.CopyFrom(context.Background(), src, []string{"services"}, false)
+	if err == nil || !strings.Contains(err.Error(), "worship_types") {
+		t.Fatalf("copy services alone = %v", err)
+	}
+}

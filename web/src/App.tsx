@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { BrowserRouter, Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './auth'
 import { AuthProvider } from './AuthProvider'
-import { BirthdayToast } from './components/BirthdayToast'
+import { DailyNotice } from './components/DailyNotice'
 import { ThemeToggle } from './components/ThemeToggle'
 import { DataScope } from './DataProvider'
 import { kolomLabel, useData } from './data'
@@ -142,7 +142,7 @@ function Shell() {
           )}
         </div>
       </aside>
-      <BirthdayToast />
+      <DailyNotice />
       <main className="content">
         <Routes>
           {PAGES.map((p) => (

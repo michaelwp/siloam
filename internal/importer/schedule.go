@@ -36,11 +36,18 @@ func ImportSchedule(ctx context.Context, s *store.Store, path string, kolom int)
 		return 0, err
 	}
 
-	col := map[string]int{}
+	var col map[string]int
 	var out []model.Service
 	for i, row := range rows {
-		if len(col) == 0 {
-			col = headerColumns(row)
+		if col == nil {
+			found := headerColumns(row)
+			if _, ok := found["date"]; !ok {
+				continue // rows above the header (title)
+			}
+			if missing := missingColumns(found); len(missing) > 0 {
+				return 0, fmt.Errorf("row %d: header has no column for %s", i+1, strings.Join(missing, ", "))
+			}
+			col = found
 			continue
 		}
 		date := serialDate(cell(row, col["date"]))
@@ -60,13 +67,13 @@ func ImportSchedule(ctx context.Context, s *store.Store, path string, kolom int)
 			Kolom:  kolom,
 			TypeID: t.ID,
 			Date:   *date,
-			Time:   dayFraction(cell(row, col["time"])),
+			Time:   timeCell(row, col),
 			Host:   strings.TrimSpace(strings.TrimPrefix(host, "Kel. ")),
 			MC:     cell(row, col["mc"]),
 			Leader: cell(row, col["leader"]),
 		})
 	}
-	if len(col) == 0 {
+	if col == nil {
 		return 0, fmt.Errorf("sheet %q: header row (Hari / Tanggal …) not found", sheets[0])
 	}
 	return len(out), s.InsertServices(ctx, out)
@@ -92,10 +99,35 @@ func headerColumns(row []string) map[string]int {
 			col["type"] = i
 		}
 	}
-	if _, ok := col["date"]; !ok {
-		return map[string]int{}
-	}
 	return col
+}
+
+// requiredColumns are the headers a schedule must have (the time is
+// optional: without it every service is at 19:00).
+var requiredColumns = []struct{ key, header string }{
+	{"date", "Hari / Tanggal"},
+	{"host", "Nama Keluarga"},
+	{"mc", "Pembawa Acara"},
+	{"leader", "Pemimpin Ibadah"},
+	{"type", "Jenis Ibadah"},
+}
+
+func missingColumns(col map[string]int) []string {
+	var out []string
+	for _, c := range requiredColumns {
+		if _, ok := col[c.key]; !ok {
+			out = append(out, fmt.Sprintf("%q", c.header))
+		}
+	}
+	return out
+}
+
+func timeCell(row []string, col map[string]int) string {
+	i, ok := col["time"]
+	if !ok {
+		return "19:00"
+	}
+	return dayFraction(cell(row, i))
 }
 
 // matchType finds a type by name or by the abbreviation in parentheses,

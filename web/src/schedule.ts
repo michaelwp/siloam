@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { scheduleApi, type Service, type WorshipType } from './api'
 import { useData } from './data'
-import { parts } from './format'
+import { MONTHS, parts } from './format'
 
 /** Services (of the viewed kolom) and worship types, with a reload. */
 export function useSchedule() {
@@ -114,7 +114,38 @@ export function icsUrl(s: Service) {
   return `/api/services/${s.id}/ics`
 }
 
-/** The subscribable feed (all services, or one kolom). */
-export function feedUrl(kolom: number | null) {
-  return `${window.location.origin}/api/calendar.ics${kolom === null ? '' : `?kolom=${kolom}`}`
+/** The subscribable feed: all services, or one kolom; typeIds (when given) limits the jenis. */
+export function feedUrl(kolom: number | null, typeIds?: string[]) {
+  const q = new URLSearchParams()
+  if (kolom !== null) q.set('kolom', String(kolom))
+  for (const id of typeIds ?? []) q.append('type', id)
+  const qs = q.toString()
+  return `${window.location.origin}/api/calendar.ics${qs ? `?${qs}` : ''}`
+}
+
+/** Chronological order: date, then time. */
+export function byStart(a: Service, b: Service) {
+  return serviceDayKey(a).localeCompare(serviceDayKey(b)) || a.time.localeCompare(b.time)
+}
+
+/** "Rabu, 21 Okt" from a "2026-10-21" key */
+export function shortDay(key: string) {
+  const [y, m, d] = key.split('-').map(Number)
+  return `${WEEKDAYS[new Date(y, m - 1, d).getDay()]}, ${d} ${MONTHS[m - 1].slice(0, 3)}`
+}
+
+/**
+ * Services of today, of the next `days` days after today, and the first one
+ * after that (for "berikutnya" when the week is empty), in time order.
+ */
+export function upcomingServices(services: Service[], today: Date, days: number) {
+  const todayKey = dayKey(today.getFullYear(), today.getMonth(), today.getDate())
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + days)
+  const endKey = dayKey(end.getFullYear(), end.getMonth(), end.getDate())
+  const sorted = services.toSorted(byStart)
+  return {
+    today: sorted.filter((s) => serviceDayKey(s) === todayKey),
+    week: sorted.filter((s) => serviceDayKey(s) > todayKey && serviceDayKey(s) <= endKey),
+    next: sorted.find((s) => serviceDayKey(s) > endKey) ?? null,
+  }
 }

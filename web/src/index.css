@@ -451,7 +451,8 @@ tr.highlight {
 }
 .form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0, …): a select sized to a long option must not widen the form */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px 14px;
   padding: 8px 20px;
 }
@@ -459,6 +460,11 @@ tr.highlight {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
+}
+.field > :is(input, select, textarea) {
+  width: 100%;
+  min-width: 0;
 }
 .field > span {
   font-size: 0.82rem;
@@ -595,7 +601,7 @@ tr.highlight {
   padding-right: 0;
 }
 .auth-form.flush .form-grid {
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
 }
 .auth-form.flush .form-error,
 .auth-form.flush .form-success {
@@ -1199,21 +1205,21 @@ a.stat {
 }
 
 /* ---- birthday notification (centered modal) ---- */
-.birthday-toast {
-  width: min(420px, calc(100vw - 32px));
+.daily-notice {
+  width: min(480px, calc(100vw - 32px));
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-top: 4px solid var(--green);
+  border-top: 4px solid var(--accent);
   border-radius: 16px;
   box-shadow: 0 24px 60px rgb(0 0 0 / 30%);
   padding: 18px 20px 14px;
   animation: toast-in 0.2s ease-out;
 }
 /* the page behind: dimmed and blurred (and inert, via showModal) */
-.birthday-toast::backdrop {
+.daily-notice::backdrop {
   background: rgb(10 14 20 / 40%);
   /* standard property only: the build adds the Safari prefix itself (declaring
      both made the minifier keep just -webkit-, which Chrome ignores) */
@@ -1226,48 +1232,92 @@ a.stat {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .birthday-toast {
+  .daily-notice {
     animation: none;
   }
 }
-.birthday-toast-head {
+.daily-notice-head {
   display: flex;
   align-items: flex-start;
   gap: 10px;
 }
-.birthday-toast-head h2 {
+.daily-notice-head h2 {
   font-size: 1.05rem;
 }
-.birthday-toast-head p {
+.daily-notice-head p {
   margin-top: 2px;
 }
-.birthday-toast-list {
+.notice-section {
+  margin-top: 14px;
+}
+.notice-section h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+.notice-services {
   list-style: none;
-  margin: 12px 0;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.birthday-toast-list li {
+.notice-services li {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border-left: 4px solid var(--type-color);
+  background: var(--surface-2);
+}
+.notice-services li.today {
+  background: color-mix(in srgb, var(--type-color) 14%, var(--surface));
+}
+.notice-time {
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.notice-services li.today .notice-time {
+  font-size: 1.05rem;
+}
+.notice-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+.daily-notice-foot {
+  margin-top: 14px;
+}
+.daily-notice-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.daily-notice-list li {
   display: flex;
   flex-direction: column;
   padding: 8px 10px;
   border-radius: 8px;
   background: var(--green-soft);
 }
-.birthday-toast-foot {
+.daily-notice-foot {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
-.birthday-toast-actions {
+.daily-notice-actions {
   display: flex;
   gap: 6px;
 }
-.birthday-toast-actions .btn {
+.daily-notice-actions .btn {
   text-decoration: none;
 }
 
@@ -1986,4 +2036,66 @@ td.actions .btn + .btn {
 textarea {
   resize: vertical;
   font: inherit;
+}
+.copy-hint {
+  display: block;
+  margin: 0;
+}
+
+/* ---- beranda: services beside birthdays ---- */
+.today-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+  align-items: start;
+}
+.today-grid .today-card {
+  margin-bottom: 0;
+  height: 100%;
+}
+.services-card {
+  border-left-color: var(--accent);
+}
+.services-card.has-services {
+  background: linear-gradient(90deg, var(--accent-soft), var(--surface) 70%);
+}
+.service-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.service-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--type-color);
+}
+.service-list strong {
+  font-size: 1.3rem;
+}
+.service-list .muted {
+  font-size: 1rem;
+}
+.service-when {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.service-list.compact li {
+  padding: 8px 12px;
+}
+.service-list.compact strong {
+  font-size: 1.1rem;
+}
+.service-sub {
+  margin: 16px 0 0;
+  font-size: 1rem;
+  color: var(--muted);
 }

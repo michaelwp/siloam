@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api, type Kolom as KolomType } from '../api'
 import { ConfirmDelete, PageHeader, Status } from '../components/ui'
 import { useData } from '../data'
+import { useSchedule } from '../schedule'
 
 /** Signed-in users (admin and operators) manage the list of koloms. */
 export default function Kolom() {
@@ -13,7 +14,9 @@ export default function Kolom() {
   const [formError, setFormError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<KolomType | null>(null)
 
+  const { allServices } = useSchedule()
   const familiesIn = (k: number) => allFamilies.filter((f) => f.kolom === k).length
+  const servicesIn = (k: number) => allServices.filter((s) => s.kolom === k).length
   const membersIn = (k: number) => allMembers.filter((m) => m.kolom === k).length
   const next = koloms.reduce((max, k) => Math.max(max, k.number), 0) + 1
 
@@ -68,17 +71,21 @@ export default function Kolom() {
                 <th>Kolom</th>
                 <th className="num">Keluarga</th>
                 <th className="num">Jiwa</th>
+                <th className="num">Jadwal</th>
                 <th className="actions">Aksi</th>
               </tr>
             </thead>
             <tbody>
               {koloms.map((k) => {
                 const fams = familiesIn(k.number)
+                const svcs = servicesIn(k.number)
+                const inUse = fams > 0 || svcs > 0
                 return (
                   <tr key={k.id}>
                     <td className="strong">Kolom {k.number}</td>
                     <td className="num">{fams}</td>
                     <td className="num">{membersIn(k.number)}</td>
+                    <td className="num">{svcs}</td>
                     <td className="actions">
                       <button
                         className="btn small"
@@ -91,8 +98,8 @@ export default function Kolom() {
                       </button>
                       <button
                         className="btn small danger"
-                        disabled={fams > 0}
-                        title={fams > 0 ? 'Kolom yang masih memiliki keluarga tidak dapat dihapus' : undefined}
+                        disabled={inUse}
+                        title={inUse ? 'Kolom yang masih memiliki keluarga atau jadwal ibadah tidak dapat dihapus' : undefined}
                         onClick={() => setDeleting(k)}
                       >
                         Hapus

@@ -1,10 +1,10 @@
 import { useMemo, useState, type CSSProperties } from 'react'
-import { scheduleApi, serviceToInput, type Service, type ServiceInput, type WorshipType } from '../api'
+import { scheduleApi, serviceToInput, type Member, type Service, type ServiceInput, type WorshipType } from '../api'
 import { useCanEdit } from '../auth'
 import { KolomField } from '../components/forms'
 import { ConfirmDelete, Field, FormShell, Modal, Status } from '../components/ui'
 import { kolomLabel, useData } from '../data'
-import { fromInputDate, MONTHS, toInputDate } from '../format'
+import { byText, fromInputDate, MONTHS, toInputDate } from '../format'
 import {
   clock,
   dayKey,
@@ -35,7 +35,7 @@ const narrow = () => typeof window !== 'undefined' && window.matchMedia('(max-wi
 export default function JadwalIbadah() {
   const { kolom } = useData()
   const canEdit = useCanEdit()
-  const { services, allServices, types, loading, error, reload } = useSchedule()
+  const { services, types, loading, error, reload } = useSchedule()
   const [today] = useState(() => new Date())
   const [cursor, setCursor] = useState(() => ({ y: today.getFullYear(), m: today.getMonth() }))
   const [view, setView] = useState<View>(() => (narrow() ? 'agenda' : 'month'))
@@ -180,7 +180,6 @@ export default function JadwalIbadah() {
           service={dialog.kind === 'edit' ? dialog.service : undefined}
           date={dialog.kind === 'add' ? dialog.date : null}
           types={types}
-          people={[...new Set(allServices.flatMap((x) => [x.leader, x.mc]).filter(Boolean))].toSorted()}
           onClose={() => setDialog(null)}
           onSaved={reload}
         />
@@ -202,7 +201,13 @@ export default function JadwalIbadah() {
           }}
         />
       )}
-      {dialog?.kind === 'subscribe' && <Subscribe kolom={kolom} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'subscribe' && (
+        <Subscribe
+          kolom={kolom}
+          types={hidden.size ? types.filter((t) => !hidden.has(t.id)) : null}
+          onClose={() => setDialog(null)}
+        />
+      )}
     </div>
   )
 }
@@ -242,8 +247,8 @@ function MonthGrid({
   onAdd?: (key: string) => void
 }) {
   const days = monthDays(cursor.y, cursor.m)
-  // drop a trailing week that lies entirely in the next month
-  const weeks = days[35].m !== cursor.m ? 5 : 6
+  // only the weeks that contain days of this month (4–6)
+  const weeks = Math.ceil((new Date(cursor.y, cursor.m, 1).getDay() + new Date(cursor.y, cursor.m + 1, 0).getDate()) / 7)
   return (
     <div className="cal-month" style={{ '--weeks': weeks } as CSSProperties}>
       {WEEKDAYS.map((w) => (
@@ -490,19 +495,16 @@ function ServiceForm({
   service,
   date,
   types,
-  people,
   onClose,
   onSaved,
 }: {
   service?: Service
   date: string | null
   types: WorshipType[]
-  /** names already used as leader / MC, offered as suggestions */
-  people: string[]
   onClose: () => void
   onSaved: () => Promise<void>
 }) {
-  const { kolom, allFamilies } = useData()
+  const { kolom, allFamilies, allMembers } = useData()
   const [s, setS] = useState<ServiceInput>(
     service
       ? serviceToInput(service)
@@ -575,19 +577,22 @@ function ServiceForm({
         <Field label="Lokasi (jika bukan di rumah tuan rumah)" wide>
           <input disabled={off} value={s.location} onChange={(e) => set({ location: e.target.value })} />
         </Field>
-        <Field label="Pemimpin Ibadah">
-          <input disabled={off} list="people-options" value={s.leader} onChange={(e) => set({ leader: e.target.value })} />
-        </Field>
-        <Field label="Pembawa Acara">
-          <input disabled={off} list="people-options" value={s.mc} onChange={(e) => set({ mc: e.target.value })} />
-          <datalist id="people-options">
-            {people.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </datalist>
-        </Field>
+        <PersonField
+          label="Pemimpin Ibadah"
+          value={s.leader}
+          disabled={off}
+          kolom={s.kolom}
+          members={allMembers}
+          onChange={(leader) => set({ leader })}
+        />
+        <PersonField
+          label="Pembawa Acara"
+          value={s.mc}
+          disabled={off}
+          kolom={s.kolom}
+          members={allMembers}
+          onChange={(mc) => set({ mc })}
+        />
         <Field label="Keterangan" wide>
           <textarea disabled={off} rows={2} value={s.note} onChange={(e) => set({ note: e.target.value })} />
         </Field>
@@ -596,17 +601,24 @@ function ServiceForm({
   )
 }
 
-function Subscribe({ kolom, onClose }: { kolom: number | null; onClose: () => void }) {
-  const url = feedUrl(kolom)
+/** types: the jenis left ticked in the filter, or null when all are shown. */
+function Subscribe({ kolom, types, onClose }: { kolom: number | null; types: WorshipType[] | null; onClose: () => void }) {
+  const url = feedUrl(kolom, types?.map((t) => t.id))
   const webcal = url.replace(/^https?:/, 'webcal:')
-  const [copied, setCopied] = useState(false)
+  const [copy, setCopy] = useState<'idle' | 'done' | 'manual'>('idle')
   const local = /^(localhost|127\.|\[::1\])/.test(window.location.hostname)
   return (
     <Modal title="Tambahkan ke Kalender Saya" onClose={onClose}>
       <div className="subscribe">
         <p>
-          Berlangganan jadwal ibadah <b>{kolomLabel(kolom)}</b>: jadwal baru dan perubahan akan muncul otomatis di
-          kalender Anda.
+          Berlangganan jadwal ibadah <b>{kolomLabel(kolom)}</b>
+          {types && (
+            <>
+              {' '}
+              (hanya <b>{types.length ? types.map((t) => t.name).join(', ') : 'tidak ada jenis yang dipilih'}</b>)
+            </>
+          )}
+          : jadwal baru dan perubahan akan muncul otomatis di kalender Anda.
         </p>
         <div className="subscribe-actions">
           <a className="btn primary" href={`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`} target="_blank" rel="noopener noreferrer">
@@ -619,23 +631,30 @@ function Subscribe({ kolom, onClose }: { kolom: number | null; onClose: () => vo
         <label className="field">
           <span>Alamat kalender (untuk aplikasi lain)</span>
           <div className="copy-row">
-            <input readOnly value={url} onFocus={(e) => e.target.select()} />
+            <input id="feed-url" readOnly value={url} onFocus={(e) => e.target.select()} />
             <button
               type="button"
               className="btn"
               onClick={async () => {
                 try {
+                  // needs HTTPS (or localhost); elsewhere fall back to a selected field
                   await navigator.clipboard.writeText(url)
-                  setCopied(true)
+                  setCopy('done')
                 } catch {
-                  setCopied(false)
+                  document.querySelector<HTMLInputElement>('#feed-url')?.select()
+                  setCopy('manual')
                 }
               }}
             >
-              {copied ? 'Disalin ✓' : 'Salin'}
+              {copy === 'done' ? 'Disalin ✓' : 'Salin'}
             </button>
           </div>
         </label>
+        {copy === 'manual' && (
+          <output className="form-error copy-hint">
+            Browser tidak mengizinkan menyalin otomatis. Alamat sudah dipilih, tekan Ctrl+C (⌘C di Mac) untuk menyalin.
+          </output>
+        )}
         {local && (
           <p className="muted small">
             Catatan: aplikasi ini sedang dibuka di alamat lokal. Google Calendar hanya dapat berlangganan dari alamat
@@ -645,5 +664,100 @@ function Subscribe({ kolom, onClose }: { kolom: number | null; onClose: () => vo
         <p className="muted small">Ingin menambahkan satu ibadah saja? Klik ibadahnya di kalender.</p>
       </div>
     </Modal>
+  )
+}
+
+const OTHER = '__other__'
+
+/**
+ * Pemimpin ibadah / pembawa acara: picked from members who are baptized and
+ * sidi (this kolom first), or typed in as another name (e.g. a pastor from
+ * outside the congregation). A saved name that is not such a member opens in
+ * the text box, so it is kept as it is.
+ */
+function PersonField({
+  label,
+  value,
+  disabled,
+  kolom,
+  members,
+  onChange,
+}: {
+  label: string
+  value: string
+  disabled: boolean
+  kolom: number
+  members: Member[]
+  onChange: (name: string) => void
+}) {
+  const eligible = members.filter((m) => m.baptized === true && m.confirmed === true).toSorted((a, b) => byText(a.name, b.name))
+  const here = eligible.filter((m) => m.kolom === kolom)
+  const elsewhere = eligible.filter((m) => m.kolom !== kolom)
+  // 'saved': editing a saved non-member name; 'new': the user chose "+ Nama lain"
+  const [typing, setTyping] = useState<false | 'saved' | 'new'>(() =>
+    value !== '' && !eligible.some((m) => m.name === value) ? 'saved' : false,
+  )
+
+  if (typing) {
+    return (
+      <Field label={`${label} (nama lain)`}>
+        <div className="copy-row">
+          <input
+            disabled={disabled}
+            value={value}
+            placeholder="mis. Pdt. …"
+            // eslint-disable-next-line jsx-a11y/no-autofocus -- the user just asked to type a name
+            autoFocus={typing === 'new'}
+            onChange={(e) => onChange(e.target.value)}
+          />
+          <button
+            type="button"
+            className="btn"
+            disabled={disabled}
+            onClick={() => {
+              onChange('')
+              setTyping(false)
+            }}
+          >
+            Pilih anggota
+          </button>
+        </div>
+      </Field>
+    )
+  }
+  return (
+    <Field label={label}>
+      <select
+        disabled={disabled}
+        value={value}
+        onChange={(e) => {
+          if (e.target.value === OTHER) {
+            onChange('')
+            setTyping('new')
+          } else onChange(e.target.value)
+        }}
+      >
+        <option value="">— pilih {label.toLowerCase()} —</option>
+        {here.length > 0 && (
+          <optgroup label={`Anggota Kolom ${kolom} (baptis & sidi)`}>
+            {here.map((m) => (
+              <option key={m.id} value={m.name}>
+                {m.name}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        {elsewhere.length > 0 && (
+          <optgroup label="Anggota kolom lain (baptis & sidi)">
+            {elsewhere.map((m) => (
+              <option key={m.id} value={m.name}>
+                {m.name} · Kolom {m.kolom}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        <option value={OTHER}>+ Nama lain (bukan anggota jemaat)…</option>
+      </select>
+    </Field>
   )
 }
