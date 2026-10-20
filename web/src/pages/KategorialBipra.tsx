@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { MemberDialogs, type MemberDialog } from '../components/forms'
-import { Badge, PageHeader, RowActions, Search, Status } from '../components/ui'
+import { ActionsHeader, Badge, EditOnly, PageHeader, RowActions, Search, Status } from '../components/ui'
+import { useFullView } from '../auth'
 import { useData } from '../data'
-import { byText, CATEGORIES, longDate, matches, triState } from '../format'
+import { birthLine, byText, CATEGORIES, dayMonth, matches, triState } from '../format'
 
 const LANSIA = 'Lansia'
 
 export default function KategorialBipra() {
+  const full = useFullView()
   const { members, loading, error } = useData()
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('')
@@ -25,9 +27,11 @@ export default function KategorialBipra() {
     <>
       <PageHeader title="Kategorial BIPRA" subtitle="Kategori dihitung otomatis dari umur, jenis kelamin dan status">
         <Search value={q} onChange={setQ} />
-        <button className="btn primary" onClick={() => setDialog({ kind: 'add' })}>
-          + Tambah Anggota
-        </button>
+        <EditOnly>
+          <button className="btn primary" onClick={() => setDialog({ kind: 'add' })}>
+            + Tambah Anggota
+          </button>
+        </EditOnly>
       </PageHeader>
 
       <div className="stats">
@@ -57,17 +61,15 @@ export default function KategorialBipra() {
               <tr>
                 <th className="num">No</th>
                 <th>Nama Lengkap</th>
-                <th>Tempat, Tanggal Lahir</th>
+                <th>{full ? 'Tempat, Tanggal Lahir' : 'Ulang Tahun'}</th>
                 <th>Jenis Kelamin</th>
                 <th>Status</th>
-                <th className="num">Umur</th>
+                {full && <th className="num">Umur</th>}
                 <th>Kategori</th>
                 <th>Baptis</th>
                 <th>Sidi</th>
                 <th>Nama Keluarga</th>
-                <th className="no-print">
-                  <span className="sr-only">Aksi</span>
-                </th>
+                <ActionsHeader />
               </tr>
             </thead>
             <tbody>
@@ -75,14 +77,10 @@ export default function KategorialBipra() {
                 <tr key={m.id}>
                   <td className="num">{i + 1}</td>
                   <td className="strong">{m.name}</td>
-                  <td>
-                    {m.birthPlace}
-                    {m.birthPlace && ', '}
-                    {longDate(m.birthDate)}
-                  </td>
+                  <td>{full ? birthLine(m) : dayMonth(m.birthDay, m.birthMonth)}</td>
                   <td>{m.gender}</td>
                   <td>{m.maritalStatus}</td>
-                  <td className="num">{m.age ?? '–'}</td>
+                  {full && <td className="num">{m.age ?? '–'}</td>}
                   <td className="nowrap">
                     {m.category && <Badge tone={m.category.toLowerCase()}>{m.category}</Badge>}{' '}
                     {m.elderly && <Badge tone="lansia">Lansia</Badge>}

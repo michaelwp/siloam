@@ -1,24 +1,27 @@
 import { useState } from 'react'
 import { MemberDialogs, type MemberDialog } from '../components/forms'
-import { PageHeader, RowActions, Search, Status } from '../components/ui'
+import { ActionsHeader, EditOnly, PageHeader, RowActions, Search, Status } from '../components/ui'
+import { useFullView } from '../auth'
 import { useData } from '../data'
-import { longDate, matches, MONTHS, parts } from '../format'
+import { birthLine, dayMonth, matches, MONTHS } from '../format'
 
 export default function HutJemaat() {
+  const full = useFullView()
   const { members, loading, error } = useData()
   const [q, setQ] = useState('')
   const [month, setMonth] = useState<number | 'all'>('all')
   const [dialog, setDialog] = useState<MemberDialog>(null)
   const [thisMonth] = useState(() => new Date().getMonth())
 
-  const withDate = members.filter((m) => m.birthDate && matches(q, m.name, m.familyName))
-  const noDate = members.filter((m) => !m.birthDate)
+  // birthMonth/birthDay are present for visitors too (the full date is not)
+  const withDate = members.filter((m) => m.birthMonth && matches(q, m.name, m.familyName))
+  const noDate = members.filter((m) => !m.birthMonth)
   const months = MONTHS.map((name, i) => ({
     name,
     i,
     rows: withDate
-      .filter((m) => parts(m.birthDate!).m === i)
-      .toSorted((a, b) => parts(a.birthDate!).d - parts(b.birthDate!).d),
+      .filter((m) => m.birthMonth === i + 1)
+      .toSorted((a, b) => a.birthDay! - b.birthDay!),
   })).filter((g) => month === 'all' || g.i === month)
 
   return (
@@ -33,9 +36,11 @@ export default function HutJemaat() {
             </option>
           ))}
         </select>
-        <button className="btn primary" onClick={() => setDialog({ kind: 'add' })}>
-          + Tambah Anggota
-        </button>
+        <EditOnly>
+          <button className="btn primary" onClick={() => setDialog({ kind: 'add' })}>
+            + Tambah Anggota
+          </button>
+        </EditOnly>
       </PageHeader>
 
       <Status loading={loading} error={error} empty={!members.length} />
@@ -55,12 +60,10 @@ export default function HutJemaat() {
                     <tr>
                       <th className="num">No</th>
                       <th>Nama Lengkap</th>
-                      <th>Tempat, Tanggal Lahir</th>
-                      <th>Umur</th>
+                      <th>{full ? 'Tempat, Tanggal Lahir' : 'Ulang Tahun'}</th>
+                      {full && <th>Umur</th>}
                       <th>Nama Keluarga</th>
-                      <th className="no-print">
-                  <span className="sr-only">Aksi</span>
-                </th>
+                      <ActionsHeader />
                     </tr>
                   </thead>
                   <tbody>
@@ -68,12 +71,8 @@ export default function HutJemaat() {
                       <tr key={m.id}>
                         <td className="num">{i + 1}</td>
                         <td className="strong">{m.name}</td>
-                        <td>
-                          {m.birthPlace}
-                          {m.birthPlace && ', '}
-                          {longDate(m.birthDate)}
-                        </td>
-                        <td className="nowrap">{m.ageText}</td>
+                        <td>{full ? birthLine(m) : dayMonth(m.birthDay, m.birthMonth)}</td>
+                        {full && <td className="nowrap">{m.ageText}</td>}
                         <td>Kel. {m.familyName}</td>
                         <RowActions
                           onEdit={() => setDialog({ kind: 'edit', member: m })}
@@ -97,9 +96,11 @@ export default function HutJemaat() {
             {noDate.map((m) => (
               <li key={m.id}>
                 {m.name} <span className="muted">(Kel. {m.familyName})</span>{' '}
-                <button className="link" onClick={() => setDialog({ kind: 'edit', member: m })}>
-                  Lengkapi
-                </button>
+                <EditOnly>
+                  <button className="link" onClick={() => setDialog({ kind: 'edit', member: m })}>
+                    Lengkapi
+                  </button>
+                </EditOnly>
               </li>
             ))}
           </ul>

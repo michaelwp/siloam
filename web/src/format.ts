@@ -90,3 +90,33 @@ export function humanDuration(seconds: number) {
 export function clockTime(iso: string) {
   return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
 }
+
+/** "13 November" from 1-based month and day (public birthday/anniversary) */
+export function dayMonth(day: number | null, month: number | null) {
+  return day && month ? `${day} ${MONTHS[month - 1]}` : '–'
+}
+
+/** "Manado, 13 November 1992" — full birth line for signed-in users */
+export function birthLine(m: { birthPlace: string; birthDate: string | null }) {
+  return [m.birthPlace, m.birthDate ? longDate(m.birthDate) : ''].filter(Boolean).join(', ') || '–'
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+function isLeapYear(y: number) {
+  return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0
+}
+
+/** The date of a month/day anniversary in a given year; 29 February falls on the 28th in non-leap years. */
+export function anniversaryIn(year: number, month: number, day: number) {
+  if (month === 2 && day === 29 && !isLeapYear(year)) return new Date(year, 1, 28)
+  return new Date(year, month - 1, day)
+}
+
+/** Whole days from `today` to the next occurrence of a 1-based month/day (0 = today). */
+export function daysUntil(month: number, day: number, today: Date) {
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  let next = anniversaryIn(today.getFullYear(), month, day)
+  if (next < start) next = anniversaryIn(today.getFullYear() + 1, month, day)
+  return Math.round((next.getTime() - start.getTime()) / DAY_MS)
+}

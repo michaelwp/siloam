@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { authApi } from '../api'
 import { passkeyError, passkeysSupported, signInWithPasskey, useAuth } from '../auth'
 import { AuthShell } from '../components/AuthShell'
@@ -28,7 +29,7 @@ export default function Login() {
   }
 
   return (
-    <AuthShell title="Masuk" subtitle="Masuk untuk mengelola data jemaat.">
+    <AuthShell title="Masuk" subtitle="Masuk untuk mengubah data jemaat dan mengelola pengguna.">
       <form
         className="auth-form"
         onSubmit={(e) => {
@@ -83,6 +84,9 @@ export default function Login() {
           </button>
         </>
       )}
+      <Link to="/" className="block-link small">
+        ← Kembali ke beranda
+      </Link>
     </AuthShell>
   )
 }

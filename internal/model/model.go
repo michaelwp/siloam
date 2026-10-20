@@ -25,8 +25,8 @@ type Family struct {
 	Note        string        `bson:"note" json:"note"` // keterangan, e.g. "Simpatisan"
 	Domicile    string        `bson:"domicile" json:"domicile"`
 	WeddingDate *time.Time    `bson:"weddingDate" json:"weddingDate"`
-	CreatedAt   time.Time     `bson:"createdAt" json:"createdAt"`
-	UpdatedAt   time.Time     `bson:"updatedAt" json:"updatedAt"`
+	CreatedAt   time.Time     `bson:"createdAt" json:"createdAt,omitzero"`
+	UpdatedAt   time.Time     `bson:"updatedAt" json:"updatedAt,omitzero"`
 }
 
 // Member is one person in a family ("Data Base Keluarga" detail rows).
@@ -42,16 +42,18 @@ type Member struct {
 	Relationship  string        `bson:"relationship" json:"relationship"` // hubungan keluarga
 	Baptized      *bool         `bson:"baptized" json:"baptized"`
 	Confirmed     *bool         `bson:"confirmed" json:"confirmed"` // sidi
-	CreatedAt     time.Time     `bson:"createdAt" json:"createdAt"`
-	UpdatedAt     time.Time     `bson:"updatedAt" json:"updatedAt"`
+	CreatedAt     time.Time     `bson:"createdAt" json:"createdAt,omitzero"`
+	UpdatedAt     time.Time     `bson:"updatedAt" json:"updatedAt,omitzero"`
 }
 
 // FamilyView is a Family enriched for API responses.
 type FamilyView struct {
 	Family
-	MemberCount  int      `json:"memberCount"`
-	WeddingYears *int     `json:"weddingYears"`
-	Members      []Member `json:"members,omitempty"`
+	MemberCount  int          `json:"memberCount"`
+	WeddingYears *int         `json:"weddingYears"`
+	WeddingMonth *int         `json:"weddingMonth"` // 1–12; also in the public view
+	WeddingDay   *int         `json:"weddingDay"`
+	Members      []MemberView `json:"members,omitempty"`
 }
 
 // MemberView is a Member enriched for API responses.
@@ -61,7 +63,9 @@ type MemberView struct {
 	Age        *int   `json:"age"`
 	AgeText    string `json:"ageText"`
 	Category   string `json:"category"`
-	Elderly    bool   `json:"elderly"` // lansia, 60+
+	Elderly    bool   `json:"elderly"`    // lansia, 60+
+	BirthMonth *int   `json:"birthMonth"` // 1–12; also in the public view (birthday lists)
+	BirthDay   *int   `json:"birthDay"`
 }
 
 // Diff returns the whole years, months and days between from and to,
@@ -120,8 +124,53 @@ func NewMemberView(m Member, familyName string, now time.Time) MemberView {
 		v.Age = &y
 		v.AgeText = fmt.Sprintf("%d Tahun %d Bulan %d Hari", y, mo, d)
 		v.Category, v.Elderly = Category(y, m.Gender, m.MaritalStatus)
+		v.BirthMonth, v.BirthDay = monthDay(*m.BirthDate)
 	}
 	return v
+}
+
+func monthDay(t time.Time) (*int, *int) {
+	m, d := int(t.Month()), t.Day()
+	return &m, &d
+}
+
+// Public returns the view for visitors who are not signed in: name, family,
+// gender, marital status, baptism/sidi, BIPRA category and birthday (day and
+// month). Birth year, age, birth place and family relationship are removed.
+func (v MemberView) Public() MemberView {
+	return MemberView{
+		Member: Member{
+			ID:            v.ID,
+			FamilyID:      v.FamilyID,
+			Order:         v.Order,
+			Name:          v.Name,
+			Gender:        v.Gender,
+			MaritalStatus: v.MaritalStatus,
+			Baptized:      v.Baptized,
+			Confirmed:     v.Confirmed,
+		},
+		FamilyName: v.FamilyName,
+		Category:   v.Category,
+		Elderly:    v.Elderly,
+		BirthMonth: v.BirthMonth,
+		BirthDay:   v.BirthDay,
+	}
+}
+
+// Public returns the family view for visitors: name, number, note, member
+// count and anniversary (day and month) only. Domicile, the wedding year and
+// years married are removed.
+func (v FamilyView) Public() FamilyView {
+	out := FamilyView{
+		Family:       Family{ID: v.ID, No: v.No, Name: v.Name, Note: v.Note},
+		MemberCount:  v.MemberCount,
+		WeddingMonth: v.WeddingMonth,
+		WeddingDay:   v.WeddingDay,
+	}
+	for _, m := range v.Members {
+		out.Members = append(out.Members, m.Public())
+	}
+	return out
 }
 
 func NewFamilyView(f Family, memberCount int, now time.Time) FamilyView {
@@ -129,6 +178,7 @@ func NewFamilyView(f Family, memberCount int, now time.Time) FamilyView {
 	if f.WeddingDate != nil {
 		y, _, _ := Diff(*f.WeddingDate, now)
 		v.WeddingYears = &y
+		v.WeddingMonth, v.WeddingDay = monthDay(*f.WeddingDate)
 	}
 	return v
 }

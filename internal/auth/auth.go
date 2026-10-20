@@ -154,6 +154,17 @@ var publicPaths = map[string]bool{
 	"/api/auth/passkey/login/finish": true,
 }
 
+// publicRead reports whether r only reads jemaat data, which the public
+// (read-only) pages show without signing in. Every write still needs a session.
+func publicRead(r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return false
+	}
+	p := r.URL.Path
+	return p == "/api/families" || strings.HasPrefix(p, "/api/families/") ||
+		p == "/api/members" || strings.HasPrefix(p, "/api/members/")
+}
+
 // paths reachable while the user still has to change the initial password
 var changePasswordPaths = map[string]bool{
 	"/api/auth/me":                 true,
@@ -175,6 +186,25 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 			return
 		}
 		if publicPaths[path] {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if publicRead(r) {
+			// readable by anyone; signed-in users get the full view (see SignedIn)
+			u, sess, err := s.authenticate(r)
+			if err != nil {
+				httpx.ServerError(w, err)
+				return
+			}
+			switch {
+			case u != nil && !u.MustChangePassword:
+				r = r.WithContext(context.WithValue(r.Context(), ctxKey{}, &principal{user: u, session: sess}))
+			case u == nil && hasCookie(r, sessionCookie):
+				// expired or revoked session: drop the cookie so the browser
+				// stops presenting it; the response is the public view
+				// (X-Data-View tells the page, which then signs out)
+				s.clearCookie(w, sessionCookie, "/")
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -214,6 +244,16 @@ type principal struct {
 	user    *model.User
 	session *model.Session
 }
+
+func hasCookie(r *http.Request, name string) bool {
+	c, err := r.Cookie(name)
+	return err == nil && c.Value != ""
+}
+
+// SignedIn reports whether the request comes from a signed-in user. Handlers
+// of public read endpoints use it to decide between the full and the public
+// (redacted) view.
+func SignedIn(r *http.Request) bool { return current(r) != nil }
 
 func current(r *http.Request) *principal {
 	p, _ := r.Context().Value(ctxKey{}).(*principal)

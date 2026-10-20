@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { api, familyToInput, type Family } from '../api'
-import { ConfirmDelete, Field, FormShell, Modal, PageHeader, RowActions, Status } from '../components/ui'
+import { ActionsHeader, ConfirmDelete, EditOnly, Field, FormShell, Modal, PageHeader, RowActions, Status } from '../components/ui'
+import { useFullView } from '../auth'
 import { useData } from '../data'
-import { fromInputDate, longDate, MONTHS, parts, toInputDate } from '../format'
+import { dayMonth, fromInputDate, longDate, MONTHS, toInputDate } from '../format'
 
 type Dialog = { kind: 'add' } | { kind: 'edit' | 'delete'; family: Family } | null
 
@@ -11,13 +12,11 @@ export default function HutPernikahan() {
   const [dialog, setDialog] = useState<Dialog>(null)
   const [thisMonth] = useState(() => new Date().getMonth())
 
+  const full = useFullView()
+  // weddingMonth/weddingDay are present for visitors too (the full date is not)
   const rows = families
-    .filter((f) => f.weddingDate)
-    .toSorted((a, b) => {
-      const pa = parts(a.weddingDate!)
-      const pb = parts(b.weddingDate!)
-      return pa.m - pb.m || pa.d - pb.d
-    })
+    .filter((f) => f.weddingMonth)
+    .toSorted((a, b) => a.weddingMonth! - b.weddingMonth! || a.weddingDay! - b.weddingDay!)
 
   return (
     <>
@@ -25,9 +24,11 @@ export default function HutPernikahan() {
         title="Daftar HUT Pernikahan"
         subtitle={`${rows.length} keluarga dengan tanggal pernikahan, diurutkan per bulan`}
       >
-        <button className="btn primary" onClick={() => setDialog({ kind: 'add' })}>
-          + Tambah Tanggal Pernikahan
-        </button>
+        <EditOnly>
+          <button className="btn primary" onClick={() => setDialog({ kind: 'add' })}>
+            + Tambah Tanggal Pernikahan
+          </button>
+        </EditOnly>
       </PageHeader>
 
       <Status loading={loading} error={error} empty={!rows.length} />
@@ -40,22 +41,20 @@ export default function HutPernikahan() {
                 <th>Nama Keluarga</th>
                 <th>Bulan</th>
                 <th>Tanggal Pernikahan</th>
-                <th>Umur Pernikahan</th>
-                <th className="no-print">
-                  <span className="sr-only">Aksi</span>
-                </th>
+                {full && <th>Umur Pernikahan</th>}
+                <ActionsHeader />
               </tr>
             </thead>
             <tbody>
               {rows.map((f, i) => {
-                const m = parts(f.weddingDate!).m
+                const m = f.weddingMonth! - 1
                 return (
                   <tr key={f.id} className={m === thisMonth ? 'highlight' : ''}>
                     <td className="num">{i + 1}</td>
                     <td className="strong">Kel. {f.name}</td>
                     <td>{MONTHS[m]}</td>
-                    <td>{longDate(f.weddingDate)}</td>
-                    <td>{f.weddingYears} Tahun</td>
+                    <td>{full ? longDate(f.weddingDate) : dayMonth(f.weddingDay, f.weddingMonth)}</td>
+                    {full && <td>{f.weddingYears} Tahun</td>}
                     <RowActions
                       onEdit={() => setDialog({ kind: 'edit', family: f })}
                       onDelete={() => setDialog({ kind: 'delete', family: f })}

@@ -307,6 +307,8 @@ func securityHeaders(next http.Handler, hsts bool) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "same-origin")
+		// member data: keep pages and API responses out of search engines
+		h.Set("X-Robots-Tag", "noindex, nofollow")
 		next.ServeHTTP(w, r)
 	})
 }

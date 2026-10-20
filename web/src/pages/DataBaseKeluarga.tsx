@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import type { Member } from '../api'
 import { FamilyDialogs, MemberDialogs, type FamilyDialog, type MemberDialog } from '../components/forms'
-import { Badge, PageHeader, RowActions, Search, Status } from '../components/ui'
+import { ActionsHeader, Badge, EditOnly, PageHeader, RowActions, Search, Status } from '../components/ui'
+import { useFullView } from '../auth'
 import { useData } from '../data'
-import { longDate, matches, triState } from '../format'
+import { birthLine, dayMonth, longDate, matches, triState } from '../format'
 
 export default function DataBaseKeluarga() {
+  const full = useFullView()
   const { families, members, loading, error } = useData()
   const [q, setQ] = useState('')
   const [memberDialog, setMemberDialog] = useState<MemberDialog>(null)
@@ -32,9 +34,11 @@ export default function DataBaseKeluarga() {
     <>
       <PageHeader title="Data Base Keluarga" subtitle="Data lengkap setiap keluarga dan anggotanya">
         <Search value={q} onChange={setQ} placeholder="Cari keluarga / anggota…" />
-        <button className="btn primary" onClick={() => setFamilyDialog({ kind: 'add' })}>
-          + Tambah Keluarga
-        </button>
+        <EditOnly>
+          <button className="btn primary" onClick={() => setFamilyDialog({ kind: 'add' })}>
+            + Tambah Keluarga
+          </button>
+        </EditOnly>
       </PageHeader>
 
       <Status loading={loading} error={error} empty={!families.length} />
@@ -50,21 +54,29 @@ export default function DataBaseKeluarga() {
                     {f.note && <Badge tone="amber">{f.note}</Badge>}
                   </h2>
                   <p className="muted">
-                    Tanggal Pernikahan: {longDate(f.weddingDate)}
-                    {f.domicile && <> · Domisili: {f.domicile}</>}
+                    {full ? (
+                      <>
+                        Tanggal Pernikahan: {longDate(f.weddingDate)}
+                        {f.domicile && <> · Domisili: {f.domicile}</>}
+                      </>
+                    ) : (
+                      <>HUT Pernikahan: {dayMonth(f.weddingDay, f.weddingMonth)}</>
+                    )}
                   </p>
                 </div>
-                <div className="page-actions no-print">
-                  <button className="btn small" onClick={() => setMemberDialog({ kind: 'add', familyId: f.id })}>
-                    + Anggota
-                  </button>
-                  <button className="btn small" onClick={() => setFamilyDialog({ kind: 'edit', family: f })}>
-                    Ubah
-                  </button>
-                  <button className="btn small danger" onClick={() => setFamilyDialog({ kind: 'delete', family: f })}>
-                    Hapus
-                  </button>
-                </div>
+                <EditOnly>
+                  <div className="page-actions no-print">
+                    <button className="btn small" onClick={() => setMemberDialog({ kind: 'add', familyId: f.id })}>
+                      + Anggota
+                    </button>
+                    <button className="btn small" onClick={() => setFamilyDialog({ kind: 'edit', family: f })}>
+                      Ubah
+                    </button>
+                    <button className="btn small danger" onClick={() => setFamilyDialog({ kind: 'delete', family: f })}>
+                      Hapus
+                    </button>
+                  </div>
+                </EditOnly>
               </header>
               {ms.length > 0 ? (
                 <div className="table-wrap flat">
@@ -73,15 +85,13 @@ export default function DataBaseKeluarga() {
                       <tr>
                         <th className="num">No</th>
                         <th>Nama Lengkap</th>
-                        <th>Tempat, Tanggal Lahir</th>
+                        <th>{full ? 'Tempat, Tanggal Lahir' : 'Ulang Tahun'}</th>
                         <th>Jenis Kelamin</th>
                         <th>Status</th>
-                        <th>Hubungan Keluarga</th>
+                        {full && <th>Hubungan Keluarga</th>}
                         <th>Baptis</th>
                         <th>Sidi</th>
-                        <th className="no-print">
-                  <span className="sr-only">Aksi</span>
-                </th>
+                        <ActionsHeader />
                       </tr>
                     </thead>
                     <tbody>
@@ -89,14 +99,10 @@ export default function DataBaseKeluarga() {
                         <tr key={m.id}>
                           <td className="num">{m.order}</td>
                           <td className="strong">{m.name}</td>
-                          <td>
-                            {m.birthPlace}
-                            {m.birthPlace && ', '}
-                            {longDate(m.birthDate)}
-                          </td>
+                          <td>{full ? birthLine(m) : dayMonth(m.birthDay, m.birthMonth)}</td>
                           <td>{m.gender}</td>
                           <td>{m.maritalStatus}</td>
-                          <td>{m.relationship}</td>
+                          {full && <td>{m.relationship}</td>}
                           <td>{triState(m.baptized, 'Baptis')}</td>
                           <td>{triState(m.confirmed, 'Sidi')}</td>
                           <RowActions

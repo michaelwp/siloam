@@ -1,6 +1,7 @@
 import { browserSupportsWebAuthn, startAuthentication, startRegistration, WebAuthnError } from '@simplewebauthn/browser'
 import { createContext, useContext } from 'react'
 import { authApi, type User } from './api'
+import { useData } from './data'
 
 export type Auth = {
   user: User | null
@@ -17,6 +18,24 @@ export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used inside AuthProvider')
   return ctx
+}
+
+/**
+ * Whether the loaded data is the full (signed-in) view, as reported by the
+ * server — never guessed from the sign-in state, which can be stale.
+ */
+export function useFullView() {
+  return useData().view === 'full'
+}
+
+/**
+ * Data can be changed only when signed in AND the loaded data is the full
+ * view, so an edit form is never filled from redacted (blank) fields.
+ */
+export function useCanEdit() {
+  const { user } = useAuth()
+  const full = useFullView()
+  return !!user && !user.mustChangePassword && full
 }
 
 /** Passkeys need WebAuthn and a secure context (HTTPS or localhost). */

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCanEdit } from '../auth'
 
 export function Modal({
   title,
@@ -159,7 +160,22 @@ export function Search({ value, onChange, placeholder = 'Cari nama…' }: {
   )
 }
 
+/** Renders its children only for signed-in users (public visitors see read-only pages). */
+export function EditOnly({ children }: { children: ReactNode }) {
+  return useCanEdit() ? <>{children}</> : null
+}
+
+/** Header cell for the row-actions column; absent in the read-only view. */
+export function ActionsHeader() {
+  return useCanEdit() ? (
+    <th className="no-print">
+      <span className="sr-only">Aksi</span>
+    </th>
+  ) : null
+}
+
 export function RowActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+  if (!useCanEdit()) return null
   return (
     <td className="actions no-print">
       <button className="link" onClick={onEdit}>

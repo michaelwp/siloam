@@ -1,9 +1,11 @@
 import { createContext, useContext } from 'react'
-import type { Family, Member } from './api'
+import type { DataView, Family, Member } from './api'
 
 export type Data = {
   families: Family[]
   members: Member[]
+  /** what the server sent: 'full' (signed in) or the redacted 'public' view */
+  view: DataView | null
   loading: boolean
   error: string | null
   reload: () => Promise<void>

@@ -890,3 +890,303 @@ th {
     overflow: visible;
   }
 }
+
+/* ---- homepage ---- */
+a.brand {
+  color: inherit;
+  text-decoration: none;
+}
+a.stat {
+  text-decoration: none;
+}
+.section-title {
+  margin: 20px 0 10px;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+.home-grid .card {
+  margin: 0;
+}
+.celebrations {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+.celebrations li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.celebrations li:last-child {
+  border-bottom: 0;
+}
+.celebrations li .grow > * {
+  display: block;
+}
+.celebrations li.past {
+  opacity: 0.55;
+}
+.celebrations li.today {
+  background: var(--green-soft);
+}
+.cal-day {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.user-chip .btn.grow {
+  text-align: center;
+  text-decoration: none;
+}
+
+/* ---- homepage: birthdays today ---- */
+.today-card {
+  margin-bottom: 20px;
+  padding: 18px 20px;
+  border-left: 4px solid var(--accent);
+}
+.today-card.has-birthdays {
+  border-left-color: var(--green);
+  background: linear-gradient(90deg, var(--green-soft), var(--surface) 70%);
+}
+.today-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.today-head h2 {
+  font-size: 1.2rem;
+}
+.today-head p {
+  margin: 2px 0 0;
+}
+.today-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+.today-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+.today-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.today-list strong {
+  font-size: 1.05rem;
+}
+.today-empty {
+  margin-top: 12px;
+}
+.today-empty p {
+  margin: 0 0 4px;
+}
+
+/* ---- filter bar ---- */
+.filters {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: -6px 0 16px;
+}
+@media (max-width: 860px) {
+  .filters select {
+    flex: 1 1 160px;
+  }
+}
+
+/* ---- charts (dataviz): palette validated for the card surfaces ---- */
+:root {
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --viz-deemph: #c3c2b7;
+}
+:root[data-theme='dark'] {
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --viz-deemph: #4a4a46;
+}
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+.chart-grid .card {
+  margin: 0;
+}
+.chart-card {
+  padding: 14px 16px 10px;
+  overflow: visible;
+}
+.chart-head {
+  margin-bottom: 8px;
+}
+.chart-head h2 {
+  font-size: 1rem;
+}
+.chart-head p {
+  margin-top: 2px;
+}
+.viz {
+  position: relative;
+  width: 100%;
+}
+.viz svg {
+  display: block;
+  overflow: visible;
+}
+.viz-s1 {
+  fill: var(--series-1);
+}
+.viz-s2 {
+  fill: var(--series-2);
+}
+.viz-deemph {
+  fill: var(--viz-deemph);
+}
+.viz-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+.viz-baseline {
+  stroke: var(--muted);
+  stroke-opacity: 0.6;
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+.viz-tick {
+  fill: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.viz-label {
+  fill: var(--text);
+  font-size: 12px;
+}
+.viz-value {
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.viz-hit {
+  fill: transparent;
+  cursor: default;
+  outline: none;
+}
+.viz-hit:focus-visible {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.viz g:has(.viz-hit:hover) path,
+.viz g:has(.viz-hit:hover) rect:not(.viz-hit) {
+  filter: brightness(1.12);
+}
+.viz-tooltip {
+  display: block;
+  color: var(--text);
+  position: absolute;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 18%);
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 2;
+}
+.viz-tooltip-title {
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+.viz-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.viz-tooltip-row strong {
+  font-size: 14px;
+}
+.viz-key {
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--series-1);
+}
+.viz-key.viz-s2 {
+  background: var(--series-2);
+}
+.viz-legend {
+  list-style: none;
+  display: flex;
+  gap: 16px;
+  margin: 0 0 6px;
+  padding: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.viz-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.viz-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--series-1);
+}
+.viz-swatch.viz-s2 {
+  background: var(--series-2);
+}
+.viz-table {
+  margin-top: 6px;
+  font-size: 12px;
+}
+.viz-table summary {
+  cursor: pointer;
+  color: var(--accent);
+  width: fit-content;
+}
+.viz-table table {
+  margin-top: 6px;
+}
+.viz-table th,
+.viz-table td {
+  padding: 4px 8px;
+  position: static;
+  box-shadow: none;
+}

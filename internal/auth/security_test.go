@@ -202,3 +202,26 @@ func TestClientIPHeader(t *testing.T) {
 		t.Fatalf("invalid header should fall back to peer, got %s", got)
 	}
 }
+
+func TestPublicReadOnlyData(t *testing.T) {
+	cases := []struct {
+		method, path string
+		public       bool
+	}{
+		{"GET", "/api/families", true},
+		{"GET", "/api/families/abc", true},
+		{"GET", "/api/members", true},
+		{"HEAD", "/api/members/abc", true},
+		{"POST", "/api/families", false},
+		{"PUT", "/api/members/abc", false},
+		{"DELETE", "/api/families/abc", false},
+		{"GET", "/api/users", false},
+		{"GET", "/api/auth/me", false},
+		{"GET", "/api/familiesX", false},
+	}
+	for _, c := range cases {
+		if got := publicRead(httptest.NewRequest(c.method, c.path, nil)); got != c.public {
+			t.Errorf("%s %s public=%v, want %v", c.method, c.path, got, c.public)
+		}
+	}
+}

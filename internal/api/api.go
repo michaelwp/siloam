@@ -9,6 +9,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"siloam/internal/auth"
 	"siloam/internal/httpx"
 	"siloam/internal/model"
 	"siloam/internal/store"
@@ -84,9 +85,14 @@ func (a *API) listFamilies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now()
+	full := dataView(w, r)
 	out := make([]model.FamilyView, 0, len(fams))
 	for _, f := range fams {
-		out = append(out, model.NewFamilyView(f, counts[f.ID], now))
+		v := model.NewFamilyView(f, counts[f.ID], now)
+		if !full {
+			v = v.Public()
+		}
+		out = append(out, v)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -106,8 +112,14 @@ func (a *API) getFamily(w http.ResponseWriter, r *http.Request) {
 		serverError(w, err)
 		return
 	}
-	v := model.NewFamilyView(f, len(members), time.Now())
-	v.Members = members
+	now := time.Now()
+	v := model.NewFamilyView(f, len(members), now)
+	for _, m := range members {
+		v.Members = append(v.Members, model.NewMemberView(m, f.Name, now))
+	}
+	if !dataView(w, r) {
+		v = v.Public()
+	}
 	writeJSON(w, http.StatusOK, v)
 }
 
@@ -220,9 +232,14 @@ func (a *API) memberViews(r *http.Request, members []model.Member) ([]model.Memb
 		names[f.ID] = f.Name
 	}
 	now := time.Now()
+	full := auth.SignedIn(r)
 	out := make([]model.MemberView, 0, len(members))
 	for _, m := range members {
-		out = append(out, model.NewMemberView(m, names[m.FamilyID], now))
+		v := model.NewMemberView(m, names[m.FamilyID], now)
+		if !full {
+			v = v.Public()
+		}
+		out = append(out, v)
 	}
 	return out, nil
 }
@@ -242,6 +259,7 @@ func (a *API) listMembers(w http.ResponseWriter, r *http.Request) {
 		serverError(w, err)
 		return
 	}
+	dataView(w, r)
 	out, err := a.memberViews(r, members)
 	if err != nil {
 		serverError(w, err)
@@ -322,10 +340,27 @@ func (a *API) writeMember(w http.ResponseWriter, r *http.Request, status int, m 
 		storeError(w, err)
 		return
 	}
-	writeJSON(w, status, model.NewMemberView(m, f.Name, time.Now()))
+	v := model.NewMemberView(m, f.Name, time.Now())
+	if !dataView(w, r) {
+		v = v.Public()
+	}
+	writeJSON(w, status, v)
 }
 
 // ---- helpers ----
+
+// dataView reports whether r gets the full (signed-in) view, and tells the
+// client which one it is in the X-Data-View header ("full" or "public"), so
+// the page never has to guess whether the data it holds is redacted.
+func dataView(w http.ResponseWriter, r *http.Request) bool {
+	full := auth.SignedIn(r)
+	view := "public"
+	if full {
+		view = "full"
+	}
+	w.Header().Set("X-Data-View", view)
+	return full
+}
 
 func clean(s string) string { return strings.Join(strings.Fields(s), " ") }
 

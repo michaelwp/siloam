@@ -14,6 +14,8 @@ export type Family = {
   weddingDate: string | null
   memberCount: number
   weddingYears: number | null
+  weddingMonth: number | null // 1–12, also for visitors
+  weddingDay: number | null
 }
 
 export type Member = {
@@ -33,6 +35,8 @@ export type Member = {
   ageText: string
   category: string
   elderly: boolean
+  birthMonth: number | null // 1–12, also for visitors
+  birthDay: number | null
 }
 
 export type FamilyInput = Pick<Family, 'name' | 'note' | 'domicile' | 'weddingDate'> & { no?: number }
@@ -64,7 +68,8 @@ export class ApiError extends Error {
 /** Fired when the server says the session ended or a password change is required. */
 export const AUTH_CHANGED = 'auth:changed'
 
-async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
+/** Sends a request; throws ApiError (and signals auth changes) on failure. */
+async function send(method: string, url: string, body?: unknown): Promise<Response> {
   const res = await fetch(url, {
     method,
     credentials: 'same-origin',
@@ -79,10 +84,31 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
     }
     throw err
   }
+  return res
+}
+
+async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
+  const res = await send(method, url, body)
   return res.status === 204 ? (undefined as T) : res.json()
 }
 
+/** Which data the server sent: everything (signed in) or the redacted public view. */
+export type DataView = 'full' | 'public'
+
+async function getWithView<T>(url: string): Promise<[T, DataView]> {
+  const res = await send('GET', url)
+  return [await res.json(), res.headers.get('X-Data-View') === 'full' ? 'full' : 'public']
+}
+
 export const api = {
+  /** Families and members, plus which view the server actually returned. */
+  load: async () => {
+    const [[families, fv], [members, mv]] = await Promise.all([
+      getWithView<Family[]>('/api/families'),
+      getWithView<Member[]>('/api/members'),
+    ])
+    return { families, members, view: (fv === 'full' && mv === 'full' ? 'full' : 'public') as DataView }
+  },
   families: () => request<Family[]>('GET', '/api/families'),
   createFamily: (f: FamilyInput) => request<Family>('POST', '/api/families', f),
   updateFamily: (id: string, f: FamilyInput) => request<Family>('PUT', `/api/families/${id}`, f),

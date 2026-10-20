@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FamilyDialogs, type FamilyDialog } from '../components/forms'
-import { Badge, PageHeader, RowActions, Search, Status } from '../components/ui'
+import { ActionsHeader, Badge, EditOnly, PageHeader, RowActions, Search, Status } from '../components/ui'
+import { useFullView } from '../auth'
 import { useData } from '../data'
 import { matches } from '../format'
 
 export default function DaftarKeluarga() {
+  const full = useFullView()
   const { families, members, loading, error } = useData()
   const [q, setQ] = useState('')
   const [dialog, setDialog] = useState<FamilyDialog>(null)
@@ -18,9 +20,11 @@ export default function DaftarKeluarga() {
         subtitle={`${families.length} keluarga · ${members.length} jiwa`}
       >
         <Search value={q} onChange={setQ} placeholder="Cari keluarga / domisili…" />
-        <button className="btn primary" onClick={() => setDialog({ kind: 'add' })}>
-          + Tambah Keluarga
-        </button>
+        <EditOnly>
+          <button className="btn primary" onClick={() => setDialog({ kind: 'add' })}>
+            + Tambah Keluarga
+          </button>
+        </EditOnly>
       </PageHeader>
 
       <Status loading={loading} error={error} empty={!families.length} />
@@ -32,11 +36,9 @@ export default function DaftarKeluarga() {
                 <th className="num">No</th>
                 <th>Nama Keluarga</th>
                 <th>Keterangan</th>
-                <th>Domisili</th>
+                {full && <th>Domisili</th>}
                 <th className="num">Jiwa</th>
-                <th className="no-print">
-                  <span className="sr-only">Aksi</span>
-                </th>
+                <ActionsHeader />
               </tr>
             </thead>
             <tbody>
@@ -49,7 +51,7 @@ export default function DaftarKeluarga() {
                     </Link>
                   </td>
                   <td>{f.note && <Badge tone="amber">{f.note}</Badge>}</td>
-                  <td>{f.domicile}</td>
+                  {full && <td>{f.domicile}</td>}
                   <td className="num">{f.memberCount}</td>
                   <RowActions
                     onEdit={() => setDialog({ kind: 'edit', family: f })}

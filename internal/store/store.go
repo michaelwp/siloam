@@ -94,6 +94,9 @@ func Open(ctx context.Context, uri, dbName string) (*Store, error) {
 	return s, nil
 }
 
+// DropDatabase deletes the whole database (tests only).
+func (s *Store) DropDatabase(ctx context.Context) error { return s.families.Database().Drop(ctx) }
+
 // Database is the name of the connected database.
 func (s *Store) Database() string { return s.db }
 

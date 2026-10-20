@@ -32,6 +32,34 @@ are computed by the server:
 - **Kategori BIPRA** – Anak (ASM) 0–11 · Remaja 12–16 · Pemuda 17–30 ·
   PKB (male) / WKI (female) 31+ or married · Lansia 60+ as an extra flag
 
+## Public view
+
+The homepage (**Beranda**) and the six data pages can be viewed **without
+signing in**, read-only (no add/edit/delete). Visitors only get non-private
+information — the server removes the rest from the API responses, it is not
+just hidden in the page:
+
+| Visitors see | Only signed-in users see |
+|---|---|
+| member name, family, gender, BIPRA category (incl. Lansia — an age range) | birth year / full birth date, exact age, birth place |
+| birthday as day + month | relationship in the family |
+| marital status, baptism / sidi status (on all pages; filters on *Daftar Anggota Jemaat*) | domisili, wedding year, years married |
+| family name, note (e.g. Simpatisan), number of members, anniversary as day + month | |
+
+The homepage shows totals, BIPRA counts and this month's birthdays and wedding
+anniversaries. **Masuk** (sidebar) opens `/login`; *Akun Saya* and *Pengguna*
+require signing in. The site asks search engines not to index it (a
+`noindex` meta tag on the page and an `X-Robots-Tag: noindex` header on every
+response, including the API); remove both to allow indexing. Public API reads
+are rate-limited like everything else.
+
+Every families/members response says which view it is in an `X-Data-View`
+header (`full` or `public`). The page shows private columns and edit controls
+only when the data it holds is the full view, and reloads all data whenever the
+user signs in or out, so redacted data can never be edited and saved back, and
+private data never stays on screen after signing out. An expired session on a
+public page gets its cookie cleared and the page returns to visitor mode.
+
 ## Sign-in & users
 
 - **First run:** when there are no users, the server creates an admin account
@@ -303,8 +331,10 @@ is only read.
 
 ## API
 
-Everything under `/api` except `/api/health` and the sign-in endpoints requires
-a session cookie; `/api/users` requires the admin role. Errors are
+Reading families and members (`GET /api/families…`, `GET /api/members…`) is
+public but returns the redacted public view unless signed in; every other
+endpoint except `/api/health` and sign-in requires a session cookie, and
+`/api/users` requires the admin role. Errors are
 `{"error": "...", "code": "..."}`; `code` is `unauthenticated` (401),
 `password_change_required` (403), `forbidden` (403), `rate_limited` (429, with
 `Retry-After`) or `account_locked` (423, only from passkey sign-in, where the
@@ -329,12 +359,12 @@ user has proven who they are).
 | PUT    | `/api/users/{id}`                      | admin: `{username, role}`                 |
 | POST   | `/api/users/{id}/reset-password`       | admin: `{password, clearPasskeys}`; also unlocks |
 | DELETE | `/api/users/{id}`                      | admin                                     |
-| GET    | `/api/families`                        | with `memberCount`, `weddingYears`        |
+| GET    | `/api/families`                        | with `memberCount`, `weddingYears`, `weddingMonth`, `weddingDay` (public: redacted) |
 | POST   | `/api/families`                        | `no` is assigned automatically            |
 | GET    | `/api/families/{id}`                   | includes `members`                        |
 | PUT    | `/api/families/{id}`                   |                                           |
 | DELETE | `/api/families/{id}`                   | also deletes its members, renumbers rest  |
-| GET    | `/api/members[?familyId=]`             | with `familyName`, `age`, `ageText`, `category`, `elderly` |
+| GET    | `/api/members[?familyId=]`             | with `familyName`, `age`, `ageText`, `category`, `elderly`, `birthMonth`, `birthDay` (public: redacted) |
 | POST   | `/api/members`                         | `order` is assigned automatically         |
 | GET    | `/api/members/{id}`                    |                                           |
 | PUT    | `/api/members/{id}`                    | moving to another family appends it there |
