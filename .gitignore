@@ -3,26 +3,55 @@
 /web/dist/
 *.test
 coverage.out
+*.tsbuildinfo
 
 # dependencies
 /web/node_modules/
 
-# local data (the workbook is staged here for container imports)
+# local Go workspace (personal, not part of the module)
+go.work
+go.work.sum
+
+# local data: the member workbooks and schedules hold personal data
+# (the workbook is staged in .import/ for container imports)
 /.import/
 *.xlsx
+*.xls
+*.csv
+
+# database dumps / backups
+*.bson
+*.archive
+*.dump
+dump/
 
 # env / secrets
 .env
 .env.*
 !.env.example
+.envrc
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Android: built apps and signing keys (the app's own rules are in android/.gitignore)
+*.apk
+*.aab
+*.idsig
+*.jks
+*.keystore
+keystore.properties
 
 # logs
 *.log
 npm-debug.log*
 
-# editor / OS
+# editor / OS / tools
 .DS_Store
 .idea/
 .vscode/*
 !.vscode/extensions.json
 *.swp
+*~
+.claude/settings.local.json

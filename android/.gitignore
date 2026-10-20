@@ -1,0 +1,31 @@
+# Gradle / Kotlin build output and caches
+.gradle/
+.kotlin/
+build/
+app/build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# machine-specific: the Android SDK path
+local.properties
+
+# built apps (share the APK, don't commit it)
+*.apk
+*.aab
+*.idsig
+output-metadata.json
+
+# signing keys and their passwords: never commit
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
+# Android Studio / IntelliJ
+*.iml
+.idea/
+.navigation/
+
+# heap dumps / profiler output
+*.hprof

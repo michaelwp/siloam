@@ -348,3 +348,40 @@ fly-logs: ## Show recent logs
 .PHONY: fly-open
 fly-open: ## Open the deployed app
 	fly open
+
+##@ Android app (android/, public view + background notifications)
+
+# JDK 17+ for Gradle: $JAVA_HOME, else a JDK unpacked in ~/.jdks
+ANDROID_JAVA_HOME ?= $(or $(JAVA_HOME),$(shell ls -d $(HOME)/.jdks/jdk-*/Contents/Home 2>/dev/null | tail -1))
+GRADLE = cd android && JAVA_HOME="$(ANDROID_JAVA_HOME)" ./gradlew --no-daemon -q
+
+.PHONY: android-test
+android-test: ## Run the Android app's unit tests
+	$(GRADLE) testDebugUnitTest
+
+.PHONY: android-apk
+android-apk: ## Build the debug APK (android/app/build/outputs/apk/debug/app-debug.apk)
+	$(GRADLE) assembleDebug
+	@echo "→ android/app/build/outputs/apk/debug/app-debug.apk"
+
+.PHONY: android-release
+android-release: ## Build the release APK (unsigned; sign it before publishing)
+	$(GRADLE) assembleRelease
+	@echo "→ android/app/build/outputs/apk/release/app-release-unsigned.apk"
+
+ANDROID_SDK ?= $(or $(ANDROID_HOME),$(HOME)/Library/Android/sdk)
+ADB = $(or $(shell command -v adb),$(ANDROID_SDK)/platform-tools/adb)
+AVD ?= siloam-test
+
+.PHONY: android-emulator
+android-emulator: ## Start the Android emulator (AVD=siloam-test) in a window and wait until it has booted
+	@$(ADB) get-state >/dev/null 2>&1 && echo "a device is already connected" && exit 0; \
+	nohup $(ANDROID_SDK)/emulator/emulator -avd $(AVD) -no-boot-anim >/dev/null 2>&1 & \
+	echo -n "booting $(AVD)"; $(ADB) wait-for-device; \
+	until [ "$$($(ADB) shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; do echo -n "."; sleep 2; done; echo " ok"
+
+.PHONY: android-install
+android-install: android-apk ## Install the debug APK on the connected phone/emulator (adb)
+	@$(ADB) get-state >/dev/null 2>&1 || (echo "no phone or emulator connected: run 'make android-emulator', or plug in a phone with USB debugging on" && exit 1)
+	$(ADB) install -r android/app/build/outputs/apk/debug/app-debug.apk
+	$(ADB) shell am start -n id.gmimsiloam.jemaat/.MainActivity >/dev/null

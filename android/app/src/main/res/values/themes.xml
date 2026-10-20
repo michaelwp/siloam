@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose draws the UI; this only colors the window before it starts. -->
+    <style name="Theme.Siloam" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window</item>
+    </style>
+    <color name="window">#F5F6F8</color>
+    <color name="brand">#1F5FAE</color>
+</resources>

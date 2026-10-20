@@ -19,6 +19,33 @@ Service times are in `APP_TIMEZONE` (default `Asia/Makassar`, WITA). Load a
 schedule spreadsheet with
 `siloam -import-jadwal jadwal.xlsx [-kolom 11] [-replace]`.
 
+## Android app (`android/`)
+
+A Kotlin (Jetpack Compose) app for the congregation: the **public view** only
+(no sign-in, the same redacted data visitors see on the web) with Beranda,
+Jadwal Ibadah, Ulang Tahun and Jemaat, a kolom picker, offline cache, and
+**background notifications**:
+
+- a daily summary (default 06:00): today's services and today's birthdays;
+- a reminder before each of today's services (default 1 hour before);
+- "Tambah ke Kalender" (the phone's calendar app) and "Bagikan" per service.
+
+A WorkManager job checks about every hour, also after a reboot, without the
+app being open. Everything follows the kolom chosen in the app; the times,
+reminders and server address are under **Pengaturan**. The server defaults to
+`https://siloam.fly.dev`; debug builds also allow plain HTTP, e.g.
+`http://10.0.2.2:8080` (your computer, seen from the Android emulator).
+
+Needs JDK 17+ and the Android SDK (`android/local.properties` →
+`sdk.dir=…`, or `ANDROID_HOME`):
+
+```sh
+make android-test      # unit tests (dates, birthdays, JSON parsing)
+make android-apk       # debug APK → android/app/build/outputs/apk/debug/app-debug.apk
+make android-install   # install it on a phone/emulator via adb
+make android-release   # release APK (unsigned: sign it with your key before publishing)
+```
+
 - **Backend:** Go 1.25 (`net/http`), MongoDB
 - **Frontend:** React 19 + TypeScript (Vite), embedded into the Go binary with `go:embed`
 - **Sign-in:** username/password or passkey (WebAuthn), admin-managed accounts

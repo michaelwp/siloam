@@ -1,0 +1,63 @@
+package id.gmimsiloam.jemaat
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import id.gmimsiloam.jemaat.data.Prefs
+import id.gmimsiloam.jemaat.data.Repository
+import id.gmimsiloam.jemaat.data.Snapshot
+import id.gmimsiloam.jemaat.notify.DailyWorker
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+data class UiState(
+    val data: Snapshot? = null,
+    val refreshing: Boolean = false,
+    /** the last refresh failed (the cached data, if any, is still shown) */
+    val error: String? = null,
+    /** viewed kolom; null = all */
+    val kolom: Int? = null,
+)
+
+class AppViewModel(app: Application) : AndroidViewModel(app) {
+    private val prefs = Prefs(app)
+    private val repo = Repository(app)
+    private val _state = MutableStateFlow(UiState(kolom = prefs.kolom))
+    val state: StateFlow<UiState> = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            repo.cached()?.let { cached -> _state.update { it.copy(data = cached) } }
+            refresh()
+        }
+    }
+
+    fun refresh() {
+        if (_state.value.refreshing) return
+        _state.update { it.copy(refreshing = true) }
+        viewModelScope.launch {
+            val result = runCatching { repo.refresh() }
+            _state.update { s ->
+                result.fold(
+                    onSuccess = { s.copy(data = it, refreshing = false, error = null) },
+                    onFailure = { e -> s.copy(refreshing = false, error = e.message ?: "Gagal memuat data") },
+                )
+            }
+        }
+    }
+
+    /** The kolom both the screens and the notifications follow. */
+    fun setKolom(k: Int?) {
+        prefs.kolom = k
+        _state.update { it.copy(kolom = k) }
+        DailyWorker.runNow(getApplication())
+    }
+
+    fun setServerUrl(url: String) {
+        prefs.serverUrl = url
+        refresh()
+    }
+}
