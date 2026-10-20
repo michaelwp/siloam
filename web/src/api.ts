@@ -220,8 +220,10 @@ export type Service = {
   time: string // "19:00"
   host: string // host family, without "Kel."
   location: string
-  leader: string // pemimpin ibadah
+  leader: string // pemimpin ibadah (the member's current name when linked)
+  leaderId: string | null // the member, or null for someone from outside
   mc: string // pembawa acara
+  mcId: string | null
   note: string
   typeName: string
   typeColor: string
@@ -229,13 +231,16 @@ export type Service = {
   end: string
 }
 
-export type ServiceInput = Pick<Service, 'kolom' | 'typeId' | 'time' | 'host' | 'location' | 'leader' | 'mc' | 'note'> & {
+export type ServiceInput = Pick<
+  Service,
+  'kolom' | 'typeId' | 'time' | 'host' | 'location' | 'leader' | 'leaderId' | 'mc' | 'mcId' | 'note'
+> & {
   date: string | null
 }
 
 export function serviceToInput(s: Service): ServiceInput {
-  const { kolom, typeId, date, time, host, location, leader, mc, note } = s
-  return { kolom, typeId, date, time, host, location, leader, mc, note }
+  const { kolom, typeId, date, time, host, location, leader, leaderId, mc, mcId, note } = s
+  return { kolom, typeId, date, time, host, location, leader, leaderId, mc, mcId, note }
 }
 
 export const scheduleApi = {

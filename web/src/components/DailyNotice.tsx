@@ -2,7 +2,16 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { Link } from 'react-router-dom'
 import { useData } from '../data'
 import { byText, daysUntil, MONTHS, parts } from '../format'
-import { clock, serviceDayKey, serviceTitle, shortDay, upcomingServices, useSchedule, WEEKDAYS } from '../schedule'
+import {
+  clock,
+  serviceDayKey,
+  serviceTitle,
+  shortDay,
+  upcomingServices,
+  useSchedule,
+  WEEK_AHEAD_DAYS,
+  WEEKDAYS,
+} from '../schedule'
 
 // Remembered per browser (nothing is sent to the server):
 //  - "Lewati" hides it for the rest of this tab session (it comes back the next
@@ -11,9 +20,6 @@ import { clock, serviceDayKey, serviceTitle, shortDay, upcomingServices, useSche
 // (The keys date from when this showed only birthdays.)
 const HIDE_TODAY_KEY = 'birthday-toast-hidden-on'
 const SKIP_KEY = 'birthday-toast-skipped-on'
-
-/** Services of the next days shown under "Ibadah Minggu Ini" (after today). */
-const WEEK_DAYS = 6
 
 function storageKey(d: Date) {
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
@@ -51,7 +57,7 @@ export function DailyNotice() {
   )
   const [dontShowToday, setDontShowToday] = useState(false)
 
-  const { today: servicesToday, week: servicesWeek } = upcomingServices(services, today, WEEK_DAYS)
+  const { today: servicesToday, week: servicesWeek } = upcomingServices(services, today, WEEK_AHEAD_DAYS)
   const birthdays = members
     .filter((m) => m.birthMonth && m.birthDay && daysUntil(m.birthMonth, m.birthDay, today) === 0)
     .toSorted((a, b) => byText(a.name, b.name))

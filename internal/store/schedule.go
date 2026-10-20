@@ -227,3 +227,25 @@ func (s *Store) InsertServices(ctx context.Context, svs []model.Service) error {
 	_, err := s.services.InsertMany(ctx, docs)
 	return err
 }
+
+// MemberNames returns the names of the given members (missing ones are left out).
+func (s *Store) MemberNames(ctx context.Context, ids []bson.ObjectID) (map[bson.ObjectID]string, error) {
+	cur, err := s.members.Find(ctx,
+		bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: ids}}}},
+		options.Find().SetProjection(bson.D{{Key: "name", Value: 1}}))
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		ID   bson.ObjectID `bson:"_id"`
+		Name string        `bson:"name"`
+	}
+	if err := cur.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	out := make(map[bson.ObjectID]string, len(rows))
+	for _, r := range rows {
+		out[r.ID] = r.Name
+	}
+	return out, nil
+}

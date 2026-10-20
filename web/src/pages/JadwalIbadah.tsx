@@ -516,7 +516,9 @@ function ServiceForm({
           host: '',
           location: '',
           leader: '',
+          leaderId: null,
           mc: '',
+          mcId: null,
           note: '',
         },
   )
@@ -579,19 +581,19 @@ function ServiceForm({
         </Field>
         <PersonField
           label="Pemimpin Ibadah"
-          value={s.leader}
+          person={{ id: s.leaderId, name: s.leader }}
           disabled={off}
           kolom={s.kolom}
           members={allMembers}
-          onChange={(leader) => set({ leader })}
+          onChange={(p) => set({ leaderId: p.id, leader: p.name })}
         />
         <PersonField
           label="Pembawa Acara"
-          value={s.mc}
+          person={{ id: s.mcId, name: s.mc }}
           disabled={off}
           kolom={s.kolom}
           members={allMembers}
-          onChange={(mc) => set({ mc })}
+          onChange={(p) => set({ mcId: p.id, mc: p.name })}
         />
         <Field label="Keterangan" wide>
           <textarea disabled={off} rows={2} value={s.note} onChange={(e) => set({ note: e.target.value })} />
@@ -669,34 +671,45 @@ function Subscribe({ kolom, types, onClose }: { kolom: number | null; types: Wor
 
 const OTHER = '__other__'
 
+/** A member (id) or someone from outside (id null, name only). */
+type Person = { id: string | null; name: string }
+
 /**
  * Pemimpin ibadah / pembawa acara: picked from members who are baptized and
- * sidi (this kolom first), or typed in as another name (e.g. a pastor from
- * outside the congregation). A saved name that is not such a member opens in
- * the text box, so it is kept as it is.
+ * sidi (this kolom first) and saved as a link to the member, or typed in as
+ * another name (e.g. a pastor from outside the congregation). A saved outside
+ * name opens in the text box; a linked member who no longer qualifies stays
+ * listed so the service keeps them.
  */
 function PersonField({
   label,
-  value,
+  person,
   disabled,
   kolom,
   members,
   onChange,
 }: {
   label: string
-  value: string
+  person: Person
   disabled: boolean
   kolom: number
   members: Member[]
-  onChange: (name: string) => void
+  onChange: (p: Person) => void
 }) {
   const eligible = members.filter((m) => m.baptized === true && m.confirmed === true).toSorted((a, b) => byText(a.name, b.name))
   const here = eligible.filter((m) => m.kolom === kolom)
   const elsewhere = eligible.filter((m) => m.kolom !== kolom)
-  // 'saved': editing a saved non-member name; 'new': the user chose "+ Nama lain"
+  const linked = person.id ? members.find((m) => m.id === person.id) : undefined
+  const current = linked && !eligible.includes(linked) ? linked : undefined
+  // 'saved': editing a saved outside name; 'new': the user chose "+ Nama lain"
   const [typing, setTyping] = useState<false | 'saved' | 'new'>(() =>
-    value !== '' && !eligible.some((m) => m.name === value) ? 'saved' : false,
+    person.name !== '' && !linked ? 'saved' : false,
   )
+  // same-name members are told apart by their family
+  const counts = new Map<string, number>()
+  for (const m of eligible) counts.set(m.name, (counts.get(m.name) ?? 0) + 1)
+  const optionLabel = (m: Member, withKolom: boolean) =>
+    `${m.name}${counts.get(m.name)! > 1 ? ` (Kel. ${m.familyName})` : ''}${withKolom ? ` · Kolom ${m.kolom}` : ''}`
 
   if (typing) {
     return (
@@ -704,18 +717,18 @@ function PersonField({
         <div className="copy-row">
           <input
             disabled={disabled}
-            value={value}
+            value={person.name}
             placeholder="mis. Pdt. …"
             // eslint-disable-next-line jsx-a11y/no-autofocus -- the user just asked to type a name
             autoFocus={typing === 'new'}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) => onChange({ id: null, name: e.target.value })}
           />
           <button
             type="button"
             className="btn"
             disabled={disabled}
             onClick={() => {
-              onChange('')
+              onChange({ id: null, name: '' })
               setTyping(false)
             }}
           >
@@ -729,20 +742,25 @@ function PersonField({
     <Field label={label}>
       <select
         disabled={disabled}
-        value={value}
+        value={person.id ?? ''}
         onChange={(e) => {
-          if (e.target.value === OTHER) {
-            onChange('')
+          const v = e.target.value
+          if (v === OTHER) {
+            onChange({ id: null, name: '' })
             setTyping('new')
-          } else onChange(e.target.value)
+            return
+          }
+          const m = members.find((x) => x.id === v)
+          onChange(m ? { id: m.id, name: m.name } : { id: null, name: '' })
         }}
       >
         <option value="">— pilih {label.toLowerCase()} —</option>
+        {current && <option value={current.id}>{current.name} (tidak lagi baptis &amp; sidi)</option>}
         {here.length > 0 && (
           <optgroup label={`Anggota Kolom ${kolom} (baptis & sidi)`}>
             {here.map((m) => (
-              <option key={m.id} value={m.name}>
-                {m.name}
+              <option key={m.id} value={m.id}>
+                {optionLabel(m, false)}
               </option>
             ))}
           </optgroup>
@@ -750,8 +768,8 @@ function PersonField({
         {elsewhere.length > 0 && (
           <optgroup label="Anggota kolom lain (baptis & sidi)">
             {elsewhere.map((m) => (
-              <option key={m.id} value={m.name}>
-                {m.name} · Kolom {m.kolom}
+              <option key={m.id} value={m.id}>
+                {optionLabel(m, true)}
               </option>
             ))}
           </optgroup>

@@ -5,7 +5,7 @@ import { ChartCard, ColumnChart, StackedBarChart } from '../components/charts'
 import { PageHeader, Status } from '../components/ui'
 import { kolomLabel, useData } from '../data'
 import { byText, CATEGORIES, dayMonth, daysUntil, MONTHS, parts } from '../format'
-import { clock, serviceDayKey, serviceTitle, shortDay, upcomingServices, useSchedule } from '../schedule'
+import { clock, serviceDayKey, serviceTitle, shortDay, upcomingServices, useSchedule, WEEK_AHEAD_DAYS } from '../schedule'
 
 /** Public homepage: totals plus this month's birthdays and wedding anniversaries. */
 export default function Beranda() {
@@ -228,8 +228,8 @@ function ServiceItem({ s, withDay }: { s: Service; withDay: boolean }) {
 
 /** Today's services and the coming week's (of the viewed kolom), beside the birthdays. */
 function TodayServices({ today }: { today: Date }) {
-  const { services, loading } = useSchedule()
-  const { today: todays, week, next } = upcomingServices(services, today, UPCOMING_DAYS - 1)
+  const { services, loading, error } = useSchedule()
+  const { today: todays, week, next } = upcomingServices(services, today, WEEK_AHEAD_DAYS)
   const dateText = `${today.getDate()} ${MONTHS[today.getMonth()]} ${today.getFullYear()}`
 
   return (
@@ -252,6 +252,8 @@ function TodayServices({ today }: { today: Date }) {
 
       {loading ? (
         <p className="today-empty muted">Memuat jadwal…</p>
+      ) : error ? (
+        <p className="today-empty form-error">Jadwal ibadah gagal dimuat: {error}</p>
       ) : (
         <>
           {todays.length > 0 ? (

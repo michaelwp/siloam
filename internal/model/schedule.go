@@ -38,6 +38,12 @@ type Service struct {
 	MC       string        `bson:"mc" json:"mc"`         // pembawa acara
 	Note     string        `bson:"note" json:"note"`
 
+	// LeaderID / MCID link the person to a member (nil: someone from outside,
+	// known only by name). Leader / MC keep the name as last saved; views show
+	// the member's current name.
+	LeaderID *bson.ObjectID `bson:"leaderId,omitempty" json:"leaderId"`
+	MCID     *bson.ObjectID `bson:"mcId,omitempty" json:"mcId"`
+
 	CreatedAt time.Time `bson:"createdAt" json:"createdAt,omitzero"`
 	UpdatedAt time.Time `bson:"updatedAt" json:"updatedAt,omitzero"`
 }

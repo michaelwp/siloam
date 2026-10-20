@@ -1,35 +1,28 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { scheduleApi, type Service, type WorshipType } from './api'
-import { useData } from './data'
+import { createContext, useContext } from 'react'
+import type { Service, WorshipType } from './api'
 import { MONTHS, parts } from './format'
 
-/** Services (of the viewed kolom) and worship types, with a reload. */
-export function useSchedule() {
-  const { kolom } = useData()
-  const [state, setState] = useState<{ services: Service[]; types: WorshipType[]; loading: boolean; error: string | null }>({
-    services: [],
-    types: [],
-    loading: true,
-    error: null,
-  })
-  const latest = useRef(0)
-  const reload = useCallback(() => {
-    const n = ++latest.current
-    return scheduleApi.load().then(
-      ([services, types]) => {
-        if (n === latest.current) setState({ services, types, loading: false, error: null })
-      },
-      (e: Error) => {
-        if (n === latest.current) setState((s) => ({ ...s, loading: false, error: e.message }))
-      },
-    )
-  }, [])
-  useEffect(() => {
-    void reload()
-  }, [reload])
-  const services = kolom === null ? state.services : state.services.filter((s) => s.kolom === kolom)
-  return { ...state, allServices: state.services, services, reload }
+export type Schedule = {
+  /** services of the viewed kolom (all when no kolom is chosen) */
+  services: Service[]
+  allServices: Service[]
+  types: WorshipType[]
+  loading: boolean
+  error: string | null
+  reload: () => Promise<void>
 }
+
+export const ScheduleContext = createContext<Schedule | null>(null)
+
+/** The schedule shared by every page (see ScheduleProvider), so a change shows everywhere. */
+export function useSchedule() {
+  const ctx = useContext(ScheduleContext)
+  if (!ctx) throw new Error('useSchedule must be used inside ScheduleProvider')
+  return ctx
+}
+
+/** Services shown as "this week": the days after today, up to this many. */
+export const WEEK_AHEAD_DAYS = 6
 
 /** Google Calendar's event colors, offered for worship types. */
 export const TYPE_COLORS = [

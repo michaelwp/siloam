@@ -5,6 +5,7 @@ import { AuthProvider } from './AuthProvider'
 import { DailyNotice } from './components/DailyNotice'
 import { ThemeToggle } from './components/ThemeToggle'
 import { DataScope } from './DataProvider'
+import { ScheduleProvider } from './ScheduleProvider'
 import { kolomLabel, useData } from './data'
 import Account from './pages/Account'
 import AdminUsers from './pages/AdminUsers'
@@ -39,10 +40,12 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <DataScope>
-          <Routes>
-            <Route path="/login" element={<LoginRoute />} />
-            <Route path="*" element={<Gate />} />
-          </Routes>
+          <ScheduleProvider>
+            <Routes>
+              <Route path="/login" element={<LoginRoute />} />
+              <Route path="*" element={<Gate />} />
+            </Routes>
+          </ScheduleProvider>
         </DataScope>
       </AuthProvider>
     </BrowserRouter>

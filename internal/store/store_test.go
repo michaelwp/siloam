@@ -396,3 +396,15 @@ func TestCopyRefusesServicesWithoutTypes(t *testing.T) {
 		t.Fatalf("copy services alone = %v", err)
 	}
 }
+
+func TestMemberNames(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	f, _ := s.CreateFamily(ctx, model.Family{Kolom: 1, Name: "F"})
+	a, _ := s.CreateMember(ctx, model.Member{FamilyID: f.ID, Name: "Ani"})
+	b, _ := s.CreateMember(ctx, model.Member{FamilyID: f.ID, Name: "Ani"}) // same name, other person
+	names, err := s.MemberNames(ctx, []bson.ObjectID{a.ID, b.ID, bson.NewObjectID()})
+	if err != nil || len(names) != 2 || names[a.ID] != "Ani" || names[b.ID] != "Ani" {
+		t.Fatalf("names = %v, %v", names, err)
+	}
+}

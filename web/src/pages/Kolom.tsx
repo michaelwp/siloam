@@ -14,7 +14,8 @@ export default function Kolom() {
   const [formError, setFormError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<KolomType | null>(null)
 
-  const { allServices } = useSchedule()
+  // without the schedule, a kolom's services are unknown: deleting waits for it
+  const { allServices, loading: scheduleLoading, error: scheduleError } = useSchedule()
   const familiesIn = (k: number) => allFamilies.filter((f) => f.kolom === k).length
   const servicesIn = (k: number) => allServices.filter((s) => s.kolom === k).length
   const membersIn = (k: number) => allMembers.filter((m) => m.kolom === k).length
@@ -63,6 +64,7 @@ export default function Kolom() {
       </form>
 
       <Status loading={loading} error={error} empty={!koloms.length} />
+      {scheduleError && <p className="form-error">Jadwal ibadah gagal dimuat ({scheduleError}); kolom belum dapat dihapus.</p>}
       {koloms.length > 0 && (
         <div className="table-wrap">
           <table className="kolom-table">
@@ -79,13 +81,13 @@ export default function Kolom() {
               {koloms.map((k) => {
                 const fams = familiesIn(k.number)
                 const svcs = servicesIn(k.number)
-                const inUse = fams > 0 || svcs > 0
+                const inUse = fams > 0 || svcs > 0 || scheduleLoading || !!scheduleError
                 return (
                   <tr key={k.id}>
                     <td className="strong">Kolom {k.number}</td>
                     <td className="num">{fams}</td>
                     <td className="num">{membersIn(k.number)}</td>
-                    <td className="num">{svcs}</td>
+                    <td className="num">{scheduleError ? '?' : svcs}</td>
                     <td className="actions">
                       <button
                         className="btn small"

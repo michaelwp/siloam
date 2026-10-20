@@ -129,8 +129,22 @@ type serviceInput struct {
 	Host     string     `json:"host"`
 	Location string     `json:"location"`
 	Leader   string     `json:"leader"`
+	LeaderID string     `json:"leaderId"`
 	MC       string     `json:"mc"`
+	MCID     string     `json:"mcId"`
 	Note     string     `json:"note"`
+}
+
+// optionalID parses an optional member ID ("" or null → nil).
+func optionalID(v, what string) (*bson.ObjectID, error) {
+	if v == "" {
+		return nil, nil
+	}
+	id, err := bson.ObjectIDFromHex(v)
+	if err != nil {
+		return nil, fmt.Errorf("%s tidak valid", what)
+	}
+	return &id, nil
 }
 
 func (in serviceInput) toModel() (model.Service, error) {
@@ -162,7 +176,36 @@ func (in serviceInput) toModel() (model.Service, error) {
 	if len(sv.Note) > 2000 {
 		return sv, errors.New("keterangan terlalu panjang")
 	}
+	if sv.LeaderID, err = optionalID(in.LeaderID, "pemimpin ibadah"); err != nil {
+		return sv, err
+	}
+	if sv.MCID, err = optionalID(in.MCID, "pembawa acara"); err != nil {
+		return sv, err
+	}
 	return sv, nil
+}
+
+// linkPeople checks that linked members exist and takes their names, so the
+// stored name matches the member at the time of saving.
+func (a *API) linkPeople(r *http.Request, sv *model.Service) error {
+	for _, p := range []struct {
+		id   *bson.ObjectID
+		name *string
+		what string
+	}{{sv.LeaderID, &sv.Leader, "pemimpin ibadah"}, {sv.MCID, &sv.MC, "pembawa acara"}} {
+		if p.id == nil {
+			continue
+		}
+		m, err := a.store.GetMember(r.Context(), *p.id)
+		if errors.Is(err, store.ErrNotFound) {
+			return fmt.Errorf("%s: anggota tidak ditemukan", p.what)
+		}
+		if err != nil {
+			return err
+		}
+		*p.name = m.Name
+	}
+	return nil
 }
 
 func (a *API) serviceViews(r *http.Request, svs []model.Service) ([]model.ServiceView, error) {
@@ -174,11 +217,38 @@ func (a *API) serviceViews(r *http.Request, svs []model.Service) ([]model.Servic
 	for _, t := range ts {
 		byID[t.ID] = t
 	}
+	names, err := a.linkedNames(r, svs)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]model.ServiceView, 0, len(svs))
 	for _, sv := range svs {
+		// linked people show their current name (renamed members follow)
+		if sv.LeaderID != nil && names[*sv.LeaderID] != "" {
+			sv.Leader = names[*sv.LeaderID]
+		}
+		if sv.MCID != nil && names[*sv.MCID] != "" {
+			sv.MC = names[*sv.MCID]
+		}
 		out = append(out, model.NewServiceView(sv, byID[sv.TypeID], a.loc))
 	}
 	return out, nil
+}
+
+// linkedNames returns the current names of the members the services link to.
+func (a *API) linkedNames(r *http.Request, svs []model.Service) (map[bson.ObjectID]string, error) {
+	var ids []bson.ObjectID
+	for _, sv := range svs {
+		for _, id := range []*bson.ObjectID{sv.LeaderID, sv.MCID} {
+			if id != nil {
+				ids = append(ids, *id)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	return a.store.MemberNames(r.Context(), ids)
 }
 
 func (a *API) listServices(w http.ResponseWriter, r *http.Request) {
@@ -210,6 +280,9 @@ func (a *API) createService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sv, err := in.toModel()
+	if err == nil {
+		err = a.linkPeople(r, &sv)
+	}
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -232,6 +305,9 @@ func (a *API) updateService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sv, err := in.toModel()
+	if err == nil {
+		err = a.linkPeople(r, &sv)
+	}
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
