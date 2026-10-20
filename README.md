@@ -221,9 +221,11 @@ fail the React lint (`--deny-warnings`).
 ### Git hook
 
 `make hooks` (also part of `make setup`) points git at `.githooks/`; every
-clone needs it once. The `pre-commit` hook runs `lint-go` when Go files are
-staged and `lint-web` when files under `web/` are staged, and always prints
-what it did (`pre-commit: …`); a lint failure blocks the commit. It also works
+clone needs it once. The `pre-commit` hook runs `lint-go` **and the Go tests**
+(`make test`) when Go files are staged, and `lint-web` (oxlint + type check)
+when files under `web/` are staged. It always prints what it did
+(`pre-commit: …`); any failure blocks the commit. Tests that need MongoDB use a
+local one if it is running and are skipped otherwise. It also works
 from Git GUIs/IDEs, which often run hooks with a minimal `PATH`.
 
 If you don't see `pre-commit:` lines when committing, check

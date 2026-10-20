@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Runs Go and React linters on staged changes before each commit.
+# Runs linters and tests on staged changes before each commit:
+#   Go files staged  → golangci-lint + go test (MongoDB tests run against a
+#                      local MongoDB if one is running, otherwise they skip)
+#   web/ staged      → oxlint + TypeScript type check
 # Installed by `make hooks` (git config core.hooksPath .githooks).
 # Skip once with: git commit --no-verify — CI runs the same checks anyway.
 set -euo pipefail
@@ -21,6 +24,8 @@ ran=0
 if grep -qE '(\.go$|^go\.(mod|sum)$|^\.golangci\.yml$)' <<<"$staged"; then
   echo "pre-commit: linting Go…"
   make --no-print-directory lint-go
+  echo "pre-commit: testing Go…"
+  make --no-print-directory test
   ran=1
 fi
 
@@ -33,5 +38,5 @@ fi
 if [ "$ran" -eq 0 ]; then
   echo "pre-commit: no Go or web changes staged, nothing to lint"
 else
-  echo "pre-commit: lint passed"
+  echo "pre-commit: all checks passed"
 fi

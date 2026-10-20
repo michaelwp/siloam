@@ -107,8 +107,8 @@ user-reset: ## Unlock an account and print a temporary password: make user-reset
 	go run . -reset-user "$(NAME)"
 
 .PHONY: test
-test: ## Run Go tests
-	go test ./...
+test: web/dist/index.html ## Run Go tests (MongoDB tests use MONGODB_TEST_URI, default local, and skip without one)
+	go test -count=1 ./...
 
 ##@ Quality
 
