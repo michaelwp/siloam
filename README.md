@@ -336,11 +336,6 @@ git-ignored and excluded from Docker builds — keep credentials there only.
 | `-copy-from <uri> [-collections families,members] [-replace]` | copy data from another MongoDB and exit |
 | `-reset-user <name>`             | unlock an account, print a temporary password and exit |
 
-Example for MongoDB Atlas (URL-encode special characters in the password):
-
-```sh
-MONGODB_URI=mongodb+srv://siloam:p%40ssw0rd@cluster0.abcde.mongodb.net/siloam?retryWrites=true&w=majority
-```
 
 **Everything uses `MONGODB_URI` from `.env`** — `make run`, `make import`,
 `make db-copy`, and the containers (`make docker-up`, `make mac-up`). The one
