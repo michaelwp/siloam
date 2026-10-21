@@ -180,12 +180,13 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val id = inputData.getString("id") ?: return Result.success()
         val kolom = inputData.getInt("kolom", 0)
         val start = inputData.getLong("start", 0)
-        // the kolom choice may have changed since the reminder was queued; and
+        // the kolom choice may have changed since the reminder was queued (the
+        // same fallback as when queuing: a deleted kolom means all koloms); and
         // Android may run it late (Doze): never remind about a started service
+        // (null from effectiveKolom means "all koloms", so no ?: fallback here)
+        val chosen = Repository(applicationContext).cached().let { if (it == null) prefs.kolom else it.effectiveKolom(prefs.kolom) }
         val started = start > 0 && System.currentTimeMillis() >= start
-        if (!prefs.notifyServices || id in prefs.remindedServices || started ||
-            (prefs.kolom != null && prefs.kolom != kolom)
-        ) {
+        if (!prefs.notifyServices || id in prefs.remindedServices || started || (chosen != null && chosen != kolom)) {
             return Result.success()
         }
         Notifier.post(

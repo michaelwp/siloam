@@ -41,7 +41,7 @@ import java.util.Date
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(data: Snapshot, kolom: Int?, error: String?, onCategory: (String) -> Unit) {
-    val today = remember { LocalDate.now() }
+    val today = rememberToday()
     val services = data.services.inKolom(kolom) { it.kolom }
     val members = data.members.inKolom(kolom) { it.kolom }
     val families = data.families.inKolom(kolom) { it.kolom }
@@ -51,7 +51,8 @@ fun HomeScreen(data: Snapshot, kolom: Int?, error: String?, onCategory: (String)
     val anniversaries = anniversariesToday(families, today)
     var selected by remember { mutableStateOf<Service?>(null) }
     // which accordions are open, kept on the device (survives tab switches and restarts)
-    val prefs = Prefs(LocalContext.current)
+    val context = LocalContext.current
+    val prefs = remember { Prefs(context) }
     var open by remember { mutableStateOf(prefs.openSections) }
     fun toggle(key: String) {
         open = if (key in open) open - key else open + key

@@ -6,6 +6,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 
 // The web app's colors (accent, surfaces, green for birthdays).
 private val Light = lightColorScheme(
@@ -41,6 +42,15 @@ private val Dark = darkColorScheme(
 @Composable
 fun SiloamTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = if (isSystemInDarkTheme()) Dark else Light, content = content)
+}
+
+/**
+ * Text color on a jenis color: black or white, whichever contrasts more (the
+ * web's palette has light colors such as Kuning, where white is unreadable).
+ */
+fun onTypeColor(background: Color): Color {
+    val l = background.luminance()
+    return if ((l + 0.05f) / 0.05f >= 1.05f / (l + 0.05f)) Color(0xDE000000) else Color.White
 }
 
 /** A worship type's calendar color ("#039be5"), or the theme's primary. */

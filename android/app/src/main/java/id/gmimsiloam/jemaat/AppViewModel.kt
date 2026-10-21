@@ -8,6 +8,7 @@ import id.gmimsiloam.jemaat.data.Repository
 import id.gmimsiloam.jemaat.data.Snapshot
 import id.gmimsiloam.jemaat.notify.DailyWorker
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,6 +46,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(refreshing = true) }
         refreshJob = viewModelScope.launch {
             val result = runCatching { repo.refresh() }
+            // replaced by a newer load (runCatching also caught the cancellation):
+            // leave the state to that one, never show "Job was cancelled"
+            ensureActive()
             _state.update { s ->
                 result.fold(
                     onSuccess = { s.copy(data = it, refreshing = false, error = null) },

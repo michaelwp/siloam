@@ -4,6 +4,7 @@ package id.gmimsiloam.jemaat.ui
 
 import android.Manifest
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -37,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -90,6 +92,11 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
     // (null from effectiveKolom means "all koloms", so no ?: fallback here)
     val kolom = state.data.let { if (it == null) state.kolom else it.effectiveKolom(state.kolom) }
 
+    // Back from another tab returns to Beranda before leaving the app
+    BackHandler(enabled = !settings && tab != Tab.Home) { tab = Tab.Home }
+    // each tab keeps its saved state (month, search, filters) while another is shown
+    val tabState = rememberSaveableStateHolder()
+
     if (settings) {
         SettingsScreen(state = state, vm = vm, onBack = { settings = false })
         return
@@ -135,12 +142,14 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
                     "Data belum dapat dimuat.\n${state.error ?: ""}\n\nPeriksa koneksi internet, lalu tarik ke bawah untuk mencoba lagi.",
                 )
                 else -> Box(Modifier.fillMaxSize()) {
-                    when (tab) {
-                        Tab.Home -> HomeScreen(data, kolom, state.error, onCategory = { category = it; tab = Tab.Bipra })
-                        Tab.Schedule -> ScheduleScreen(data, kolom)
-                        Tab.Birthdays -> BirthdaysScreen(data, kolom)
-                        Tab.Members -> MembersScreen(data, kolom)
-                        Tab.Bipra -> BipraScreen(data, kolom, category, onCategory = { category = it })
+                    tabState.SaveableStateProvider(tab.key) {
+                        when (tab) {
+                            Tab.Home -> HomeScreen(data, kolom, state.error, onCategory = { category = it; tab = Tab.Bipra })
+                            Tab.Schedule -> ScheduleScreen(data, kolom)
+                            Tab.Birthdays -> BirthdaysScreen(data, kolom)
+                            Tab.Members -> MembersScreen(data, kolom)
+                            Tab.Bipra -> BipraScreen(data, kolom, category, onCategory = { category = it })
+                        }
                     }
                 }
             }

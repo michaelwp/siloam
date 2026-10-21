@@ -33,7 +33,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,9 +48,16 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import id.gmimsiloam.jemaat.data.Service
 import id.gmimsiloam.jemaat.data.clock
 import id.gmimsiloam.jemaat.data.shortDate
+import kotlinx.coroutines.delay
+import java.time.Duration
+import java.time.LocalDate
+import java.time.LocalDateTime
 
 /** Centered message (loading, empty, error); scrollable so pull-to-refresh works. */
 @Composable
@@ -54,6 +65,26 @@ fun Message(text: String) {
     Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp), contentAlignment = Alignment.Center) {
         Text(text, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+}
+
+/**
+ * Today's date, kept current: re-read whenever the app comes to the foreground
+ * (Android keeps it in memory overnight) and at midnight while it is open.
+ */
+@Composable
+fun rememberToday(): LocalDate {
+    var today by remember { mutableStateOf(LocalDate.now()) }
+    val owner = LocalLifecycleOwner.current
+    LaunchedEffect(owner) {
+        owner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                today = LocalDate.now()
+                val midnight = LocalDate.now().plusDays(1).atStartOfDay()
+                delay(Duration.between(LocalDateTime.now(), midnight).toMillis() + 1_000)
+            }
+        }
+    }
+    return today
 }
 
 /**

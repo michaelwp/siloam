@@ -22,7 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,8 +38,8 @@ import java.time.LocalDate
 /** Birthdays month by month (day and month only: the public view has no birth year). */
 @Composable
 fun BirthdaysScreen(data: Snapshot, kolom: Int?) {
-    val today = remember { LocalDate.now() }
-    var month by remember { mutableIntStateOf(today.monthValue) }
+    val today = rememberToday()
+    var month by rememberSaveable { mutableIntStateOf(today.monthValue) }
     val list = data.members.inKolom(kolom) { it.kolom }
         .filter { it.hasBirthday() && it.birthMonth == month }
         .sortedWith(compareBy({ it.birthDay }, { it.name.lowercase() }))

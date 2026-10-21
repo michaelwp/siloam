@@ -50,6 +50,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,12 +84,14 @@ import java.time.YearMonth
  */
 @Composable
 fun ScheduleScreen(data: Snapshot, kolom: Int?) {
-    val today = remember { LocalDate.now() }
-    val prefs = Prefs(LocalContext.current)
+    val today = rememberToday()
+    val context = LocalContext.current
+    val prefs = remember { Prefs(context) }
     var calendar by remember { mutableStateOf(prefs.scheduleCalendar) }
-    var month by remember { mutableStateOf(YearMonth.from(today)) }
-    var day by remember { mutableStateOf(today) } // the calendar's chosen day
-    var hidden by remember { mutableStateOf(setOf<String>()) }
+    // kept across tab switches and rotation (SiloamApp keeps each tab's saved state)
+    var month by rememberSaveable { mutableStateOf(YearMonth.from(today)) }
+    var day by rememberSaveable { mutableStateOf(today) } // the calendar's chosen day
+    var hidden by rememberSaveable { mutableStateOf(setOf<String>()) }
     var selected by remember { mutableStateOf<Service?>(null) }
     val shown = data.services.inKolom(kolom) { it.kolom }
         .filter { it.typeId !in hidden }
@@ -317,7 +320,7 @@ private fun DayCell(
             Text(
                 clock(s.time),
                 style = MaterialTheme.typography.labelSmall,
-                color = Color.White,
+                color = onTypeColor(typeColor(s.typeColor)),
                 maxLines = 1,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
