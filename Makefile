@@ -362,12 +362,12 @@ android-test: ## Run the Android app's unit tests
 .PHONY: android-apk
 android-apk: ## Build the debug APK (android/app/build/outputs/apk/debug/app-debug.apk)
 	$(GRADLE) assembleDebug
-	@echo "→ android/app/build/outputs/apk/debug/siloam-app-debug.apk"
+	@echo "→ android/app/build/outputs/apk/debug/app-debug.apk"
 
 .PHONY: android-release
 android-release: ## Build the release APK (unsigned; sign it before publishing)
 	$(GRADLE) assembleRelease
-	@echo "→ android/app/build/outputs/apk/release/siloam-app-release-unsigned.apk"
+	@echo "→ android/app/build/outputs/apk/release/app-release-unsigned.apk"
 
 ANDROID_SDK ?= $(or $(ANDROID_HOME),$(HOME)/Library/Android/sdk)
 ADB = $(or $(shell command -v adb),$(ANDROID_SDK)/platform-tools/adb)
