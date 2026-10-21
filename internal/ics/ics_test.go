@@ -12,11 +12,11 @@ func TestCalendar(t *testing.T) {
 	out := string(Calendar("Jadwal Ibadah", []Event{{
 		UID: "abc@siloam", Start: start, End: start.Add(90 * time.Minute),
 		Summary:     "Ibadah Kolom · Kel. Umboh, Riedel",
-		Description: "Pemimpin: Pdt. Eva; MC: Ibu Frieda\nKolom 11 " + strings.Repeat("panjang ", 12),
+		Description: "Khadim: Pdt. Eva; MC: Ibu Frieda\nKolom 11 " + strings.Repeat("panjang ", 12),
 	}}))
 	for _, want := range []string{
 		"BEGIN:VCALENDAR\r\n", "DTSTART:20260120T110000Z\r\n", "DTEND:20260120T123000Z\r\n",
-		`SUMMARY:Ibadah Kolom · Kel. Umboh\, Riedel`, `Pemimpin: Pdt. Eva\; MC: Ibu Frieda\nKolom 11`, "END:VCALENDAR\r\n",
+		`SUMMARY:Ibadah Kolom · Kel. Umboh\, Riedel`, `Khadim: Pdt. Eva\; MC: Ibu Frieda\nKolom 11`, "END:VCALENDAR\r\n",
 	} {
 		if !strings.Contains(strings.ReplaceAll(out, "\r\n ", ""), want) {
 			t.Errorf("missing %q in\n%s", want, out)

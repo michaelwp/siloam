@@ -132,7 +132,7 @@ internal fun showDaily(ctx: Context, prefs: Prefs, data: Snapshot, today: LocalD
 
 private fun serviceLine(s: Service) = buildString {
     append("${clock(s.time)} · ${s.fullTitle}")
-    if (s.leader.isNotEmpty()) append(" · Pemimpin: ${s.leader}")
+    if (s.leader.isNotEmpty()) append(" · Khadim: ${s.leader}")
 }
 
 /** Queues a reminder [Prefs.remindBeforeMinutes] before each of today's services that is still ahead. */
@@ -161,7 +161,7 @@ private fun scheduleReminders(ctx: Context, prefs: Prefs, data: Snapshot, today:
                     "detail" to listOfNotNull(
                         s.fullTitle,
                         s.place.ifEmpty { null },
-                        s.leader.ifEmpty { null }?.let { "Pemimpin: $it" },
+                        s.leader.ifEmpty { null }?.let { "Khadim: $it" },
                         s.mc.ifEmpty { null }?.let { "Pembawa acara: $it" },
                         longDate(s.date),
                     ).joinToString("\n"),

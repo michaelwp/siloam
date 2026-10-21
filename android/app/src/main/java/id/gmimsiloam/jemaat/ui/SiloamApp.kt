@@ -18,7 +18,6 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -54,7 +53,7 @@ import id.gmimsiloam.jemaat.notify.Notifier
 enum class Tab(val key: String, val label: String, val icon: ImageVector) {
     Home("home", "Beranda", Icons.Filled.Home),
     Schedule("schedule", "Jadwal", Icons.Filled.DateRange),
-    Birthdays("birthdays", "HUT", Icons.Filled.Star),
+    Birthdays("birthdays", "HUT", Icons.Filled.Cake),
     Members("members", "Jemaat", Icons.Filled.Person),
     Bipra("bipra", "BIPRA", Icons.AutoMirrored.Filled.List),
 }

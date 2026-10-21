@@ -217,7 +217,7 @@ function ServiceItem({ s, withDay }: { s: Service; withDay: boolean }) {
       <strong>{serviceTitle(s)}</strong>
       {(s.leader || s.mc) && (
         <span className="muted">
-          {s.leader && <>Pemimpin: {s.leader}</>}
+          {s.leader && <>Khadim: {s.leader}</>}
           {s.leader && s.mc && ' · '}
           {s.mc && <>Pembawa acara: {s.mc}</>}
         </span>

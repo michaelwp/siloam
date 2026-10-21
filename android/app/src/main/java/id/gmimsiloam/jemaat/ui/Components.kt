@@ -184,7 +184,7 @@ fun ServiceRow(s: Service, withDate: Boolean, highlight: Boolean = false, onClic
                 )
                 Text(s.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 val people = listOfNotNull(
-                    s.leader.ifEmpty { null }?.let { "Pemimpin: $it" },
+                    s.leader.ifEmpty { null }?.let { "Khadim: $it" },
                     s.mc.ifEmpty { null }?.let { "Pembawa acara: $it" },
                 ).joinToString(" · ")
                 if (people.isNotEmpty()) {

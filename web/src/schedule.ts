@@ -78,7 +78,7 @@ function gcalStamp(iso: string) {
 function details(s: Service) {
   return [
     `Kolom ${s.kolom}`,
-    s.leader && `Pemimpin Ibadah: ${s.leader}`,
+    s.leader && `Khadim: ${s.leader}`,
     s.mc && `Pembawa Acara: ${s.mc}`,
     s.note,
   ]

@@ -14,33 +14,49 @@ of worship services per kolom. Each service can be added to Google Calendar
 or Apple Calendar (`.ics`), and "Tambahkan ke Kalender Saya" subscribes a
 calendar app to `/api/calendar.ics` (optionally `?kolom=N`), so changes show
 up automatically. The kinds of service ("Jenis Ibadah": Kolom, WKI, PKB,
-Pemuda, Remaja, ASM, with their colors) are managed on their own page.
+Pemuda, Remaja, ASM, with their colors) are managed on their own page. The
+**Khadim** (who leads the service) and the **Pembawa Acara** are picked from
+the members who are baptized and sidi (the service's kolom first), or typed in
+as another name, e.g. a pastor from outside the congregation. On opening the
+site, a popup shows today's and this week's services and today's birthdays
+(unless there is nothing to show, or it was hidden for today); Beranda shows
+the same.
 Service times are in `APP_TIMEZONE` (default `Asia/Makassar`, WITA). Load a
 schedule spreadsheet with
-`siloam -import-jadwal jadwal.xlsx [-kolom 11] [-replace]`.
+`siloam -import-jadwal jadwal.xlsx [-kolom 11] [-replace]` (the leader's
+column may be headed "Pemimpin Ibadah" or "Khadim").
 
 ## Android app (`android/`)
 
 A Kotlin (Jetpack Compose) app for the congregation: the **public view** only
-(no sign-in, the same redacted data visitors see on the web) with Beranda,
-Jadwal Ibadah, Ulang Tahun and Jemaat, a kolom picker, offline cache, and
-**background notifications**:
+(no sign-in, the same redacted data visitors see on the web), with a kolom
+picker, an offline cache, and five tabs:
+
+| Tab | What it shows |
+|---|---|
+| Beranda | Two collapsible sections: **Pemberitahuan** (today's and this week's services, today's birthdays and wedding anniversaries) and **Statistik** (totals, BIPRA counts, charts). Tapping a BIPRA count opens that category on the BIPRA tab |
+| Jadwal | Services month by month, as a list or a month calendar (swipe to change month); details, "Tambah ke Kalender" and "Bagikan" per service |
+| HUT | Birthdays month by month (day and month only) |
+| Jemaat | Families and their members, searchable |
+| BIPRA | Members per Kategorial BIPRA category, searchable |
+
+It also sends **background notifications**:
 
 - a daily summary (default 06:00): today's services and today's birthdays;
-- a reminder before each of today's services (default 1 hour before);
-- "Tambah ke Kalender" (the phone's calendar app) and "Bagikan" per service.
+- a reminder before each of today's services (default 1 hour before).
 
 A WorkManager job checks about every hour, also after a reboot, without the
 app being open. Everything follows the kolom chosen in the app; the times,
 reminders and server address are under **Pengaturan**. The server defaults to
 `https://siloam.fly.dev`; debug builds also allow plain HTTP, e.g.
-`http://10.0.2.2:8080` (your computer, seen from the Android emulator).
+`http://10.0.2.2:8080` (your computer, seen from the Android emulator);
+release builds only accept `https://` addresses.
 
 Needs JDK 17+ and the Android SDK (`android/local.properties` →
 `sdk.dir=…`, or `ANDROID_HOME`):
 
 ```sh
-make android-test      # unit tests (dates, birthdays, JSON parsing)
+make android-test      # unit tests (dates, birthdays, statistics, calendar grid, JSON parsing)
 make android-apk       # debug APK → android/app/build/outputs/apk/debug/app-debug.apk
 make android-install   # install it on a phone/emulator via adb
 make android-release   # release APK (unsigned: sign it with your key before publishing)
@@ -361,8 +377,8 @@ running `make mac-up` / `make docker-up` with a localhost URI) into the remote
 database instead, use `make mac-db-copy` or `make docker-db-copy` (same
 `REPLACE=1` option).
 
-Families, members and users (with passwords and passkeys) are copied with
-their IDs, so links between them stay intact. Sessions are not copied — everyone
+Koloms, families, members, worship types, services and users (with passwords
+and passkeys) are copied with their IDs, so links between them stay intact. Sessions are not copied — everyone
 signs in again once. The command refuses a non-empty target unless `REPLACE=1`
 (which clears only the collections being copied), and refuses to copy a
 database onto itself — detected by writing a marker, so `localhost`,
@@ -371,8 +387,10 @@ is only read.
 
 ## API
 
-Reading families and members (`GET /api/families…`, `GET /api/members…`) is
-public but returns the redacted public view unless signed in; every other
+Reading koloms, families, members, worship types and services (`GET` on
+`/api/koloms`, `/api/families…`, `/api/members…`, `/api/worship-types`,
+`/api/services…` and `/api/calendar.ics`) is public; families and members come
+in the redacted public view unless signed in. Every other
 endpoint except `/api/health` and sign-in requires a session cookie, and
 `/api/users` requires the admin role. Errors are
 `{"error": "...", "code": "..."}`; `code` is `unauthenticated` (401),
@@ -399,6 +417,9 @@ user has proven who they are).
 | PUT    | `/api/users/{id}`                      | admin: `{username, role}`                 |
 | POST   | `/api/users/{id}/reset-password`       | admin: `{password, clearPasskeys}`; also unlocks |
 | DELETE | `/api/users/{id}`                      | admin                                     |
+| GET    | `/api/koloms`                          | public                                    |
+| POST   | `/api/koloms`                          | `{number}`                                |
+| DELETE | `/api/koloms/{id}`                     | only when no family or service is in it   |
 | GET    | `/api/families`                        | with `memberCount`, `weddingYears`, `weddingMonth`, `weddingDay` (public: redacted) |
 | POST   | `/api/families`                        | `no` is assigned automatically            |
 | GET    | `/api/families/{id}`                   | includes `members`                        |
@@ -409,6 +430,16 @@ user has proven who they are).
 | GET    | `/api/members/{id}`                    |                                           |
 | PUT    | `/api/members/{id}`                    | moving to another family appends it there |
 | DELETE | `/api/members/{id}`                    | renumbers the family                      |
+| GET    | `/api/worship-types`                   | jenis ibadah with `color` (public)        |
+| POST   | `/api/worship-types`                   | `{name, color}`                           |
+| PUT    | `/api/worship-types/{id}`              | `{name, color}`                           |
+| DELETE | `/api/worship-types/{id}`              | only when no service uses it              |
+| GET    | `/api/services`                        | with `typeName`, `typeColor`, `start`, `end`; `leader` (khadim) and `mc` show the linked member's current name (public) |
+| POST   | `/api/services`                        | `leaderId` / `mcId` link a member, or give `leader` / `mc` as a name |
+| PUT    | `/api/services/{id}`                   |                                           |
+| DELETE | `/api/services/{id}`                   |                                           |
+| GET    | `/api/services/{id}/ics`               | one service as an `.ics` file (public)    |
+| GET    | `/api/calendar.ics[?kolom=&type=]`     | calendar feed to subscribe to (public)    |
 
 Dates are sent as `YYYY-MM-DDT00:00:00Z`; `baptized`/`confirmed` are `true`,
 `false` or `null` (unknown).
@@ -425,14 +456,16 @@ spellings and birth dates); Data Base Keluarga is treated as the source of truth
 
 ```
 main.go                 server, flags, SPA handler
-internal/api            REST handlers (families, members)
+internal/api            REST handlers (koloms, families, members, schedule)
 internal/auth           sign-in, passkeys, sessions, user admin, middleware
 internal/httpx          JSON helpers
 internal/config         .env loader
 internal/store          MongoDB access
 internal/model          types (incl. User, Session) + derived values
-internal/importer       .xlsx import
+internal/importer       .xlsx import (members workbook, worship schedule)
+internal/ics            iCalendar (.ics) output for the schedule
 web/                    React app (web/embed.go embeds web/dist)
+android/                Android app (Kotlin, Jetpack Compose; public view + notifications)
 .env.example            settings template (copy to .env)
 Dockerfile, compose.yaml, Makefile, .githooks/
 ```

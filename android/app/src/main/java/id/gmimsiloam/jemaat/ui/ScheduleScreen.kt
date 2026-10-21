@@ -350,7 +350,7 @@ fun ServiceSheet(s: Service, onDismiss: () -> Unit) {
             Text("${longDate(s.date)} · ${timeRange(s.time)} WITA", style = MaterialTheme.typography.bodyLarge)
             listOf(
                 "Lokasi" to s.place,
-                "Pemimpin Ibadah" to s.leader,
+                "Khadim" to s.leader,
                 "Pembawa Acara" to s.mc,
                 "Kolom" to "${s.kolom}",
                 "Keterangan" to s.note,
@@ -386,7 +386,7 @@ private fun addToCalendar(context: Context, s: Service) {
             CalendarContract.Events.DESCRIPTION,
             listOfNotNull(
                 "Kolom ${s.kolom}",
-                s.leader.ifEmpty { null }?.let { "Pemimpin Ibadah: $it" },
+                s.leader.ifEmpty { null }?.let { "Khadim: $it" },
                 s.mc.ifEmpty { null }?.let { "Pembawa Acara: $it" },
                 s.note.ifEmpty { null },
             ).joinToString("\n"),
@@ -405,7 +405,7 @@ private fun share(context: Context, s: Service) {
         appendLine(s.fullTitle)
         appendLine("${longDate(s.date)}, ${timeRange(s.time)} WITA")
         if (s.place.isNotEmpty()) appendLine(s.place)
-        if (s.leader.isNotEmpty()) appendLine("Pemimpin Ibadah: ${s.leader}")
+        if (s.leader.isNotEmpty()) appendLine("Khadim: ${s.leader}")
         if (s.mc.isNotEmpty()) append("Pembawa Acara: ${s.mc}")
     }.trim()
     context.startActivity(

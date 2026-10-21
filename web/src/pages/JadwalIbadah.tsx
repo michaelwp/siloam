@@ -332,7 +332,7 @@ function Agenda({
                       <strong>{serviceTitle(s)}</strong>
                       <span className="muted">
                         Ibadah {s.typeName}
-                        {s.leader && <> · Pemimpin: {s.leader}</>}
+                        {s.leader && <> · Khadim: {s.leader}</>}
                       </span>
                     </span>
                   </button>
@@ -409,7 +409,7 @@ function ServiceDetails({
   const rows: [string, string][] = [
     ['Tuan Rumah', s.host ? `Kel. ${s.host}` : ''],
     ['Lokasi', s.location],
-    ['Pemimpin Ibadah', s.leader],
+    ['Khadim', s.leader],
     ['Pembawa Acara', s.mc],
     ['Kolom', String(s.kolom)],
     ['Keterangan', s.note],
@@ -580,7 +580,7 @@ function ServiceForm({
           <input disabled={off} value={s.location} onChange={(e) => set({ location: e.target.value })} />
         </Field>
         <PersonField
-          label="Pemimpin Ibadah"
+          label="Khadim"
           person={{ id: s.leaderId, name: s.leader }}
           disabled={off}
           kolom={s.kolom}
@@ -675,7 +675,7 @@ const OTHER = '__other__'
 type Person = { id: string | null; name: string }
 
 /**
- * Pemimpin ibadah / pembawa acara: picked from members who are baptized and
+ * Khadim / pembawa acara: picked from members who are baptized and
  * sidi (this kolom first) and saved as a link to the member, or typed in as
  * another name (e.g. a pastor from outside the congregation). A saved outside
  * name opens in the text box; a linked member who no longer qualifies stays

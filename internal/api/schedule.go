@@ -176,7 +176,7 @@ func (in serviceInput) toModel() (model.Service, error) {
 	if len(sv.Note) > 2000 {
 		return sv, errors.New("keterangan terlalu panjang")
 	}
-	if sv.LeaderID, err = optionalID(in.LeaderID, "pemimpin ibadah"); err != nil {
+	if sv.LeaderID, err = optionalID(in.LeaderID, "khadim"); err != nil {
 		return sv, err
 	}
 	if sv.MCID, err = optionalID(in.MCID, "pembawa acara"); err != nil {
@@ -192,7 +192,7 @@ func (a *API) linkPeople(r *http.Request, sv *model.Service) error {
 		id   *bson.ObjectID
 		name *string
 		what string
-	}{{sv.LeaderID, &sv.Leader, "pemimpin ibadah"}, {sv.MCID, &sv.MC, "pembawa acara"}} {
+	}{{sv.LeaderID, &sv.Leader, "khadim"}, {sv.MCID, &sv.MC, "pembawa acara"}} {
 		if p.id == nil {
 			continue
 		}
@@ -399,7 +399,7 @@ func icsEvent(v model.ServiceView) ics.Event {
 	var desc []string
 	desc = append(desc, fmt.Sprintf("Kolom %d", v.Kolom))
 	if v.Leader != "" {
-		desc = append(desc, "Pemimpin Ibadah: "+v.Leader)
+		desc = append(desc, "Khadim: "+v.Leader)
 	}
 	if v.MC != "" {
 		desc = append(desc, "Pembawa Acara: "+v.MC)

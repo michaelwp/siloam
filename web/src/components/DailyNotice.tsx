@@ -100,7 +100,7 @@ export function DailyNotice() {
                   </strong>
                   {(s.leader || s.mc) && (
                     <span className="muted small">
-                      {s.leader && <>Pemimpin: {s.leader}</>}
+                      {s.leader && <>Khadim: {s.leader}</>}
                       {s.leader && s.mc && ' · '}
                       {s.mc && <>Pembawa acara: {s.mc}</>}
                     </span>
@@ -128,7 +128,7 @@ export function DailyNotice() {
                   <strong>
                     Ibadah {s.typeName} · {serviceTitle(s)}
                   </strong>
-                  {s.leader && <span className="muted small">Pemimpin: {s.leader}</span>}
+                  {s.leader && <span className="muted small">Khadim: {s.leader}</span>}
                 </span>
               </li>
             ))}

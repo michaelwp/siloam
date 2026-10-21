@@ -220,7 +220,7 @@ export type Service = {
   time: string // "19:00"
   host: string // host family, without "Kel."
   location: string
-  leader: string // pemimpin ibadah (the member's current name when linked)
+  leader: string // khadim, who leads the service (the member's current name when linked)
   leaderId: string | null // the member, or null for someone from outside
   mc: string // pembawa acara
   mcId: string | null

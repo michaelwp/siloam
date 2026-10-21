@@ -15,7 +15,7 @@ import (
 
 // ImportSchedule loads a "Jadwal Ibadah" workbook (first sheet) into the given
 // kolom. Columns are found by their headers: Hari / Tanggal, Nama Keluarga
-// (a "Kel." cell followed by the name), Pembawa Acara, Pemimpin Ibadah, the
+// (a "Kel." cell followed by the name), Pembawa Acara, Pemimpin Ibadah (or Khadim), the
 // time (as a day fraction) and Jenis Ibadah (matched to the worship types).
 func ImportSchedule(ctx context.Context, s *store.Store, path string, kolom int) (int, error) {
 	f, err := excelize.OpenFile(path)
@@ -91,7 +91,7 @@ func headerColumns(row []string) map[string]int {
 			col["host"] = i
 		case strings.Contains(h, "pembawa"):
 			col["mc"] = i
-		case strings.Contains(h, "pemimpin"):
+		case strings.Contains(h, "pemimpin") || strings.Contains(h, "khadim"):
 			col["leader"] = i
 		case h == "time" || h == "jam" || h == "waktu":
 			col["time"] = i
@@ -108,7 +108,7 @@ var requiredColumns = []struct{ key, header string }{
 	{"date", "Hari / Tanggal"},
 	{"host", "Nama Keluarga"},
 	{"mc", "Pembawa Acara"},
-	{"leader", "Pemimpin Ibadah"},
+	{"leader", "Khadim (Pemimpin Ibadah)"},
 	{"type", "Jenis Ibadah"},
 }
 

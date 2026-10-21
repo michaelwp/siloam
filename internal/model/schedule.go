@@ -34,7 +34,7 @@ type Service struct {
 	Time     string        `bson:"time" json:"time"` // "19:00", local time
 	Host     string        `bson:"host" json:"host"` // host family ("Kel. …"), without the prefix
 	Location string        `bson:"location" json:"location"`
-	Leader   string        `bson:"leader" json:"leader"` // pemimpin ibadah
+	Leader   string        `bson:"leader" json:"leader"` // khadim (leads the service)
 	MC       string        `bson:"mc" json:"mc"`         // pembawa acara
 	Note     string        `bson:"note" json:"note"`
 
