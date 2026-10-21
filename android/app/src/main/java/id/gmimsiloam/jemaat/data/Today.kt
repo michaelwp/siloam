@@ -37,6 +37,17 @@ fun timeRange(t: String): String {
 /** Items of the viewed kolom (null = all). */
 fun <T> List<T>.inKolom(kolom: Int?, of: (T) -> Int) = if (kolom == null) this else filter { of(it) == kolom }
 
+/**
+ * The days shown in a month calendar: whole weeks from Sunday (as the
+ * weekday names, Minggu first) covering [month], so 4 to 6 rows.
+ */
+fun monthGrid(month: java.time.YearMonth): List<LocalDate> {
+    val first = month.atDay(1)
+    val start = first.minusDays((first.dayOfWeek.value % 7).toLong())
+    val weeks = (first.dayOfWeek.value % 7 + month.lengthOfMonth() + 6) / 7
+    return (0 until weeks * 7).map { start.plusDays(it.toLong()) }
+}
+
 data class Upcoming(val today: List<Service>, val week: List<Service>, val next: Service?)
 
 private val byStart = compareBy<Service>({ it.date }, { it.time })

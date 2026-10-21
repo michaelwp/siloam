@@ -67,4 +67,17 @@ class TodayTest {
         assertEquals("Min, 25 Okt", shortDate(LocalDate.of(2026, 10, 25)))
         assertNull(upcomingServices(emptyList(), LocalDate.of(2026, 1, 1)).next)
     }
+
+    @Test
+    fun monthGridCoversWholeWeeksFromSunday() {
+        // October 2026 starts on a Thursday and needs 5 weeks
+        val oct = monthGrid(java.time.YearMonth.of(2026, 10))
+        assertEquals(35, oct.size)
+        assertEquals(LocalDate.of(2026, 9, 27), oct.first()) // a Sunday
+        assertEquals(LocalDate.of(2026, 10, 31), oct.last())
+        // February 2026 starts on a Sunday: exactly 4 weeks
+        assertEquals(28, monthGrid(java.time.YearMonth.of(2026, 2)).size)
+        // August 2026 starts on a Saturday and has 31 days: 6 weeks
+        assertEquals(42, monthGrid(java.time.YearMonth.of(2026, 8)).size)
+    }
 }

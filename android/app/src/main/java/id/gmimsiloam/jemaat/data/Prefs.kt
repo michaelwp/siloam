@@ -58,6 +58,11 @@ class Prefs(context: Context) {
         get() = p.getStringSet("openSections", null) ?: setOf("notices", "stats")
         set(v) = p.edit { putStringSet("openSections", v) }
 
+    /** Jadwal's view: list or month calendar. */
+    var scheduleCalendar: Boolean
+        get() = p.getBoolean("scheduleCalendar", false)
+        set(v) = p.edit { putBoolean("scheduleCalendar", v) }
+
     companion object {
         const val DEFAULT_SERVER = "https://siloam.fly.dev"
     }
