@@ -3,6 +3,7 @@
 package id.gmimsiloam.jemaat.ui
 
 import android.Manifest
+import android.app.Activity
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -12,12 +13,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -66,6 +69,7 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
     val state by vm.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
     var settings by rememberSaveable { mutableStateOf(false) }
+    var confirmClose by rememberSaveable { mutableStateOf(false) }
     var category by rememberSaveable { mutableStateOf<String?>(null) } // BIPRA tab's filter
 
     // a tapped notification opens its tab
@@ -98,6 +102,23 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
     // each tab keeps its saved state (month, search, filters) while another is shown
     val tabState = rememberSaveableStateHolder()
 
+    if (confirmClose) {
+        AlertDialog(
+            onDismissRequest = { confirmClose = false },
+            title = { Text("Tutup aplikasi?") },
+            text = { Text("Notifikasi ibadah dan ulang tahun tetap muncul setelah aplikasi ditutup.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmClose = false
+                    // closes the screens and removes the app from the recent apps; the
+                    // background check (WorkManager) keeps sending notifications
+                    (context as? Activity)?.finishAndRemoveTask()
+                }) { Text("Tutup") }
+            },
+            dismissButton = { TextButton(onClick = { confirmClose = false }) { Text("Batal") } },
+        )
+    }
+
     if (settings) {
         SettingsScreen(state = state, vm = vm, onBack = { settings = false })
         return
@@ -115,6 +136,9 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
                 actions = {
                     FilterMenu(filter, state.data, onPick = vm::setFilter)
                     IconButton(onClick = { settings = true }) { Icon(Icons.Filled.Settings, contentDescription = "Pengaturan") }
+                    IconButton(onClick = { confirmClose = true }) {
+                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Tutup aplikasi")
+                    }
                 },
             )
         },
