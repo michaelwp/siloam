@@ -15,7 +15,27 @@ import (
 
 // Admin-only user management. The middleware has already checked the role.
 
-func validRole(role string) bool { return role == model.RoleAdmin || role == model.RoleUser }
+// roleKolom checks a role and its kolom: a "kelola data kolom" user needs an
+// existing kolom; other roles have none (0).
+func (s *Service) roleKolom(r *http.Request, role string, kolom int) (int, error) {
+	if !model.ValidRole(role) {
+		return 0, errors.New("role tidak valid")
+	}
+	if role != model.RoleKolom {
+		return 0, nil
+	}
+	if kolom <= 0 {
+		return 0, errors.New("pilih kolom yang dikelola pengguna ini")
+	}
+	ok, err := s.store.KolomExists(r.Context(), kolom)
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		return 0, fmt.Errorf("kolom %d tidak ada", kolom)
+	}
+	return kolom, nil
+}
 
 func (s *Service) listUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := s.store.ListUsers(r.Context())
@@ -33,6 +53,7 @@ func (s *Service) createUser(w http.ResponseWriter, r *http.Request) {
 		Username string `json:"username"`
 		Password string `json:"password"`
 		Role     string `json:"role"`
+		Kolom    int    `json:"kolom"` // for the "kolom" role
 	}
 	if !httpx.Decode(w, r, &in) {
 		return
@@ -49,8 +70,9 @@ func (s *Service) createUser(w http.ResponseWriter, r *http.Request) {
 	if in.Role == "" {
 		in.Role = model.RoleUser
 	}
-	if !validRole(in.Role) {
-		httpx.WriteError(w, http.StatusBadRequest, "role tidak valid")
+	kolom, err := s.roleKolom(r, in.Role, in.Kolom)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	hash, err := hashPassword(in.Password)
@@ -62,6 +84,7 @@ func (s *Service) createUser(w http.ResponseWriter, r *http.Request) {
 		Username:           username,
 		PasswordHash:       hash,
 		Role:               in.Role,
+		Kolom:              kolom,
 		MustChangePassword: true,
 		WebAuthnID:         randomBytes(32),
 	}
@@ -86,11 +109,12 @@ func (s *Service) targetUser(w http.ResponseWriter, r *http.Request) (*model.Use
 	return u, true
 }
 
-// updateUser changes username and/or role.
+// updateUser changes username and/or role (and a kolom user's kolom).
 func (s *Service) updateUser(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Username string `json:"username"`
 		Role     string `json:"role"`
+		Kolom    int    `json:"kolom"`
 	}
 	if !httpx.Decode(w, r, &in) {
 		return
@@ -112,19 +136,21 @@ func (s *Service) updateUser(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if in.Role != "" && in.Role != u.Role {
-		if !validRole(in.Role) {
-			httpx.WriteError(w, http.StatusBadRequest, "role tidak valid")
+	if in.Role != "" && (in.Role != u.Role || in.Kolom != u.Kolom) {
+		kolom, err := s.roleKolom(r, in.Role, in.Kolom)
+		if err != nil {
+			httpx.WriteError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		if u.ID == current(r).user.ID {
-			httpx.WriteError(w, http.StatusBadRequest, "tidak dapat mengubah role akun sendiri")
-			return
-		}
-		var err error
-		if u, err = s.store.SetRole(r.Context(), u.ID, in.Role); err != nil {
-			writeUserError(w, err)
-			return
+		if in.Role != u.Role || kolom != u.Kolom {
+			if u.ID == current(r).user.ID {
+				httpx.WriteError(w, http.StatusBadRequest, "tidak dapat mengubah role akun sendiri")
+				return
+			}
+			if u, err = s.store.SetRole(r.Context(), u.ID, in.Role, kolom); err != nil {
+				writeUserError(w, err)
+				return
+			}
 		}
 	}
 	httpx.WriteJSON(w, http.StatusOK, u)

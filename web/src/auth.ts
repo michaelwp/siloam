@@ -1,6 +1,6 @@
 import { browserSupportsWebAuthn, startAuthentication, startRegistration, WebAuthnError } from '@simplewebauthn/browser'
 import { createContext, useContext } from 'react'
-import { authApi, type User } from './api'
+import { authApi, type Role, type User } from './api'
 import { useData } from './data'
 
 export type Auth = {
@@ -20,12 +20,37 @@ export function useAuth() {
   return ctx
 }
 
+export const ROLE_LABELS: Record<Role, string> = {
+  admin: 'Admin',
+  user: 'Pengguna',
+  kolom: 'Pengguna – kelola data kolom',
+}
+
+/** "Admin", "Pengguna", "Kelola Kolom 3" */
+export function roleLabel(u: Pick<User, 'role' | 'kolom'>) {
+  return u.role === 'kolom' ? `Kelola Kolom ${u.kolom}` : ROLE_LABELS[u.role]
+}
+
+/** Admins and regular users change every kolom's data, the koloms and the jenis ibadah. */
+export function managesAll(u: User | null) {
+  return !!u && (u.role === 'admin' || u.role === 'user')
+}
+
+/** Whether u may change (and see the private data of) kolom k; a kolom user only their own. */
+export function managesKolom(u: User | null, k: number) {
+  return managesAll(u) || (!!u && u.role === 'kolom' && u.kolom === k)
+}
+
 /**
  * Whether the loaded data is the full (signed-in) view, as reported by the
- * server — never guessed from the sign-in state, which can be stale.
+ * server — never guessed from the sign-in state, which can be stale. A
+ * "kelola data kolom" user gets it only for their own kolom (the server sends
+ * the other koloms redacted), so other koloms show as for visitors.
  */
 export function useFullView() {
-  return useData().view === 'full'
+  const { view, kolom } = useData()
+  const { user } = useAuth()
+  return view === 'full' && (user?.role !== 'kolom' || kolom === user.kolom)
 }
 
 /**

@@ -172,6 +172,12 @@ func adminOnly(path string) bool {
 	return path == "/api/users" || strings.HasPrefix(path, "/api/users/") || strings.HasPrefix(path, "/api/admin/")
 }
 
+// managesAllOnly: writes only admins and regular users may make.
+func managesAllOnly(path string) bool {
+	return path == "/api/koloms" || strings.HasPrefix(path, "/api/koloms/") ||
+		path == "/api/worship-types" || strings.HasPrefix(path, "/api/worship-types/")
+}
+
 // paths reachable while the user still has to change the initial password
 var changePasswordPaths = map[string]bool{
 	"/api/auth/me":                 true,
@@ -232,6 +238,12 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 			httpx.WriteError(w, http.StatusForbidden, "hanya admin yang dapat mengakses halaman ini", "forbidden")
 			return
 		}
+		// a "kelola data kolom" user changes their kolom's data, not the
+		// koloms or jenis ibadah themselves (the data rules are in the API)
+		if isUnsafe(r.Method) && !u.ManagesAll() && managesAllOnly(path) {
+			httpx.WriteError(w, http.StatusForbidden, fmt.Sprintf("Anda hanya dapat mengelola data Kolom %d", u.Kolom), "forbidden")
+			return
+		}
 		ctx := context.WithValue(r.Context(), ctxKey{}, &principal{user: u, session: sess})
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -268,6 +280,12 @@ func CurrentUser(r *http.Request) *model.User {
 		return p.user
 	}
 	return nil
+}
+
+// WithUser returns r as if u were signed in (for tests of handlers behind
+// the middleware).
+func WithUser(r *http.Request, u *model.User) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), ctxKey{}, &principal{user: u}))
 }
 
 // ClientIP is the request's client address (behind the configured proxies).

@@ -116,3 +116,38 @@ func TestAdminPagesNeedTheAdminRole(t *testing.T) {
 		}
 	}
 }
+
+func TestKolomUserCannotChangeKolomsOrJenisIbadah(t *testing.T) {
+	svc, st := testService(t)
+	h := svc.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	u := &model.User{Username: "kolom3", Role: model.RoleKolom, Kolom: 3, WebAuthnID: []byte("kolom3")}
+	if err := st.CreateUser(context.Background(), u); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if err := st.CreateSession(context.Background(), model.Session{ID: hashToken("k3"), UserID: u.ID, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		method, path string
+		want         int
+	}{
+		{http.MethodPost, "/api/koloms", http.StatusForbidden},
+		{http.MethodDelete, "/api/koloms/abc", http.StatusForbidden},
+		{http.MethodPost, "/api/worship-types", http.StatusForbidden},
+		{http.MethodPut, "/api/worship-types/abc", http.StatusForbidden},
+		{http.MethodGet, "/api/koloms", http.StatusNoContent},
+		{http.MethodPost, "/api/families", http.StatusNoContent}, // the API checks the kolom
+		{http.MethodGet, "/api/users", http.StatusForbidden},
+	} {
+		r := httptest.NewRequest(c.method, c.path, nil)
+		r.Header.Set("Origin", "http://example.com")
+		r.Host = "example.com"
+		r.AddCookie(&http.Cookie{Name: sessionCookie, Value: "k3"})
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, r)
+		if rec.Code != c.want {
+			t.Errorf("%s %s: %d, want %d", c.method, c.path, rec.Code, c.want)
+		}
+	}
+}

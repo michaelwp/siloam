@@ -287,6 +287,9 @@ func (a *API) createService(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if !mayManage(w, r, sv.Kolom) {
+		return
+	}
 	sv, err = a.store.CreateService(r.Context(), sv)
 	if err != nil {
 		scheduleError(w, err)
@@ -313,6 +316,15 @@ func (a *API) updateService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sv.ID = id
+	// both the service's kolom and the one it would move to
+	old, err := a.store.GetService(r.Context(), id)
+	if err != nil {
+		storeError(w, err)
+		return
+	}
+	if !mayManage(w, r, old.Kolom) || !mayManage(w, r, sv.Kolom) {
+		return
+	}
 	sv, err = a.store.UpdateService(r.Context(), sv)
 	if err != nil {
 		scheduleError(w, err)
@@ -324,6 +336,14 @@ func (a *API) updateService(w http.ResponseWriter, r *http.Request) {
 func (a *API) deleteService(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
+		return
+	}
+	old, err := a.store.GetService(r.Context(), id)
+	if err != nil {
+		storeError(w, err)
+		return
+	}
+	if !mayManage(w, r, old.Kolom) {
 		return
 	}
 	if err := a.store.DeleteService(r.Context(), id); err != nil {

@@ -1,12 +1,18 @@
 import { useState } from 'react'
 import { api, familyToInput, memberToInput, type Family, type FamilyInput, type Member, type MemberInput } from '../api'
+import { managesKolom, useAuth } from '../auth'
 import { familyOption, useData } from '../data'
 import { fromInputDate, GENDERS, MARITAL_STATUSES, RELATIONSHIPS, toInputDate } from '../format'
 import { ConfirmDelete, Field, FormShell, Modal } from './ui'
 
-/** Kolom picker; forms ask for it first and keep the other fields off until chosen. */
+/**
+ * Kolom picker; forms ask for it first and keep the other fields off until
+ * chosen. It offers only the koloms the user may change (a "kelola data
+ * kolom" user: their own).
+ */
 export function KolomField({ value, onChange }: { value: number; onChange: (k: number) => void }) {
-  const { koloms } = useData()
+  const { user } = useAuth()
+  const koloms = useData().koloms.filter((k) => managesKolom(user, k.number))
   return (
     <Field label="Kolom" wide>
       <select required value={value || ''} onChange={(e) => onChange(Number(e.target.value))}>

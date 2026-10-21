@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { BrowserRouter, Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { useAuth } from './auth'
+import { managesAll, roleLabel, useAuth } from './auth'
 import { AuthProvider } from './AuthProvider'
 import { DailyNotice } from './components/DailyNotice'
 import { ThemeToggle } from './components/ThemeToggle'
@@ -74,11 +74,13 @@ function Gate() {
 }
 
 /** Pages that need a signed-in user send visitors to /login. */
-function RequireUser({ children, admin }: { children: ReactNode; admin?: boolean }) {
+function RequireUser({ children, admin, all }: { children: ReactNode; admin?: boolean; all?: boolean }) {
   const { user } = useAuth()
   const location = useLocation()
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
   if (admin && user.role !== 'admin') return <Navigate to="/" replace />
+  // koloms and jenis ibadah: not for a "kelola data kolom" user
+  if (all && !managesAll(user)) return <Navigate to="/" replace />
   return <>{children}</>
 }
 
@@ -115,13 +117,17 @@ function Shell() {
                 </span>
                 <div className="grow">
                   <strong>{user.username}</strong>
-                  <small>{isAdmin ? 'Admin' : 'Pengguna'}</small>
+                  <small>{roleLabel(user)}</small>
                 </div>
                 <ThemeToggle />
               </div>
               <nav>
-                <NavLink to="/kolom">Kelola Kolom</NavLink>
-                <NavLink to="/jenis-ibadah">Jenis Ibadah</NavLink>
+                {managesAll(user) && (
+                  <>
+                    <NavLink to="/kolom">Kelola Kolom</NavLink>
+                    <NavLink to="/jenis-ibadah">Jenis Ibadah</NavLink>
+                  </>
+                )}
                 <NavLink to="/akun">Akun Saya</NavLink>
                 {isAdmin && (
                   <>
@@ -162,7 +168,7 @@ function Shell() {
           <Route
             path="/jenis-ibadah"
             element={
-              <RequireUser>
+              <RequireUser all>
                 <JenisIbadah />
               </RequireUser>
             }
@@ -170,7 +176,7 @@ function Shell() {
           <Route
             path="/kolom"
             element={
-              <RequireUser>
+              <RequireUser all>
                 <Kolom />
               </RequireUser>
             }
@@ -217,17 +223,30 @@ function Shell() {
 /** Which kolom every page shows; "Semua Kolom" shows the whole congregation. */
 function KolomPicker() {
   const { koloms, kolom, setKolom } = useData()
+  const { user } = useAuth()
+  // a "kelola data kolom" user only reads the other koloms (as visitors see them)
+  const own = user?.role === 'kolom' ? user.kolom : undefined
   return (
-    <label className="kolom-picker">
-      <span className="sr-only">Kolom yang ditampilkan</span>
-      <select value={kolom ?? ''} onChange={(e) => setKolom(e.target.value ? Number(e.target.value) : null)}>
-        <option value="">{kolomLabel(null)}</option>
-        {koloms.map((k) => (
-          <option key={k.id} value={k.number}>
-            {kolomLabel(k.number)}
-          </option>
-        ))}
-      </select>
-    </label>
+    <>
+      <label className="kolom-picker">
+        <span className="sr-only">Kolom yang ditampilkan</span>
+        <select value={kolom ?? ''} onChange={(e) => setKolom(e.target.value ? Number(e.target.value) : null)}>
+          <option value="">{kolomLabel(null)}</option>
+          {koloms.map((k) => (
+            <option key={k.id} value={k.number}>
+              {kolomLabel(k.number)}
+            </option>
+          ))}
+        </select>
+      </label>
+      {own !== undefined && kolom !== own && (
+        <p className="kolom-note small">
+          Hanya baca. Anda mengelola data Kolom {own}.{' '}
+          <button type="button" className="link" onClick={() => setKolom(own)}>
+            Buka Kolom {own}
+          </button>
+        </p>
+      )}
+    </>
   )
 }

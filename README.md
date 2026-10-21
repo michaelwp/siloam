@@ -161,12 +161,24 @@ reach the app (not signed in, not an admin) are not logged either.
 - **Passkeys:** under *Akun Saya* each user can add passkeys (Touch ID / Face ID,
   Windows Hello, Android, security keys), rename or delete them, then use
   *Masuk dengan Passkey* on the sign-in page without typing a username.
-- **Admin → Pengguna:** add users (role *Pengguna* or *Admin*) with a generated
+- **Admin → Pengguna:** add users (role *Admin*, *Pengguna* or *Pengguna –
+  kelola data kolom*, see below) with a generated
   temporary password, edit username/role, reset a password (optionally removing
   the user's passkeys, e.g. for a lost phone) and delete users. New and reset
   accounts must change their password at the next sign-in. You cannot delete or
   demote yourself, and there is always at least one admin.
-- Both roles can manage the jemaat data; only admins manage users.
+- **Roles:**
+
+  | Role | Can change | Sees private data of |
+  |---|---|---|
+  | Admin | all jemaat data, koloms, jenis ibadah, users, Android version, log | every kolom |
+  | Pengguna | all jemaat data, koloms, jenis ibadah | every kolom |
+  | Pengguna – kelola data kolom | families, members and services of **their one kolom** (chosen when the account is created; required) | their kolom only — other koloms show as for visitors |
+
+  The server enforces this (`403` otherwise, also for moving data into or out
+  of the kolom); the web app starts a kolom user on their kolom, offers only
+  that kolom in forms, hides *Kelola Kolom* and *Jenis Ibadah*, and marks other
+  koloms "Hanya baca". A kolom assigned to a user cannot be deleted.
 - **Account lockout:** after **3 wrong passwords in a row** an account is locked
   for **3 minutes** (`MAX_FAILED_LOGINS`, `LOCK_DURATION`; the sign-in page shows
   the current values). During the lock it cannot sign in — not even with the
@@ -454,8 +466,8 @@ user has proven who they are).
 | PUT    | `/api/auth/passkeys/{id}`              | rename `{name}`                           |
 | DELETE | `/api/auth/passkeys/{id}`              |                                           |
 | GET    | `/api/users`                           | admin                                     |
-| POST   | `/api/users`                           | admin: `{username, password, role}`       |
-| PUT    | `/api/users/{id}`                      | admin: `{username, role}`                 |
+| POST   | `/api/users`                           | admin: `{username, password, role, kolom}` — role `admin`, `user` or `kolom` (then `kolom` is required) |
+| PUT    | `/api/users/{id}`                      | admin: `{username, role, kolom}`          |
 | POST   | `/api/users/{id}/reset-password`       | admin: `{password, clearPasskeys}`; also unlocks |
 | DELETE | `/api/users/{id}`                      | admin                                     |
 | GET    | `/api/koloms`                          | public                                    |

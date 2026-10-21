@@ -3,6 +3,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -114,6 +115,10 @@ func (a *API) deleteKolom(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "kolom masih memiliki keluarga atau jadwal ibadah; pindahkan atau hapus terlebih dahulu")
 		return
 	}
+	if errors.Is(err, store.ErrKolomHasUsers) {
+		writeError(w, http.StatusConflict, "kolom ini masih ditugaskan kepada pengguna; ubah kolom atau role pengguna itu terlebih dahulu")
+		return
+	}
 	if err != nil {
 		storeError(w, err)
 		return
@@ -166,7 +171,7 @@ func (a *API) listFamilies(w http.ResponseWriter, r *http.Request) {
 	out := make([]model.FamilyView, 0, len(fams))
 	for _, f := range fams {
 		v := model.NewFamilyView(f, counts[f.ID], now)
-		if !full {
+		if !seesPrivate(r, full, f.Kolom) {
 			v = v.Public()
 		}
 		out = append(out, v)
@@ -194,7 +199,7 @@ func (a *API) getFamily(w http.ResponseWriter, r *http.Request) {
 	for _, m := range members {
 		v.Members = append(v.Members, model.NewMemberView(m, f, now))
 	}
-	if !dataView(w, r) {
+	if !seesPrivate(r, dataView(w, r), f.Kolom) {
 		v = v.Public()
 	}
 	writeJSON(w, http.StatusOK, v)
@@ -208,6 +213,9 @@ func (a *API) createFamily(w http.ResponseWriter, r *http.Request) {
 	f, err := in.toModel()
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !mayManage(w, r, f.Kolom) {
 		return
 	}
 	f, err = a.store.CreateFamily(r.Context(), f)
@@ -233,6 +241,15 @@ func (a *API) updateFamily(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f.ID = id
+	// both the family's kolom and the one it would move to
+	old, err := a.store.GetFamily(r.Context(), id)
+	if err != nil {
+		storeError(w, err)
+		return
+	}
+	if !mayManage(w, r, old.Kolom) || !mayManage(w, r, f.Kolom) {
+		return
+	}
 	f, err = a.store.UpdateFamily(r.Context(), f)
 	if err != nil {
 		storeError(w, err)
@@ -249,6 +266,14 @@ func (a *API) updateFamily(w http.ResponseWriter, r *http.Request) {
 func (a *API) deleteFamily(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
+		return
+	}
+	old, err := a.store.GetFamily(r.Context(), id)
+	if err != nil {
+		storeError(w, err)
+		return
+	}
+	if !mayManage(w, r, old.Kolom) {
 		return
 	}
 	if err := a.store.DeleteFamily(r.Context(), id); err != nil {
@@ -312,8 +337,9 @@ func (a *API) memberViews(r *http.Request, members []model.Member) ([]model.Memb
 	full := auth.SignedIn(r)
 	out := make([]model.MemberView, 0, len(members))
 	for _, m := range members {
-		v := model.NewMemberView(m, byID[m.FamilyID], now)
-		if !full {
+		f := byID[m.FamilyID]
+		v := model.NewMemberView(m, f, now)
+		if !seesPrivate(r, full, f.Kolom) {
 			v = v.Public()
 		}
 		out = append(out, v)
@@ -368,6 +394,9 @@ func (a *API) createMember(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if !a.mayManageFamily(w, r, m.FamilyID) {
+		return
+	}
 	m, err = a.store.CreateMember(r.Context(), m)
 	if err != nil {
 		storeError(w, err)
@@ -391,6 +420,15 @@ func (a *API) updateMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m.ID = id
+	// both the member's family and the one it would move to
+	old, err := a.store.GetMember(r.Context(), id)
+	if err != nil {
+		storeError(w, err)
+		return
+	}
+	if !a.mayManageFamily(w, r, old.FamilyID) || !a.mayManageFamily(w, r, m.FamilyID) {
+		return
+	}
 	m, err = a.store.UpdateMember(r.Context(), m)
 	if err != nil {
 		storeError(w, err)
@@ -402,6 +440,14 @@ func (a *API) updateMember(w http.ResponseWriter, r *http.Request) {
 func (a *API) deleteMember(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
+		return
+	}
+	old, err := a.store.GetMember(r.Context(), id)
+	if err != nil {
+		storeError(w, err)
+		return
+	}
+	if !a.mayManageFamily(w, r, old.FamilyID) {
 		return
 	}
 	if err := a.store.DeleteMember(r.Context(), id); err != nil {
@@ -418,13 +464,34 @@ func (a *API) writeMember(w http.ResponseWriter, r *http.Request, status int, m 
 		return
 	}
 	v := model.NewMemberView(m, f, time.Now())
-	if !dataView(w, r) {
+	if !seesPrivate(r, dataView(w, r), f.Kolom) {
 		v = v.Public()
 	}
 	writeJSON(w, status, v)
 }
 
 // ---- helpers ----
+
+// mayManage reports whether the signed-in user may change data of kolom k
+// (a "kelola data kolom" user only their own); if not, it answers 403.
+func mayManage(w http.ResponseWriter, r *http.Request, k int) bool {
+	u := auth.CurrentUser(r)
+	if u == nil || u.ManagesKolom(k) { // writes always have a user (auth middleware)
+		return true
+	}
+	writeError(w, http.StatusForbidden, fmt.Sprintf("Anda hanya dapat mengelola data Kolom %d", u.Kolom), "forbidden")
+	return false
+}
+
+// seesPrivate reports whether r gets the private data of kolom k: signed in,
+// and (for a "kelola data kolom" user) their own kolom. full is dataView's answer.
+func seesPrivate(r *http.Request, full bool, k int) bool {
+	if !full {
+		return false
+	}
+	u := auth.CurrentUser(r)
+	return u == nil || u.ManagesKolom(k)
+}
 
 // dataView reports whether r gets the full (signed-in) view, and tells the
 // client which one it is in the X-Data-View header ("full" or "public"), so
@@ -437,6 +504,23 @@ func dataView(w http.ResponseWriter, r *http.Request) bool {
 	}
 	w.Header().Set("X-Data-View", view)
 	return full
+}
+
+// mayManageFamily is mayManage for the kolom of family id (a missing family
+// is left to the store, which answers "not found").
+func (a *API) mayManageFamily(w http.ResponseWriter, r *http.Request, id bson.ObjectID) bool {
+	if u := auth.CurrentUser(r); u == nil || u.ManagesAll() {
+		return true
+	}
+	f, err := a.store.GetFamily(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		return true
+	}
+	if err != nil {
+		serverError(w, err)
+		return false
+	}
+	return mayManage(w, r, f.Kolom)
 }
 
 func clean(s string) string { return strings.Join(strings.Fields(s), " ") }

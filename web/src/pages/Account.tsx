@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { authApi, type Passkey } from '../api'
-import { passkeyError, passkeysSupported, registerPasskey, useAuth } from '../auth'
+import { passkeyError, passkeysSupported, registerPasskey, roleLabel, useAuth } from '../auth'
 import { CredentialsForm } from '../components/CredentialsForm'
 import { ConfirmDelete, Field, FormShell, Modal, PageHeader } from '../components/ui'
 import { longDate } from '../format'
@@ -12,7 +12,7 @@ export default function Account() {
 
   return (
     <>
-      <PageHeader title="Akun Saya" subtitle={<>Masuk sebagai <b>{user.username}</b> ({user.role === 'admin' ? 'Admin' : 'Pengguna'})</>} />
+      <PageHeader title="Akun Saya" subtitle={<>Masuk sebagai <b>{user.username}</b> ({roleLabel(user)})</>} />
       <section className="card panel">
         <header className="panel-head">
           <h2>Username & Password</h2>

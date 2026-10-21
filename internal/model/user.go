@@ -9,7 +9,13 @@ import (
 const (
 	RoleAdmin = "admin"
 	RoleUser  = "user"
+	// RoleKolom ("Pengguna – kelola data kolom") manages the data of one
+	// kolom (User.Kolom) only: its families, members and services.
+	RoleKolom = "kolom"
 )
+
+// ValidRole reports whether role is one of the roles above.
+func ValidRole(role string) bool { return role == RoleAdmin || role == RoleUser || role == RoleKolom }
 
 // User is an account that can sign in to the app.
 type User struct {
@@ -17,6 +23,7 @@ type User struct {
 	Username           string        `bson:"username" json:"username"`
 	PasswordHash       string        `bson:"passwordHash" json:"-"`
 	Role               string        `bson:"role" json:"role"`
+	Kolom              int           `bson:"kolom,omitempty" json:"kolom,omitempty"` // RoleKolom: the kolom they manage
 	MustChangePassword bool          `bson:"mustChangePassword" json:"mustChangePassword"`
 	FailedLogins       int           `bson:"failedLogins" json:"failedLogins"` // consecutive wrong passwords
 	LockedAt           *time.Time    `bson:"lockedAt" json:"lockedAt"`         // when the current/last lock started
@@ -29,6 +36,16 @@ type User struct {
 }
 
 func (u *User) IsAdmin() bool { return u.Role == RoleAdmin }
+
+// ManagesAll reports whether the user may change data of every kolom (and
+// the koloms and jenis ibadah themselves): admins and regular users.
+func (u *User) ManagesAll() bool { return u.Role == RoleAdmin || u.Role == RoleUser }
+
+// ManagesKolom reports whether the user may change, and see the private
+// data of, kolom k.
+func (u *User) ManagesKolom(k int) bool {
+	return u.ManagesAll() || (u.Role == RoleKolom && u.Kolom == k)
+}
 
 // IsLockedAt reports whether a temporary lock is in force at the given time.
 func (u *User) IsLockedAt(now time.Time) bool {

@@ -173,8 +173,15 @@ func (s *Store) SetUsername(ctx context.Context, id bson.ObjectID, username stri
 // SetRole changes a role. Demoting an admin is undone (ErrLastAdmin) if it
 // would leave no admin — checked after the write, so two admins demoting each
 // other at the same moment cannot both succeed.
-func (s *Store) SetRole(ctx context.Context, id bson.ObjectID, role string) (*model.User, error) {
-	u, err := s.modifyUser(ctx, byID(id), set(bson.D{{Key: "role", Value: role}}))
+func (s *Store) SetRole(ctx context.Context, id bson.ObjectID, role string, kolom int) (*model.User, error) {
+	update := set(bson.D{{Key: "role", Value: role}, {Key: "kolom", Value: kolom}})
+	if role != model.RoleKolom { // only kolom users have a kolom
+		update = bson.D{
+			{Key: "$set", Value: bson.D{{Key: "role", Value: role}, {Key: "updatedAt", Value: time.Now().UTC()}}},
+			{Key: "$unset", Value: bson.D{{Key: "kolom", Value: ""}}},
+		}
+	}
+	u, err := s.modifyUser(ctx, byID(id), update)
 	if err != nil || role == model.RoleAdmin {
 		return u, err
 	}

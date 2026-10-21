@@ -152,7 +152,7 @@ export function memberToInput(m: Member): MemberInput {
 
 // ---- auth & users ----
 
-export type Role = 'admin' | 'user'
+export type Role = 'admin' | 'user' | 'kolom'
 
 export type Passkey = {
   id: string
@@ -165,6 +165,7 @@ export type User = {
   id: string
   username: string
   role: Role
+  kolom?: number // role 'kolom': the kolom they manage
   mustChangePassword: boolean
   failedLogins: number
   lockedAt: string | null
@@ -247,8 +248,10 @@ export const adminApi = {
 
 export const usersApi = {
   list: () => request<User[]>('GET', '/api/users'),
-  create: (body: { username: string; password: string; role: Role }) => request<User>('POST', '/api/users', body),
-  update: (id: string, body: { username: string; role: Role }) => request<User>('PUT', `/api/users/${id}`, body),
+  create: (body: { username: string; password: string; role: Role; kolom?: number }) =>
+    request<User>('POST', '/api/users', body),
+  update: (id: string, body: { username: string; role: Role; kolom?: number }) =>
+    request<User>('PUT', `/api/users/${id}`, body),
   resetPassword: (id: string, body: { password: string; clearPasskeys: boolean }) =>
     request<User>('POST', `/api/users/${id}/reset-password`, body),
   remove: (id: string) => request<void>('DELETE', `/api/users/${id}`),

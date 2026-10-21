@@ -38,9 +38,19 @@ function saveKolom(k: number | null) {
  * user (see DataScope), so signing in or out remounts it empty: data loaded
  * for one user — or the redacted public view — is never reused for another.
  */
-function DataProvider({ children, expectFull, onStale }: { children: ReactNode; expectFull: boolean; onStale: () => void }) {
+function DataProvider({
+  children,
+  expectFull,
+  onStale,
+  startKolom,
+}: {
+  children: ReactNode
+  expectFull: boolean
+  onStale: () => void
+  startKolom: number | null // a "kelola data kolom" user starts on their kolom
+}) {
   const [state, setState] = useState<State>({ koloms: [], families: [], members: [], view: null, loading: true, error: null })
-  const [chosen, setChosen] = useState(savedKolom)
+  const [chosen, setChosen] = useState(() => startKolom ?? savedKolom())
   const latest = useRef(0) // ignore responses of superseded loads
 
   const load = useCallback(() => {
@@ -106,7 +116,12 @@ export function DataScope({ children }: { children: ReactNode }) {
   const full = !!user && !user.mustChangePassword
   const key = user ? `${user.id}:${full ? 'full' : 'limited'}` : 'visitor'
   return (
-    <DataProvider key={key} expectFull={full} onStale={refresh}>
+    <DataProvider
+      key={key}
+      expectFull={full}
+      onStale={refresh}
+      startKolom={user?.role === 'kolom' ? (user.kolom ?? null) : null}
+    >
       {children}
     </DataProvider>
   )

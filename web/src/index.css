@@ -2142,3 +2142,9 @@ textarea {
   justify-content: center;
   margin: 16px 0;
 }
+
+/* a "kelola data kolom" user viewing another kolom */
+.kolom-note {
+  margin: -4px 4px 8px;
+  color: var(--muted);
+}

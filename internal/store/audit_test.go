@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -96,5 +97,35 @@ func TestAuditLabelAndAndroidRelease(t *testing.T) {
 	}
 	if r, _ := s.GetAndroidRelease(ctx); r != nil {
 		t.Fatalf("cleared: %+v", r)
+	}
+}
+
+func TestKolomUsersRole(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	newUser(t, s, "admin", model.RoleAdmin)
+	u := newUser(t, s, "budi", model.RoleUser)
+	got, err := s.SetRole(ctx, u.ID, model.RoleKolom, 3)
+	if err != nil || got.Role != model.RoleKolom || got.Kolom != 3 {
+		t.Fatalf("to kolom user: %+v %v", got, err)
+	}
+	ks, err := s.ListKoloms(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var k3 model.Kolom
+	for _, k := range ks {
+		if k.Number == 3 {
+			k3 = k
+		}
+	}
+	if err := s.DeleteKolom(ctx, k3.ID); !errors.Is(err, ErrKolomHasUsers) {
+		t.Fatalf("delete an assigned kolom: %v", err)
+	}
+	if got, err = s.SetRole(ctx, u.ID, model.RoleUser, 0); err != nil || got.Kolom != 0 {
+		t.Fatalf("back to regular user keeps the kolom: %+v %v", got, err)
+	}
+	if err := s.DeleteKolom(ctx, k3.ID); err != nil {
+		t.Fatalf("delete once unassigned: %v", err)
 	}
 }

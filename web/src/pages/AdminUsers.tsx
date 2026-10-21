@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { usersApi, type Role, type User } from '../api'
-import { useAuth } from '../auth'
+import { roleLabel, useAuth } from '../auth'
 import { PasswordStrength } from '../components/PasswordStrength'
 import { Badge, ConfirmDelete, Field, FormShell, Modal, PageHeader, Status } from '../components/ui'
+import { useData } from '../data'
 import { clockTime, longDate } from '../format'
 import { generatePassword, MIN_PASSWORD_LENGTH, passwordValid } from '../password'
 
@@ -78,7 +79,9 @@ export default function AdminUsers() {
                       {u.username} {self && <span className="muted">(Anda)</span>}
                     </td>
                     <td>
-                      <Badge tone={u.role === 'admin' ? 'pkb' : undefined}>{u.role === 'admin' ? 'Admin' : 'Pengguna'}</Badge>
+                      <Badge tone={u.role === 'admin' ? 'pkb' : u.role === 'kolom' ? 'pemuda' : undefined}>
+                        {roleLabel(u)}
+                      </Badge>
                     </td>
                     <td>
                       {locked ? (
@@ -131,7 +134,9 @@ export default function AdminUsers() {
           </footer>
         </Modal>
       )}
-      {dialog?.kind === 'edit' && <EditUser user={dialog.user} self={dialog.user.id === me?.id} onClose={close} onSaved={load} />}
+      {dialog?.kind === 'edit' && (
+        <EditUser user={dialog.user} self={dialog.user.id === me?.id} onClose={close} onSaved={load} />
+      )}
       {dialog?.kind === 'reset' && (
         <ResetPassword user={dialog.user} locked={isLocked(dialog.user, loadedAt)} onClose={close} onSaved={load} />
       )}
@@ -155,7 +160,15 @@ export default function AdminUsers() {
   )
 }
 
-function PasswordInput({ value, username, onChange }: { value: string; username: string; onChange: (v: string) => void }) {
+function PasswordInput({
+  value,
+  username,
+  onChange,
+}: {
+  value: string
+  username: string
+  onChange: (v: string) => void
+}) {
   return (
     <>
       <div className="input-row">
@@ -213,6 +226,7 @@ function TempPassword({ username, password }: { username: string; password: stri
 function AddUser({ onClose, onCreated }: { onClose: () => void; onCreated: (u: User, password: string) => void }) {
   const [username, setUsername] = useState('')
   const [role, setRole] = useState<Role>('user')
+  const [kolom, setKolom] = useState(0)
   const [password, setPassword] = useState(generatePassword)
   return (
     <Modal title="Tambah Pengguna" onClose={onClose}>
@@ -221,18 +235,16 @@ function AddUser({ onClose, onCreated }: { onClose: () => void; onCreated: (u: U
         submitLabel="Tambah"
         onSubmit={async () => {
           requireValid(password, username)
-          onCreated(await usersApi.create({ username, password, role }), password)
+          onCreated(
+            await usersApi.create({ username, password, role, kolom: role === 'kolom' ? kolom : undefined }),
+            password,
+          )
         }}
       >
         <Field label="Username">
           <input autoCapitalize="none" required minLength={3} maxLength={32} value={username} onChange={(e) => setUsername(e.target.value)} />
         </Field>
-        <Field label="Role">
-          <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-            <option value="user">Pengguna — kelola data jemaat</option>
-            <option value="admin">Admin — juga kelola pengguna</option>
-          </select>
-        </Field>
+        <RoleFields role={role} kolom={kolom} onRole={setRole} onKolom={setKolom} />
         <Field label="Password sementara" wide>
           <PasswordInput value={password} username={username} onChange={setPassword} />
         </Field>
@@ -242,15 +254,26 @@ function AddUser({ onClose, onCreated }: { onClose: () => void; onCreated: (u: U
   )
 }
 
-function EditUser({ user, self, onClose, onSaved }: { user: User; self: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
+function EditUser({
+  user,
+  self,
+  onClose,
+  onSaved,
+}: {
+  user: User
+  self: boolean
+  onClose: () => void
+  onSaved: () => Promise<void>
+}) {
   const [username, setUsername] = useState(user.username)
   const [role, setRole] = useState<Role>(user.role)
+  const [kolom, setKolom] = useState(user.kolom ?? 0)
   return (
     <Modal title="Ubah Pengguna" onClose={onClose}>
       <FormShell
         onCancel={onClose}
         onSubmit={async () => {
-          await usersApi.update(user.id, { username, role })
+          await usersApi.update(user.id, { username, role, kolom: role === 'kolom' ? kolom : undefined })
           await onSaved()
           onClose()
         }}
@@ -258,15 +281,56 @@ function EditUser({ user, self, onClose, onSaved }: { user: User; self: boolean;
         <Field label="Username">
           <input autoCapitalize="none" required minLength={3} maxLength={32} value={username} onChange={(e) => setUsername(e.target.value)} />
         </Field>
-        <Field label="Role">
-          <select value={role} disabled={self} onChange={(e) => setRole(e.target.value as Role)}>
-            <option value="user">Pengguna</option>
-            <option value="admin">Admin</option>
-          </select>
-        </Field>
+        <RoleFields role={role} kolom={kolom} disabled={self} onRole={setRole} onKolom={setKolom} />
         {self && <p className="wide muted small">Role akun sendiri tidak dapat diubah.</p>}
       </FormShell>
     </Modal>
+  )
+}
+
+/** Role, and for "kelola data kolom" the kolom they manage (required). */
+function RoleFields({
+  role,
+  kolom,
+  disabled,
+  onRole,
+  onKolom,
+}: {
+  role: Role
+  kolom: number
+  disabled?: boolean
+  onRole: (r: Role) => void
+  onKolom: (k: number) => void
+}) {
+  const { koloms } = useData()
+  return (
+    <>
+      <Field label="Role" wide>
+        <select value={role} disabled={disabled} onChange={(e) => onRole(e.target.value as Role)}>
+          <option value="user">Pengguna — kelola data semua kolom</option>
+          <option value="kolom">Pengguna – kelola data kolom — hanya satu kolom</option>
+          <option value="admin">Admin — juga kelola pengguna</option>
+        </select>
+      </Field>
+      {role === 'kolom' && (
+        <Field label="Kolom yang dikelola" wide>
+          <select required disabled={disabled} value={kolom || ''} onChange={(e) => onKolom(Number(e.target.value))}>
+            <option value="">— pilih kolom —</option>
+            {koloms.map((k) => (
+              <option key={k.id} value={k.number}>
+                Kolom {k.number}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      {role === 'kolom' && (
+        <p className="wide muted small">
+          Hanya dapat menambah, mengubah dan menghapus keluarga, anggota dan jadwal ibadah kolom ini, dan hanya melihat
+          data pribadi kolom ini. Kolom lain tampil seperti untuk pengunjung.
+        </p>
+      )}
+    </>
   )
 }
 

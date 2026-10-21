@@ -23,6 +23,8 @@ var (
 	ErrKolomExists = errors.New("kolom already exists")
 	ErrKolomInUse  = errors.New("kolom still has families or services")
 	ErrNoKolom     = errors.New("kolom does not exist")
+	// ErrKolomHasUsers: a "kelola data kolom" user is assigned to the kolom
+	ErrKolomHasUsers = errors.New("kolom has users assigned")
 )
 
 func (s *Store) ensureKolomIndexes(ctx context.Context) error {
@@ -123,6 +125,13 @@ func (s *Store) DeleteKolom(ctx context.Context, id bson.ObjectID) error {
 	}
 	if n > 0 {
 		return ErrKolomInUse
+	}
+	// a "kelola data kolom" user is assigned to it
+	if n, err = s.users.CountDocuments(ctx, bson.D{{Key: "role", Value: model.RoleKolom}, {Key: "kolom", Value: k.Number}}); err != nil {
+		return err
+	}
+	if n > 0 {
+		return ErrKolomHasUsers
 	}
 	_, err = s.koloms.DeleteOne(ctx, bson.D{{Key: "_id", Value: id}})
 	return err
