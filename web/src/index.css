@@ -2188,3 +2188,10 @@ textarea {
   margin: 0 0 4px;
   font-weight: 600;
 }
+
+/* the app's version, at the foot of the sidebar */
+.app-version {
+  margin: 0 4px 8px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}

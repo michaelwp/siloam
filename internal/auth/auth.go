@@ -147,6 +147,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 // paths reachable without a session
 var publicPaths = map[string]bool{
 	"/api/health":                    true,
+	"/api/version":                   true,
 	"/api/auth/config":               true,
 	"/api/auth/login":                true,
 	"/api/auth/logout":               true,

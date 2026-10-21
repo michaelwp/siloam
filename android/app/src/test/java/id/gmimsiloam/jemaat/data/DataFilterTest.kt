@@ -38,7 +38,7 @@ class DataFilterTest {
         assertEquals(3, all.members(data).size)
 
         // per BIPRA: the linked jenis in every kolom, and the category's members
-        val bipra = DataFilter(DataFilter.BIPRA, null, "Pemuda")
+        val bipra = DataFilter.bipra(pemuda)
         assertEquals(listOf("pem", "pem3"), bipra.services(data).map { it.id })
         assertEquals(listOf("Budi", "Sari"), bipra.members(data).map { it.name })
         assertEquals(listOf("f3", "f11"), bipra.families(data).map { it.id }) // the families they are in
@@ -54,7 +54,13 @@ class DataFilterTest {
 
         // a deleted kolom or category: everything
         assertEquals(4, DataFilter(DataFilter.KOLOM, 99, "").services(data).size)
-        assertEquals(3, DataFilter(DataFilter.BIPRA, null, "Hilang").members(data).size)
+        assertEquals(3, DataFilter(DataFilter.BIPRA, null, "Hilang", "cat-gone").members(data).size)
+
+        // an admin renamed the code: the id still finds it
+        val renamed = data.copy(categories = listOf(pemuda.copy(key = "PMD", label = "Pemuda Gereja")))
+        assertEquals("Pemuda Gereja", bipra.label(renamed))
+        // a filter saved before ids (or an older server): by code
+        assertEquals("Pemuda", DataFilter(DataFilter.BIPRA, null, "Pemuda").label(data))
     }
 
     @Test

@@ -1,6 +1,6 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import { scheduleApi, serviceToInput, type Member, type Service, type ServiceInput, type WorshipType } from '../api'
-import { managesService, useAuth, useCanAddServices } from '../auth'
+import { managesAll, managesService, useAuth, useCanAddServices } from '../auth'
 import { KolomField } from '../components/forms'
 import { ConfirmDelete, Field, FormShell, Modal, Status } from '../components/ui'
 import { useData } from '../data'
@@ -566,7 +566,12 @@ function ServiceForm({
             Belum ada jenis ibadah yang terhubung ke kategori BIPRA Anda. Minta admin menghubungkannya di Jenis Ibadah.
           </p>
         )}
-        <KolomField value={s.kolom} allowAll={linked} onChange={(k) => set({ kolom: k })} />
+        {/* "Semua kolom": not for a kolom user (they change their kolom's services only) */}
+        <KolomField
+          value={s.kolom}
+          allowAll={linked && (managesAll(user) || user?.role === 'bipra')}
+          onChange={(k) => set({ kolom: k })}
+        />
         <Field label="Tanggal">
           <input
             type="date"

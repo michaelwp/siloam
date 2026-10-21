@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
@@ -40,6 +41,26 @@ import (
 	"siloam/internal/store"
 	"siloam/web"
 )
+
+// version is set at build time (-ldflags "-X main.version=v1.2.3"; see the
+// Makefile and Dockerfile); the app shows it in the sidebar.
+var version = "dev"
+
+// appVersion is version, or for a plain "go build" in a git checkout
+// "dev (abc1234)" from the build's VCS information.
+func appVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, s := range info.Settings {
+			if s.Key == "vcs.revision" && len(s.Value) >= 7 {
+				return "dev (" + s.Value[:7] + ")"
+			}
+		}
+	}
+	return version
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -129,6 +150,7 @@ func run() error {
 	mux := http.NewServeMux()
 	authSvc.Register(mux)
 	jemaat := api.New(s, loc)
+	jemaat.Version = appVersion()
 	jemaat.AndroidDefault = model.AndroidRelease{LatestVersion: os.Getenv("ANDROID_LATEST_VERSION"), DownloadURL: os.Getenv("ANDROID_DOWNLOAD_URL")}
 	if err := jemaat.AndroidDefault.Validate(); err != nil {
 		return fmt.Errorf("ANDROID_LATEST_VERSION / ANDROID_DOWNLOAD_URL: %w", err)
@@ -150,7 +172,7 @@ func run() error {
 		defer cancel()
 		_ = srv.Shutdown(shutdownCtx)
 	}()
-	log.Printf("listening on %s", *addr)
+	log.Printf("siloam %s listening on %s", jemaat.Version, *addr)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

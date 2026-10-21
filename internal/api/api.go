@@ -19,6 +19,8 @@ import (
 type API struct {
 	store *store.Store
 	loc   *time.Location // local time of the services (WITA)
+	// Version is the server's (and the embedded web app's) version, e.g. "v3.1.0"
+	Version string
 	// AndroidDefault is the newest Android app per the server's ANDROID_*
 	// settings; the admin page's setting, once saved, takes precedence
 	AndroidDefault model.AndroidRelease
@@ -28,6 +30,7 @@ func New(s *store.Store, loc *time.Location) *API { return &API{store: s, loc: l
 
 func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/health", a.health)
+	mux.HandleFunc("GET /api/version", a.version)
 	mux.HandleFunc("GET /api/app/android", a.androidRelease)
 
 	// admin only (the auth middleware guards /api/admin/)
@@ -63,6 +66,11 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "endpoint not found")
 	})
+}
+
+// version tells the web app which version it is (public).
+func (a *API) version(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"version": a.Version})
 }
 
 func (a *API) health(w http.ResponseWriter, r *http.Request) {

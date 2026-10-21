@@ -7,7 +7,7 @@ package id.gmimsiloam.jemaat.data
  * (its families and members, its services and the whole congregation's). A
  * kolom or category that no longer exists falls back to everything.
  */
-data class DataFilter(val mode: String, val kolom: Int?, val bipra: String) {
+data class DataFilter(val mode: String, val kolom: Int?, val bipra: String, val bipraId: String = "") {
     companion object {
         const val ALL = "all"
         const val BIPRA = "bipra"
@@ -15,12 +15,17 @@ data class DataFilter(val mode: String, val kolom: Int?, val bipra: String) {
 
         val all = DataFilter(ALL, null, "")
         fun kolom(k: Int) = DataFilter(KOLOM, k, "")
-        fun bipra(key: String) = DataFilter(BIPRA, null, key)
+
+        /** A category, by id (stays right when an admin changes its code) and code (older servers have no ids). */
+        fun bipra(c: Category) = DataFilter(BIPRA, null, c.key, c.id)
     }
 
+    /** Whether this filter is about category [c]: by id when both have one, else by code. */
+    fun isCategory(c: Category) =
+        mode == BIPRA && if (bipraId.isNotEmpty() && c.id.isNotEmpty()) c.id == bipraId else c.key == bipra
+
     /** The category this filter is about, if it is a BIPRA filter whose category exists. */
-    fun category(data: Snapshot): Category? =
-        if (mode == BIPRA) data.categories.firstOrNull { it.key == bipra } else null
+    fun category(data: Snapshot): Category? = data.categories.firstOrNull { isCategory(it) }
 
     /** The kolom this filter is about, if it is a kolom filter whose kolom exists. */
     fun kolomOf(data: Snapshot): Int? =

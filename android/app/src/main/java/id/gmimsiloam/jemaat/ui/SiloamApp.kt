@@ -176,7 +176,7 @@ private fun FilterMenu(filter: DataFilter, data: Snapshot?, onPick: (DataFilter)
                 HorizontalDivider()
                 MenuHeading("Kategori BIPRA")
                 categories.forEach { c ->
-                    DropdownMenuItem(text = { Text(c.label) }, onClick = { onPick(DataFilter.bipra(c.key)); open = false })
+                    DropdownMenuItem(text = { Text(c.label) }, onClick = { onPick(DataFilter.bipra(c)); open = false })
                 }
             }
             HorizontalDivider()

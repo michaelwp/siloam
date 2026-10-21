@@ -16,7 +16,9 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web /src/web/dist ./web/dist
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/siloam .
+# the version shown in the app (the image has no .git): --build-arg APP_VERSION=v1.2.3
+ARG APP_VERSION=dev
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${APP_VERSION}" -o /out/siloam .
 
 # ---- runtime ----
 FROM gcr.io/distroless/static-debian12:nonroot

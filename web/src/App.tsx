@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { BrowserRouter, Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { versionApi } from './api'
 import { managesAll, roleLabel, useAuth } from './auth'
 import { AuthProvider } from './AuthProvider'
 import { DailyNotice } from './components/DailyNotice'
@@ -112,6 +113,7 @@ function Shell() {
           ))}
         </nav>
         <div className="sidebar-footer">
+          <AppVersion />
           {user ? (
             <>
               <div className="user-chip">
@@ -275,4 +277,14 @@ function KolomPicker() {
       </label>
     </>
   )
+}
+
+/** "Versi v3.1.0": the version of the server and this web app (they are built together). */
+function AppVersion() {
+  const [version, setVersion] = useState<string | null>(null)
+  useEffect(() => {
+    versionApi.get().then(setVersion, () => {})
+  }, [])
+  if (!version) return null
+  return <p className="app-version">Versi {version}</p>
 }

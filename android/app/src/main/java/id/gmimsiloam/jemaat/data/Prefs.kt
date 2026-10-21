@@ -91,11 +91,13 @@ class Prefs(context: Context) {
             mode = p.getString("notifyMode", null) ?: if (kolom != null) DataFilter.KOLOM else DataFilter.ALL,
             kolom = p.getInt("notifyKolom", 0).takeIf { it > 0 } ?: kolom,
             bipra = p.getString("notifyBipra", "") ?: "",
+            bipraId = p.getString("notifyBipraId", "") ?: "",
         )
         set(f) = p.edit {
             putString("notifyMode", f.mode)
             putInt("notifyKolom", f.kolom ?: 0)
             putString("notifyBipra", f.bipra)
+            putString("notifyBipraId", f.bipraId)
         }
 
     companion object {

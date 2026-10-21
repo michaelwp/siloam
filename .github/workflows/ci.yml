@@ -125,5 +125,5 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@master
         if: steps.token.outputs.ok == 'true'
       # fly.toml's health check (/api/health) stops a broken release
-      - run: flyctl deploy --remote-only --image-label "$GITHUB_REF_NAME"
+      - run: flyctl deploy --remote-only --image-label "$GITHUB_REF_NAME" --build-arg APP_VERSION="$GITHUB_REF_NAME"
         if: steps.token.outputs.ok == 'true'

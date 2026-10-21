@@ -210,7 +210,8 @@ private fun DataFilterFields(state: UiState, onPick: (DataFilter) -> Unit) {
                     // a first choice: the category / kolom chosen before, else the first one
                     onPick(
                         when (key) {
-                            DataFilter.BIPRA -> DataFilter.bipra(f.bipra.takeIf { b -> categories.any { it.key == b } } ?: categories.firstOrNull()?.key ?: "")
+                            DataFilter.BIPRA -> (categories.firstOrNull { f.isCategory(it) } ?: categories.firstOrNull())
+                                ?.let { DataFilter.bipra(it) } ?: DataFilter.all
                             DataFilter.KOLOM -> (f.kolom ?: koloms.firstOrNull())?.let { DataFilter.kolom(it) } ?: DataFilter.all
                             else -> DataFilter.all
                         },
@@ -224,7 +225,7 @@ private fun DataFilterFields(state: UiState, onPick: (DataFilter) -> Unit) {
         DataFilter.BIPRA -> {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 categories.forEach { c ->
-                    FilterChip(selected = f.bipra == c.key, onClick = { onPick(DataFilter.bipra(c.key)) }, label = { Text(c.label) })
+                    FilterChip(selected = f.isCategory(c), onClick = { onPick(DataFilter.bipra(c)) }, label = { Text(c.label) })
                 }
             }
             Hint("Anggota kategori ini dan keluarganya, ibadah jenis kategori ini (di semua kolom), dan notifikasinya.")

@@ -14,7 +14,10 @@ services:
 
   app:
     image: ${IMAGE:-siloam:latest}
-    build: .
+    build:
+      context: .
+      args:
+        APP_VERSION: ${APP_VERSION:-dev} # set by the Makefile (git describe)
     restart: unless-stopped
     depends_on:
       mongo:

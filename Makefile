@@ -49,7 +49,10 @@ MAC_APP     := $(APP)-app
 # the workbook is copied here and mounted read-only into the container for import
 IMPORT_DIR  := $(CURDIR)/.import
 
-COMPOSE     := docker compose
+# the version shown in the app: the git tag (v1.2.3, or v1.2.3-4-gabc1234 after
+# it, with -dirty for uncommitted changes); "dev" outside a git checkout
+APP_VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+COMPOSE     := APP_VERSION=$(APP_VERSION) docker compose
 
 .DEFAULT_GOAL := help
 
@@ -74,7 +77,7 @@ web: ## Build the React frontend into web/dist
 
 .PHONY: build
 build: web ## Build bin/siloam with the frontend embedded
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/$(APP) .
+	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=$(APP_VERSION)" -o bin/$(APP) .
 
 .PHONY: run
 run: build ## Build and serve (default port 8080, override with PORT=); MongoDB from .env
@@ -249,7 +252,7 @@ mac-start: ## Start the container system service (first run installs a kernel)
 
 .PHONY: mac-build
 mac-build: mac-start ## Build the image with Apple container
-	container build -t $(IMAGE) .
+	container build --build-arg APP_VERSION=$(APP_VERSION) -t $(IMAGE) .
 
 .PHONY: mac-net
 mac-net: mac-start
@@ -335,7 +338,7 @@ fly-secrets: ## Copy MONGODB_URI (and INITIAL_ADMIN_PASSWORD if set) from .env t
 
 .PHONY: fly-deploy
 fly-deploy: ## Build remotely and deploy (stops if a new machine fails its health check)
-	fly deploy
+	fly deploy --build-arg APP_VERSION=$(APP_VERSION)
 
 .PHONY: fly-status
 fly-status: ## Show machines and health checks

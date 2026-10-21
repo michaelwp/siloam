@@ -375,6 +375,15 @@ If you don't see `pre-commit:` lines when committing, check
 isn't set to skip hooks (`--no-verify`, "bypass hooks" options). CI runs the
 same checks regardless.
 
+### Version
+
+The web app shows the server's version at the foot of the sidebar. It is the
+git tag the binary was built from (`git describe`: `v3.1.0`, or
+`v3.1.0-4-gabc1234` for a build after that tag, `-dirty` with uncommitted
+changes), stamped in by `make build`, the Docker / Apple container / Fly
+builds (`--build-arg APP_VERSION`) and the CI deploy (the tag's name). A
+plain `go build` shows `dev (abc1234)`.
+
 ### CI (GitHub Actions) and releases
 
 `.github/workflows/ci.yml` runs **only when a version tag (`v*`) is pushed**, or
@@ -486,6 +495,7 @@ user has proven who they are).
 | Method | Path                                   | Notes                                     |
 |--------|----------------------------------------|-------------------------------------------|
 | GET    | `/api/health`                          | `200` when MongoDB is reachable (public)  |
+| GET    | `/api/version`                         | `{version}`, e.g. `v3.1.0` (public; shown at the foot of the sidebar) |
 | GET    | `/api/app/android`                     | `{latestVersion, downloadUrl}` for the app's update check (public; empty when not configured) |
 | GET    | `/api/admin/android`                   | admin: the release in effect, `source` (`database`/`env`/`none`) and the `ANDROID_*` values |
 | PUT    | `/api/admin/android`                   | admin: `{latestVersion, downloadUrl}` (both empty = no update notice) |

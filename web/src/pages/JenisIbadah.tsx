@@ -111,13 +111,11 @@ function TypeForm({ type, onClose, onSaved }: { type?: WorshipType; onClose: () 
         <Field label="Kategori BIPRA" wide>
           <select value={bipraId} onChange={(e) => setBipraId(e.target.value)}>
             <option value="">— tidak ada (ibadah per kolom) —</option>
-            {categories
-              .filter((c) => c.kind === 'main')
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
           </select>
         </Field>
         <p className="wide muted small">

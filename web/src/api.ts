@@ -126,6 +126,11 @@ async function getWithView<T>(url: string): Promise<[T, DataView]> {
   return [await res.json(), res.headers.get('X-Data-View') === 'full' ? 'full' : 'public']
 }
 
+/** The server's (and this web app's) version, e.g. "v3.1.0". */
+export const versionApi = {
+  get: () => request<{ version: string }>('GET', '/api/version').then((v) => v.version),
+}
+
 export const api = {
   /** Families and members, plus which view the server actually returned. */
   load: async () => {
