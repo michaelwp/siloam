@@ -2,7 +2,7 @@ import { useState, type CSSProperties } from 'react'
 import type { Member, Service } from '../api'
 import { Link } from 'react-router-dom'
 import { ChartCard, ColumnChart, StackedBarChart } from '../components/charts'
-import { ByKolom, PageHeader, Status } from '../components/ui'
+import { BirthdaysByKolom, ByKolom, PageHeader, Status } from '../components/ui'
 import { useBipraScope } from '../auth'
 import { kolomLabel, useData } from '../data'
 import { bipraRange, byText, dayMonth, daysUntil, inBipra, MONTHS, parts } from '../format'
@@ -231,7 +231,7 @@ function ServiceItem({ s, withDay }: { s: Service; withDay: boolean }) {
   )
 }
 
-/** Today's services and the coming week's (of the viewed kolom, grouped per kolom), beside the birthdays. */
+/** Today's services and the coming week's (of the viewed kolom), per kolom, beside the birthdays. */
 function TodayServices({ today }: { today: Date }) {
   const { homeServices: services, loading, error } = useSchedule()
   const { today: todays, week, next } = upcomingServices(services, today, WEEK_AHEAD_DAYS)
@@ -247,7 +247,7 @@ function TodayServices({ today }: { today: Date }) {
           ⛪
         </span>
         <div className="grow">
-          <h2 id="services-title">Ibadah Hari Ini</h2>
+          <h2 id="services-title">Ibadah Hari Ini & Minggu Ini</h2>
           <p className="muted small">{dateText}</p>
         </div>
         <Link to="/jadwal" className="btn small">
@@ -261,33 +261,17 @@ function TodayServices({ today }: { today: Date }) {
         <p className="today-empty form-error">Jadwal ibadah gagal dimuat: {error}</p>
       ) : (
         <>
-          {todays.length > 0 ? (
-            <ByKolom items={todays} kolomOf={(s) => s.kolom}>
-              {(list) => (
-                <ul className="service-list">
-                  {list.map((s) => (
-                    <ServiceItem key={s.id} s={s} withDay={false} />
-                  ))}
-                </ul>
-              )}
-            </ByKolom>
-          ) : (
-            <p className="today-empty">Tidak ada ibadah hari ini.</p>
-          )}
-          {week.length > 0 && (
-            <>
-              <h3 className="service-sub">Minggu Ini</h3>
-              <ByKolom items={week} kolomOf={(s) => s.kolom}>
-                {(list) => (
-                  <ul className="service-list compact">
-                    {list.map((s) => (
-                      <ServiceItem key={s.id} s={s} withDay />
-                    ))}
-                  </ul>
-                )}
-              </ByKolom>
-            </>
-          )}
+          {todays.length === 0 && <p className="today-empty">Tidak ada ibadah hari ini.</p>}
+          {/* today's and this week's together, per kolom; today's show the time only */}
+          <ByKolom items={[...todays, ...week]} kolomOf={(s) => s.kolom}>
+            {(list) => (
+              <ul className="service-list">
+                {list.map((s) => (
+                  <ServiceItem key={s.id} s={s} withDay={!todays.includes(s)} />
+                ))}
+              </ul>
+            )}
+          </ByKolom>
           {week.length === 0 && next && (
             <p className="muted small">
               Berikutnya: <strong>{serviceTitle(next)}</strong> ({shortDay(serviceDayKey(next))}, {clock(next.time)})
@@ -301,8 +285,7 @@ function TodayServices({ today }: { today: Date }) {
 
 /**
  * The homepage's main information: who has a birthday today. When nobody does,
- * the next birthdays within a week. The age is shown only to signed-in users
- * (visitors don't receive birth years).
+ * the next birthdays within a week. Today's are listed per kolom.
  */
 function TodayBirthdays({ members, today }: { members: Member[]; today: Date }) {
   const dated = members
@@ -310,7 +293,6 @@ function TodayBirthdays({ members, today }: { members: Member[]; today: Date }) 
     .map((m) => ({
       m,
       days: daysUntil(m.birthMonth!, m.birthDay!, today),
-      turning: m.birthDate ? today.getFullYear() - parts(m.birthDate).y : null,
     }))
   const todays = dated.filter((x) => x.days === 0).toSorted((a, b) => byText(a.m.name, b.m.name))
   const upcoming = dated
@@ -331,21 +313,7 @@ function TodayBirthdays({ members, today }: { members: Member[]; today: Date }) 
       </header>
 
       {todays.length > 0 ? (
-        <ByKolom items={todays} kolomOf={({ m }) => m.kolom}>
-          {(list) => (
-            <ul className="today-list">
-              {list.map(({ m, turning }) => (
-                <li key={m.id}>
-                  <strong>{m.name}</strong>
-                  <span className="muted">
-                    Kel. {m.familyName}
-                    {turning !== null && <> · {turning} tahun</>}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </ByKolom>
+        <BirthdaysByKolom members={todays.map(({ m }) => m)} />
       ) : (
         <div className="today-empty">
           <p>Tidak ada anggota jemaat yang berulang tahun hari ini.</p>

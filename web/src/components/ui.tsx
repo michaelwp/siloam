@@ -218,8 +218,8 @@ export function BipraBadge({ code }: { code: string }) {
 
 /**
  * Lists items per kolom: "Semua kolom" (services for the whole congregation,
- * kolom 0) first, then Kolom 1, 2, … under a small heading each. With items of
- * one kolom only (e.g. one kolom is viewed) there are no headings.
+ * kolom 0) first, then Kolom 1, 2, … under a heading each ("Kolom 11:"), also
+ * when there is only one kolom, so it is always clear which kolom it is.
  */
 export function ByKolom<T>({
   items,
@@ -231,15 +231,23 @@ export function ByKolom<T>({
   children: (items: T[]) => ReactNode
 }) {
   const koloms = [...new Set(items.map(kolomOf))].toSorted((a, b) => a - b)
-  if (koloms.length <= 1) return <>{children(items)}</>
   return (
     <>
       {koloms.map((k) => (
         <div key={k} className="kolom-group">
-          <h4 className="kolom-group-head">{k === 0 ? 'Semua kolom' : `Kolom ${k}`}</h4>
+          <h4 className="kolom-group-head">{k === 0 ? 'Semua kolom' : `Kolom ${k}`}:</h4>
           {children(items.filter((i) => kolomOf(i) === k))}
         </div>
       ))}
     </>
+  )
+}
+
+/** Birthdays per kolom, one line each: "Kolom 11: Budi Umboh, Erwin Umboh". */
+export function BirthdaysByKolom({ members }: { members: { id: string; name: string; kolom: number }[] }) {
+  return (
+    <ByKolom items={members} kolomOf={(m) => m.kolom}>
+      {(list) => <p className="kolom-names">{list.map((m) => m.name).join(', ')}</p>}
+    </ByKolom>
   )
 }

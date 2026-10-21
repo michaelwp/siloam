@@ -170,22 +170,20 @@ fun UpdateBanner(update: AppRelease) {
 }
 
 /**
- * Items per kolom, "Semua kolom" first: a small heading before each kolom's
- * items when there are several koloms (e.g. "Semua Kolom" is shown).
+ * Items per kolom, "Semua kolom" first, each kolom under a small "KOLOM 11:"
+ * heading (also when there is only one, so the kolom is always clear).
  */
 @Composable
 fun <T> KolomGroups(items: List<T>, kolomOf: (T) -> Int, item: @Composable (T) -> Unit) {
     val groups = items.byKolom(kolomOf)
     groups.forEach { (k, list) ->
-        if (groups.size > 1) {
-            Text(
-                kolomHeading(k).uppercase(),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
+        Text(
+            "${kolomHeading(k)}:".uppercase(),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
         list.forEach { item(it) }
     }
 }

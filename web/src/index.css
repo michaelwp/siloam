@@ -2184,3 +2184,7 @@ textarea {
   text-transform: uppercase;
   color: var(--muted);
 }
+.kolom-names {
+  margin: 0 0 4px;
+  font-weight: 600;
+}

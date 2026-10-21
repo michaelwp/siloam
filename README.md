@@ -24,8 +24,10 @@ the members who are baptized and sidi (the service's kolom first), or typed in
 as another name, e.g. a pastor from outside the congregation. On opening the
 site, a popup shows today's and this week's services and today's birthdays
 (unless there is nothing to show, or it was hidden for today); Beranda shows
-the same. With all koloms shown, both list them per kolom ("Semua kolom"
-first, then Kolom 1, 2, …).
+the same. Both list them per kolom, always with the kolom's name ("Semua
+kolom:" first, then "Kolom 1:", "Kolom 2:", …): today's and this week's
+services together (today's with the time only, the others with the day), and
+the birthdays as one line per kolom ("Kolom 11: Budi Umboh, Erwin Umboh").
 Service times are in `APP_TIMEZONE` (default `Asia/Makassar`, WITA). Load a
 schedule spreadsheet with
 `siloam -import-jadwal jadwal.xlsx [-kolom 11] [-replace]` (the leader's
@@ -48,7 +50,8 @@ picker, an offline cache, and five tabs:
 It also sends **background notifications**:
 
 - a daily summary (default 06:00): today's services and today's birthdays,
-  listed per kolom;
+  per kolom ("Kolom 11:" then "- 19.00 · Ibadah Kolom · …"; birthdays as
+  "Kolom 11: Budi Umboh, Erwin Umboh");
 - a reminder before each of today's services (default 1 hour before).
 
 Under **Pengaturan → Notifikasi untuk** the notifications are for *Semua*

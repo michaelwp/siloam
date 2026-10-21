@@ -3,6 +3,7 @@ package id.gmimsiloam.jemaat.notify
 import android.content.Context
 import android.graphics.Typeface
 import android.text.SpannableString
+import android.text.SpannableStringBuilder
 import android.text.style.StyleSpan
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -15,6 +16,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import id.gmimsiloam.jemaat.BuildConfig
+import id.gmimsiloam.jemaat.data.Member
 import id.gmimsiloam.jemaat.data.Prefs
 import id.gmimsiloam.jemaat.data.Repository
 import id.gmimsiloam.jemaat.data.Service
@@ -23,6 +25,7 @@ import id.gmimsiloam.jemaat.data.birthdaysToday
 import id.gmimsiloam.jemaat.data.byKolom
 import id.gmimsiloam.jemaat.data.clock
 import id.gmimsiloam.jemaat.data.kolomHeading
+import id.gmimsiloam.jemaat.data.kolomText
 import id.gmimsiloam.jemaat.data.longDate
 import id.gmimsiloam.jemaat.data.upcomingServices
 import java.time.LocalDate
@@ -113,7 +116,9 @@ internal fun showDaily(ctx: Context, prefs: Prefs, data: Snapshot, today: LocalD
                 Notifier.ID_DAILY_SERVICES,
                 Notifier.CHANNEL_SERVICES,
                 title = if (todays.size == 1) "Ibadah hari ini, ${clock(first.time)} WITA" else "${todays.size} ibadah hari ini",
-                text = todays.joinToString(" · ") { "${clock(it.time)} ${it.fullTitle}" },
+                text = todays.byKolom { it.kolom }.joinToString(" · ") { (k, list) ->
+                    "${kolomHeading(k)}: " + list.joinToString(", ") { "${clock(it.time)} ${it.fullTitle}" }
+                },
                 lines = grouped(todays, { it.kolom }) { serviceLine(it) },
                 tab = "home",
             )
@@ -129,8 +134,8 @@ internal fun showDaily(ctx: Context, prefs: Prefs, data: Snapshot, today: LocalD
                 Notifier.CHANNEL_BIRTHDAYS,
                 title = if (birthdays.size == 1) "🎂 ${birthdays.first().name} berulang tahun hari ini"
                 else "🎂 ${birthdays.size} anggota jemaat berulang tahun hari ini",
-                text = birthdays.joinToString(", ") { it.name } + ". Selamat ulang tahun!",
-                lines = grouped(birthdays, { it.kolom }) { "${it.name} · Kel. ${it.familyName}" },
+                text = birthdayLines(birthdays).joinToString(" · ") + ". Selamat ulang tahun!",
+                lines = birthdayLines(birthdays),
                 tab = "birthdays",
             )
         }
@@ -148,18 +153,22 @@ private fun notifyUpdate(ctx: Context, prefs: Prefs) {
     prefs.notifiedUpdate = update.latestVersion
 }
 
+/** A bold "Kolom 11:" for the expanded notification. */
+private fun heading(kolom: Int): CharSequence =
+    SpannableString("${kolomHeading(kolom)}:").apply { setSpan(StyleSpan(Typeface.BOLD), 0, length, 0) }
+
 /**
- * The expanded notification's lines, per kolom: with items of several koloms,
- * a bold "Kolom 3" heading before each kolom's lines ("Semua kolom" first).
+ * The expanded notification's lines, per kolom ("Semua kolom" first): a bold
+ * "Kolom 11:" heading, then "- 19.00 · Ibadah Kolom · …" for each item.
  */
-private fun <T> grouped(items: List<T>, kolomOf: (T) -> Int, line: (T) -> String): List<CharSequence> {
-    val groups = items.byKolom(kolomOf)
-    if (groups.size <= 1) return items.map(line)
-    return groups.flatMap { (k, list) ->
-        val heading = SpannableString(kolomHeading(k)).apply { setSpan(StyleSpan(Typeface.BOLD), 0, length, 0) }
-        listOf<CharSequence>(heading) + list.map { "   " + line(it) }
+private fun <T> grouped(items: List<T>, kolomOf: (T) -> Int, line: (T) -> String): List<CharSequence> =
+    items.byKolom(kolomOf).flatMap { (k, list) -> listOf(heading(k)) + list.map { "- " + line(it) } }
+
+/** One line per kolom: "Kolom 11: Budi Umboh, Erwin Umboh" (the kolom in bold). */
+private fun birthdayLines(birthdays: List<Member>): List<CharSequence> =
+    birthdays.byKolom { it.kolom }.map { (k, list) ->
+        SpannableStringBuilder(heading(k)).append(" ").append(list.joinToString(", ") { it.name })
     }
-}
 
 private fun serviceLine(s: Service) = buildString {
     append("${clock(s.time)} · ${s.fullTitle}")
@@ -187,9 +196,9 @@ private fun scheduleReminders(ctx: Context, prefs: Prefs, data: Snapshot, today:
                     "id" to s.id,
                     "start" to start,
                     "title" to "Ibadah dimulai ${clock(s.time)} WITA",
-                    "text" to s.fullTitle + if (s.place.isNotEmpty()) " · ${s.place}" else "",
+                    "text" to "${s.kolomText} · ${s.fullTitle}" + if (s.place.isNotEmpty()) " · ${s.place}" else "",
                     "detail" to listOfNotNull(
-                        s.fullTitle,
+                        "${s.kolomText} · ${s.fullTitle}",
                         s.place.ifEmpty { null },
                         s.leader.ifEmpty { null }?.let { "Khadim: $it" },
                         s.mc.ifEmpty { null }?.let { "Pembawa acara: $it" },

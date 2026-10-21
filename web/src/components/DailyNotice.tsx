@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useData } from '../data'
-import { byText, daysUntil, MONTHS, parts } from '../format'
+import { byText, daysUntil, MONTHS } from '../format'
 import {
   clock,
   serviceDayKey,
@@ -12,7 +12,7 @@ import {
   WEEK_AHEAD_DAYS,
   WEEKDAYS,
 } from '../schedule'
-import { ByKolom } from './ui'
+import { BirthdaysByKolom, ByKolom } from './ui'
 
 // Remembered per browser (nothing is sent to the server):
 //  - "Lewati" hides it for the rest of this tab session (it comes back the next
@@ -45,7 +45,7 @@ function write(storage: () => Storage, key: string, value: string) {
 /**
  * A centered modal shown once the data has loaded, on every page (visitors and
  * signed-in users), for the viewed kolom: today's services, the services of
- * the coming week and today's birthdays, each grouped per kolom. The page behind is blurred and inert
+ * the coming week and today's birthdays, per kolom ("Kolom 11:"). The page behind is blurred and inert
  * (native modal <dialog>) until it is closed. Nothing to tell → not shown.
  */
 export function DailyNotice() {
@@ -63,7 +63,10 @@ export function DailyNotice() {
     .filter((m) => m.birthMonth && m.birthDay && daysUntil(m.birthMonth, m.birthDay, today) === 0)
     .toSorted((a, b) => byText(a.name, b.name))
 
-  const nothing = servicesToday.length + servicesWeek.length + birthdays.length === 0
+  // today's and this week's together, per kolom (today's show the time only)
+  const upcoming = [...servicesToday, ...servicesWeek]
+  const todayIds = new Set(servicesToday.map((s) => s.id))
+  const nothing = upcoming.length + birthdays.length === 0
   if (hidden || loading || scheduleLoading || nothing) return null
 
   const close = () => {
@@ -88,15 +91,27 @@ export function DailyNotice() {
         </button>
       </header>
 
-      {servicesToday.length > 0 && (
+      {upcoming.length > 0 && (
         <section className="notice-section">
-          <h3>⛪ Ibadah Hari Ini</h3>
-          <ByKolom items={servicesToday} kolomOf={(s) => s.kolom}>
+          <h3>⛪ Ibadah Hari Ini & Minggu Ini</h3>
+          <ByKolom items={upcoming} kolomOf={(s) => s.kolom}>
             {(list) => (
               <ul className="notice-services">
                 {list.map((s) => (
-                  <li key={s.id} className="today" style={{ '--type-color': s.typeColor } as CSSProperties}>
-                    <span className="notice-time">{clock(s.time)}</span>
+                  <li
+                    key={s.id}
+                    className={todayIds.has(s.id) ? 'today' : undefined}
+                    style={{ '--type-color': s.typeColor } as CSSProperties}
+                  >
+                    <span className="notice-time">
+                      {!todayIds.has(s.id) && (
+                        <>
+                          {shortDay(serviceDayKey(s))}
+                          <br />
+                        </>
+                      )}
+                      {clock(s.time)}
+                    </span>
                     <span className="notice-text">
                       <strong>
                         Ibadah {s.typeName} · {serviceTitle(s)}
@@ -118,51 +133,10 @@ export function DailyNotice() {
         </section>
       )}
 
-      {servicesWeek.length > 0 && (
-        <section className="notice-section">
-          <h3>📅 Ibadah Minggu Ini</h3>
-          <ByKolom items={servicesWeek} kolomOf={(s) => s.kolom}>
-            {(list) => (
-              <ul className="notice-services">
-                {list.map((s) => (
-                  <li key={s.id} style={{ '--type-color': s.typeColor } as CSSProperties}>
-                    <span className="notice-time">
-                      {shortDay(serviceDayKey(s))}
-                      <br />
-                      {clock(s.time)}
-                    </span>
-                    <span className="notice-text">
-                      <strong>
-                        Ibadah {s.typeName} · {serviceTitle(s)}
-                      </strong>
-                      {s.leader && <span className="muted small">Khadim: {s.leader}</span>}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </ByKolom>
-        </section>
-      )}
-
       {birthdays.length > 0 && (
         <section className="notice-section">
           <h3>🎂 Ulang Tahun Hari Ini</h3>
-          <ByKolom items={birthdays} kolomOf={(m) => m.kolom}>
-            {(list) => (
-              <ul className="daily-notice-list">
-                {list.map((m) => (
-                  <li key={m.id}>
-                    <strong>{m.name}</strong>
-                    <span className="muted small">
-                      Kel. {m.familyName}
-                      {m.birthDate && <> · {today.getFullYear() - parts(m.birthDate).y} tahun</>}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </ByKolom>
+          <BirthdaysByKolom members={birthdays} />
         </section>
       )}
 

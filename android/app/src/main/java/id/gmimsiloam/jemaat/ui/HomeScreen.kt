@@ -29,9 +29,11 @@ import id.gmimsiloam.jemaat.data.Service
 import id.gmimsiloam.jemaat.data.Snapshot
 import id.gmimsiloam.jemaat.data.anniversariesToday
 import id.gmimsiloam.jemaat.data.birthdaysToday
+import id.gmimsiloam.jemaat.data.byKolom
 import id.gmimsiloam.jemaat.data.clock
 import id.gmimsiloam.jemaat.data.forKolom
 import id.gmimsiloam.jemaat.data.inKolom
+import id.gmimsiloam.jemaat.data.kolomHeading
 import id.gmimsiloam.jemaat.data.longDate
 import id.gmimsiloam.jemaat.data.shortDate
 import id.gmimsiloam.jemaat.data.upcomingBirthdays
@@ -82,13 +84,14 @@ fun HomeScreen(data: Snapshot, kolom: Int?, error: String?, update: AppRelease?,
         ).joinToString(" · ").ifEmpty { "Tidak ada ibadah atau ulang tahun" } + " hari ini"
         Accordion("🔔 Pemberitahuan", notices, open = "notices" in open, onToggle = { toggle("notices") }) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionCard("⛪", "Ibadah Hari Ini", longDate(today)) {
+                SectionCard("⛪", "Ibadah Hari Ini & Minggu Ini", longDate(today)) {
                     if (up.today.isEmpty()) Text("Tidak ada ibadah hari ini.", style = MaterialTheme.typography.bodyLarge)
-                    KolomGroups(up.today, { it.kolom }) { s -> ServiceRow(s, withDate = false, highlight = true) { selected = s } }
-                    if (up.week.isNotEmpty()) {
-                        Text("Minggu Ini", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        KolomGroups(up.week, { it.kolom }) { s -> ServiceRow(s, withDate = true) { selected = s } }
-                    } else if (up.next != null) {
+                    // today's and this week's together, per kolom; today's show the time only
+                    KolomGroups(up.today + up.week, { it.kolom }) { s ->
+                        val isToday = s in up.today
+                        ServiceRow(s, withDate = !isToday, highlight = isToday) { selected = s }
+                    }
+                    if (up.week.isEmpty() && up.next != null) {
                         Text(
                             "Berikutnya: ${up.next.title} (${shortDate(up.next.date)}, ${clock(up.next.time)})",
                             style = MaterialTheme.typography.bodyMedium,
@@ -101,11 +104,17 @@ fun HomeScreen(data: Snapshot, kolom: Int?, error: String?, update: AppRelease?,
                     if (birthdays.isEmpty()) {
                         Text("Tidak ada anggota jemaat yang berulang tahun hari ini.", style = MaterialTheme.typography.bodyLarge)
                     }
-                    KolomGroups(birthdays, { it.kolom }) { m ->
+                    // one line per kolom: "Budi Umboh, Erwin Umboh"
+                    birthdays.byKolom { it.kolom }.forEach { (k, list) ->
                         Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                                Text(m.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                Text("Kel. ${m.familyName}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    "${kolomHeading(k)}:".uppercase(),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(list.joinToString(", ") { it.name }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
