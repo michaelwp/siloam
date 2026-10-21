@@ -18,14 +18,23 @@ android {
         // sets it; versionCode follows from it (1.2.3 → 10203), so it always
         // grows with the version, as Android requires for updates
         versionName = "1.1.0"
-        versionCode = versionName!!.split(".").map { it.toInt() }
-            .let { (major, minor, patch) -> major * 10_000 + minor * 100 + patch }
+        val parts = versionName!!.split(".").mapNotNull { it.toIntOrNull() }
+        require(parts.size == 3 && parts[1] < 100 && parts[2] < 100) {
+            "versionName must be like 1.2.0 (major.minor.patch; minor and patch up to 99), not \"$versionName\""
+        }
+        versionCode = parts[0] * 10_000 + parts[1] * 100 + parts[2]
     }
 
     // The release key, from android/keystore.properties (never committed; see
     // keystore.properties.example). Without it the release APK is unsigned.
     val keystore = rootProject.file("keystore.properties").takeIf { it.exists() }?.let { f ->
-        Properties().apply { f.inputStream().use { load(it) } }
+        Properties().apply { f.inputStream().use { load(it) } }.also { p ->
+            val missing = listOf("storeFile", "storePassword", "keyAlias", "keyPassword").filter { p.getProperty(it).isNullOrBlank() }
+            require(missing.isEmpty()) { "android/keystore.properties is missing ${missing.joinToString()} (see keystore.properties.example)" }
+            require(rootProject.file(p.getProperty("storeFile")).exists()) {
+                "the key file ${p.getProperty("storeFile")} in android/keystore.properties does not exist"
+            }
+        }
     }
     signingConfigs {
         if (keystore != null) {

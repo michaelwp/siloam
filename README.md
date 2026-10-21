@@ -94,7 +94,8 @@ Pengaturan; *Unduh* opens the download link. To publish a version:
    with a different key);
 2. `make android-publish VERSION=1.2.0` — sets the version (`versionName` in
    `android/app/build.gradle.kts`; `versionCode` follows from it, 1.2.0 →
-   10200, and must grow: a lower version is refused), builds and signs the
+   10200, and must grow: a lower version is refused; so the APK matches a
+   commit, it also refuses while there are uncommitted changes), builds and signs the
    release APK and adds it as `downloads/android/jemaat-siloam-1.2.0.apk` (the
    only APKs git does not ignore); commit and push it with the changed
    `build.gradle.kts`;

@@ -382,6 +382,10 @@ android-publish: ## Set the version, build, sign and add the APK to downloads/an
 	@echo "$(VERSION)" | grep -qE '^[0-9]+\.[0-9]{1,2}\.[0-9]{1,2}$$' || (echo "usage: make android-publish VERSION=1.2.0 (major.minor.patch; minor and patch up to 99)" && exit 1)
 	@test -f android/keystore.properties || (echo "android/keystore.properties is missing: see android/keystore.properties.example" && exit 1)
 	@test ! -e $(APK_DIR)/jemaat-siloam-$(VERSION).apk || (echo "$(APK_DIR)/jemaat-siloam-$(VERSION).apk already exists" && exit 1)
+	@# the APK must be exactly a commit (besides the version this target sets)
+	@dirty=$$(git status --porcelain --untracked-files=no | grep -v ' android/app/build.gradle.kts$$'); \
+	if [ -n "$$dirty" ] || ! git diff --quiet -I'versionName = ' -- android/app/build.gradle.kts; then \
+		echo "uncommitted changes — commit them first, so the APK matches a commit:"; git status --short --untracked-files=no; exit 1; fi
 	@cur=$$(sed -nE 's/^ *versionName = "([0-9.]+)".*/\1/p' android/app/build.gradle.kts); \
 	code() { echo "$$1" | awk -F. '{print $$1*10000 + $$2*100 + $$3}'; }; \
 	if [ "$$cur" != "$(VERSION)" ] && [ $$(code $(VERSION)) -le $$(code $$cur) ]; then \
