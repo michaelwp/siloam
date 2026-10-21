@@ -11,6 +11,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"siloam/internal/auth"
 	"siloam/internal/ics"
 	"siloam/internal/model"
 	"siloam/internal/store"
@@ -37,12 +38,20 @@ func (a *API) registerSchedule(mux *http.ServeMux) {
 var colorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 type worshipTypeInput struct {
-	Name  string `json:"name"`
-	Color string `json:"color"`
+	Name    string `json:"name"`
+	Color   string `json:"color"`
+	BipraID string `json:"bipraId"` // "" = not linked to a BIPRA category
 }
 
 func (in worshipTypeInput) toModel() (model.WorshipType, error) {
 	t := model.WorshipType{Name: clean(in.Name), Color: strings.ToLower(in.Color)}
+	if in.BipraID != "" {
+		id, err := bson.ObjectIDFromHex(in.BipraID)
+		if err != nil {
+			return t, errors.New("kategori BIPRA tidak valid")
+		}
+		t.BipraID = &id
+	}
 	if t.Name == "" {
 		return t, errors.New("nama jenis ibadah wajib diisi")
 	}
@@ -70,6 +79,9 @@ func (a *API) createWorshipType(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t, err := in.toModel()
+	if err == nil {
+		err = a.checkTypeBipra(r, t)
+	}
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -92,6 +104,9 @@ func (a *API) updateWorshipType(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t, err := in.toModel()
+	if err == nil {
+		err = a.checkTypeBipra(r, t)
+	}
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -117,7 +132,46 @@ func (a *API) deleteWorshipType(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// checkTypeBipra: a linked BIPRA category must exist.
+func (a *API) checkTypeBipra(r *http.Request, t model.WorshipType) error {
+	if t.BipraID == nil {
+		return nil
+	}
+	if _, err := a.store.BipraCategory(r.Context(), *t.BipraID); err != nil {
+		return errors.New("kategori BIPRA tidak ada")
+	}
+	return nil
+}
+
 // ---- services ----
+
+// mayManageService checks a service the user wants to save or delete: a
+// service without a kolom needs a jenis linked to a BIPRA category; a
+// "kelola data kolom" user changes their kolom's services, a "kelola data
+// BIPRA" user those of their category's jenis. It answers 400/403 itself.
+func (a *API) mayManageService(w http.ResponseWriter, r *http.Request, sv model.Service) bool {
+	t, err := a.store.GetWorshipType(r.Context(), sv.TypeID)
+	if err != nil {
+		storeError(w, err)
+		return false
+	}
+	if sv.Kolom == 0 && t.BipraID == nil {
+		writeError(w, http.StatusBadRequest, "kolom wajib dipilih untuk jenis ibadah ini")
+		return false
+	}
+	u := auth.CurrentUser(r)
+	if u == nil || u.ManagesAll() {
+		return true
+	}
+	if u.Role == model.RoleBipra {
+		if u.ManagesType(t) {
+			return true
+		}
+		writeError(w, http.StatusForbidden, u.Scope(), "forbidden")
+		return false
+	}
+	return mayManage(w, r, sv.Kolom)
+}
 
 var timeRe = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
 
@@ -157,8 +211,8 @@ func (in serviceInput) toModel() (model.Service, error) {
 		MC:       clean(in.MC),
 		Note:     strings.TrimSpace(in.Note),
 	}
-	if sv.Kolom <= 0 {
-		return sv, errors.New("kolom wajib dipilih")
+	if sv.Kolom < 0 { // 0: the whole congregation, if the jenis allows it (mayManageService)
+		return sv, errors.New("kolom tidak valid")
 	}
 	tid, err := bson.ObjectIDFromHex(in.TypeID)
 	if err != nil {
@@ -287,7 +341,7 @@ func (a *API) createService(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if !mayManage(w, r, sv.Kolom) {
+	if !a.mayManageService(w, r, sv) {
 		return
 	}
 	sv, err = a.store.CreateService(r.Context(), sv)
@@ -322,7 +376,7 @@ func (a *API) updateService(w http.ResponseWriter, r *http.Request) {
 		storeError(w, err)
 		return
 	}
-	if !mayManage(w, r, old.Kolom) || !mayManage(w, r, sv.Kolom) {
+	if !a.mayManageService(w, r, old) || !a.mayManageService(w, r, sv) {
 		return
 	}
 	sv, err = a.store.UpdateService(r.Context(), sv)
@@ -343,7 +397,7 @@ func (a *API) deleteService(w http.ResponseWriter, r *http.Request) {
 		storeError(w, err)
 		return
 	}
-	if !mayManage(w, r, old.Kolom) {
+	if !a.mayManageService(w, r, old) {
 		return
 	}
 	if err := a.store.DeleteService(r.Context(), id); err != nil {
@@ -404,7 +458,8 @@ func (a *API) calendarICS(w http.ResponseWriter, r *http.Request) {
 	}
 	events := make([]ics.Event, 0, len(views))
 	for _, v := range views {
-		if (kolom == 0 || v.Kolom == kolom) && (len(types) == 0 || types[v.TypeID.Hex()]) {
+		// a kolom's feed also has the services of the whole congregation (no kolom)
+		if (kolom == 0 || v.Kolom == kolom || v.Kolom == 0) && (len(types) == 0 || types[v.TypeID.Hex()]) {
 			events = append(events, icsEvent(v))
 		}
 	}
@@ -417,7 +472,11 @@ func (a *API) calendarICS(w http.ResponseWriter, r *http.Request) {
 
 func icsEvent(v model.ServiceView) ics.Event {
 	var desc []string
-	desc = append(desc, fmt.Sprintf("Kolom %d", v.Kolom))
+	if v.Kolom > 0 {
+		desc = append(desc, fmt.Sprintf("Kolom %d", v.Kolom))
+	} else {
+		desc = append(desc, "Semua kolom")
+	}
 	if v.Leader != "" {
 		desc = append(desc, "Khadim: "+v.Leader)
 	}

@@ -47,6 +47,10 @@ func bipraError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, "kode kategori ini sudah dipakai")
 		return
 	}
+	if errors.Is(err, store.ErrBipraHasUsers) {
+		writeError(w, http.StatusConflict, "kategori ini masih ditugaskan kepada pengguna; ubah role pengguna itu terlebih dahulu")
+		return
+	}
 	storeError(w, err)
 }
 

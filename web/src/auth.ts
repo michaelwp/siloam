@@ -1,6 +1,6 @@
 import { browserSupportsWebAuthn, startAuthentication, startRegistration, WebAuthnError } from '@simplewebauthn/browser'
 import { createContext, useContext } from 'react'
-import { authApi, type Role, type User } from './api'
+import { authApi, type BipraCategory, type Role, type Service, type User, type WorshipType } from './api'
 import { useData } from './data'
 
 export type Auth = {
@@ -24,11 +24,34 @@ export const ROLE_LABELS: Record<Role, string> = {
   admin: 'Admin',
   user: 'Pengguna',
   kolom: 'Pengguna – kelola data kolom',
+  bipra: 'Pengguna – kelola data BIPRA',
 }
 
-/** "Admin", "Pengguna", "Kelola Kolom 3" */
-export function roleLabel(u: Pick<User, 'role' | 'kolom'>) {
-  return u.role === 'kolom' ? `Kelola Kolom ${u.kolom}` : ROLE_LABELS[u.role]
+/** "Admin", "Pengguna", "Kelola Kolom 3", "Kelola BIPRA Pemuda" */
+export function roleLabel(u: Pick<User, 'role' | 'kolom' | 'bipraId'>, categories: BipraCategory[] = []) {
+  if (u.role === 'kolom') return `Kelola Kolom ${u.kolom}`
+  if (u.role === 'bipra') return `Kelola BIPRA ${categories.find((c) => c.id === u.bipraId)?.name ?? ''}`.trim()
+  return ROLE_LABELS[u.role]
+}
+
+/**
+ * The BIPRA category of a "kelola data BIPRA" user, else null. Their pages
+ * show only its members (DataProvider) and its services (on Beranda).
+ */
+export function useBipraScope(): BipraCategory | null {
+  const { user } = useAuth()
+  const { categories } = useData()
+  if (user?.role !== 'bipra') return null
+  return categories.find((c) => c.id === user.bipraId) ?? null
+}
+
+/** Whether u may change service s (the server decides the same way). */
+export function managesService(u: User | null, s: Pick<Service, 'kolom' | 'typeId'>, types: WorshipType[]) {
+  if (!u || u.mustChangePassword) return false
+  if (managesAll(u)) return true
+  if (u.role === 'kolom') return s.kolom === u.kolom
+  if (u.role === 'bipra') return !!u.bipraId && types.find((t) => t.id === s.typeId)?.bipraId === u.bipraId
+  return false
 }
 
 /** Admins and regular users change every kolom's data, the koloms and the jenis ibadah. */
@@ -50,6 +73,7 @@ export function managesKolom(u: User | null, k: number) {
 export function useFullView() {
   const { view, kolom } = useData()
   const { user } = useAuth()
+  // a "kelola data BIPRA" user gets only their category's members (full)
   return view === 'full' && (user?.role !== 'kolom' || kolom === user.kolom)
 }
 
@@ -60,7 +84,16 @@ export function useFullView() {
 export function useCanEdit() {
   const { user } = useAuth()
   const full = useFullView()
-  return !!user && !user.mustChangePassword && full
+  // a "kelola data BIPRA" user changes services only (see managesService)
+  return !!user && !user.mustChangePassword && full && user.role !== 'bipra'
+}
+
+/** Whether the user may add services at all (each one is then checked with managesService). */
+export function useCanAddServices() {
+  const { user } = useAuth()
+  const full = useFullView()
+  if (!user || user.mustChangePassword) return false
+  return user.role === 'bipra' || (managesAll(user) && full) || (user.role === 'kolom' && full)
 }
 
 /** Passkeys need WebAuthn and a secure context (HTTPS or localhost). */

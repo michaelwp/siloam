@@ -37,6 +37,12 @@ fun timeRange(t: String): String {
 /** Items of the viewed kolom (null = all). */
 fun <T> List<T>.inKolom(kolom: Int?, of: (T) -> Int) = if (kolom == null) this else filter { of(it) == kolom }
 
+/** Services of the viewed kolom, and those for the whole congregation (kolom 0, e.g. a Pemuda service). */
+fun List<Service>.forKolom(kolom: Int?) = if (kolom == null) this else filter { it.kolom == kolom || it.kolom == 0 }
+
+/** "Kolom 11", or "Semua kolom" for a service of the whole congregation. */
+val Service.kolomText: String get() = if (kolom == 0) "Semua kolom" else "Kolom $kolom"
+
 /**
  * The days shown in a month calendar: whole weeks from Sunday (as the
  * weekday names, Minggu first) covering [month], so 4 to 6 rows.

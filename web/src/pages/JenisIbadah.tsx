@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react'
 import { scheduleApi, type WorshipType } from '../api'
 import { ConfirmDelete, Field, FormShell, Modal, PageHeader, Status } from '../components/ui'
+import { useData } from '../data'
 import { TYPE_COLORS, useSchedule } from '../schedule'
 
 type Dialog = { kind: 'add' } | { kind: 'edit' | 'delete'; type: WorshipType } | null
@@ -8,6 +9,8 @@ type Dialog = { kind: 'add' } | { kind: 'edit' | 'delete'; type: WorshipType } |
 /** Signed-in users manage the kinds of worship services and their colors. */
 export default function JenisIbadah() {
   const { types, allServices, loading, error, reload } = useSchedule()
+  const { categories } = useData()
+  const bipraName = (id: string | null) => categories.find((c) => c.id === id)?.name
   const [dialog, setDialog] = useState<Dialog>(null)
   const used = (id: string) => allServices.filter((s) => s.typeId === id).length
 
@@ -26,6 +29,7 @@ export default function JenisIbadah() {
             <thead>
               <tr>
                 <th>Jenis Ibadah</th>
+                <th>Kategori BIPRA</th>
                 <th className="num">Jadwal</th>
                 <th className="actions">Aksi</th>
               </tr>
@@ -39,6 +43,7 @@ export default function JenisIbadah() {
                       <span className="type-swatch" style={{ '--type-color': t.color } as CSSProperties} aria-hidden="true" />
                       {t.name}
                     </td>
+                    <td>{bipraName(t.bipraId) ?? <span className="muted">–</span>}</td>
                     <td className="num">{n}</td>
                     <td className="actions">
                       <button className="btn small" onClick={() => setDialog({ kind: 'edit', type: t })}>
@@ -87,13 +92,15 @@ export default function JenisIbadah() {
 function TypeForm({ type, onClose, onSaved }: { type?: WorshipType; onClose: () => void; onSaved: () => Promise<void> }) {
   const [name, setName] = useState(type?.name ?? '')
   const [color, setColor] = useState(type?.color ?? TYPE_COLORS[0].hex)
+  const [bipraId, setBipraId] = useState(type?.bipraId ?? '')
+  const { categories } = useData()
   return (
     <Modal title={type ? 'Ubah Jenis Ibadah' : 'Tambah Jenis Ibadah'} onClose={onClose}>
       <FormShell
         onCancel={onClose}
         onSubmit={async () => {
-          if (type) await scheduleApi.updateType(type.id, { name, color })
-          else await scheduleApi.createType({ name, color })
+          if (type) await scheduleApi.updateType(type.id, { name, color, bipraId })
+          else await scheduleApi.createType({ name, color, bipraId })
           await onSaved()
           onClose()
         }}
@@ -101,6 +108,22 @@ function TypeForm({ type, onClose, onSaved }: { type?: WorshipType; onClose: () 
         <Field label="Nama Jenis Ibadah" wide>
           <input required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder="mis. Pemuda" />
         </Field>
+        <Field label="Kategori BIPRA" wide>
+          <select value={bipraId} onChange={(e) => setBipraId(e.target.value)}>
+            <option value="">— tidak ada (ibadah per kolom) —</option>
+            {categories
+              .filter((c) => c.kind === 'main')
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+          </select>
+        </Field>
+        <p className="wide muted small">
+          Ibadah jenis yang terhubung ke kategori BIPRA boleh tanpa kolom (untuk seluruh jemaat), dan dikelola juga oleh
+          pengguna “kelola data BIPRA” kategori itu.
+        </p>
         <fieldset className="color-picker wide">
           <legend>Warna di kalender</legend>
           {TYPE_COLORS.map((c) => (

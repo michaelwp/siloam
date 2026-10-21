@@ -173,13 +173,23 @@ func (s *Store) SetUsername(ctx context.Context, id bson.ObjectID, username stri
 // SetRole changes a role. Demoting an admin is undone (ErrLastAdmin) if it
 // would leave no admin — checked after the write, so two admins demoting each
 // other at the same moment cannot both succeed.
-func (s *Store) SetRole(ctx context.Context, id bson.ObjectID, role string, kolom int) (*model.User, error) {
-	update := set(bson.D{{Key: "role", Value: role}, {Key: "kolom", Value: kolom}})
-	if role != model.RoleKolom { // only kolom users have a kolom
-		update = bson.D{
-			{Key: "$set", Value: bson.D{{Key: "role", Value: role}, {Key: "updatedAt", Value: time.Now().UTC()}}},
-			{Key: "$unset", Value: bson.D{{Key: "kolom", Value: ""}}},
-		}
+func (s *Store) SetRole(ctx context.Context, id bson.ObjectID, role string, kolom int, bipra *bson.ObjectID) (*model.User, error) {
+	// only kolom users have a kolom, only "kelola data BIPRA" users a category
+	fields := bson.D{{Key: "role", Value: role}, {Key: "updatedAt", Value: time.Now().UTC()}}
+	unset := bson.D{}
+	if role == model.RoleKolom {
+		fields = append(fields, bson.E{Key: "kolom", Value: kolom})
+	} else {
+		unset = append(unset, bson.E{Key: "kolom", Value: ""})
+	}
+	if role == model.RoleBipra && bipra != nil {
+		fields = append(fields, bson.E{Key: "bipraId", Value: *bipra})
+	} else {
+		unset = append(unset, bson.E{Key: "bipraId", Value: ""})
+	}
+	update := bson.D{{Key: "$set", Value: fields}}
+	if len(unset) > 0 {
+		update = append(update, bson.E{Key: "$unset", Value: unset})
 	}
 	u, err := s.modifyUser(ctx, byID(id), update)
 	if err != nil || role == model.RoleAdmin {

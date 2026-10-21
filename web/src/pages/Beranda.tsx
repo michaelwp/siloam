@@ -3,20 +3,24 @@ import type { Member, Service } from '../api'
 import { Link } from 'react-router-dom'
 import { ChartCard, ColumnChart, StackedBarChart } from '../components/charts'
 import { PageHeader, Status } from '../components/ui'
+import { useBipraScope } from '../auth'
 import { kolomLabel, useData } from '../data'
 import { bipraRange, byText, dayMonth, daysUntil, inBipra, MONTHS, parts } from '../format'
 import { clock, serviceDayKey, serviceTitle, shortDay, upcomingServices, useSchedule, WEEK_AHEAD_DAYS } from '../schedule'
 
 /** Public homepage: totals plus this month's birthdays and wedding anniversaries. */
 export default function Beranda() {
-  const { families, members, categories, kolom, loading, error } = useData()
+  const { families, members, categories: allCategories, kolom, loading, error } = useData()
+  // a "kelola data BIPRA" user: members, families and statistics of their category only
+  const scope = useBipraScope()
+  const categories = scope ? [scope] : allCategories
   const [today] = useState(() => new Date())
   const month = today.getMonth()
   const day = today.getDate()
 
   const count = (pred: (m: (typeof members)[number]) => boolean) => members.filter(pred).length
   const tiles = [
-    { label: 'Keluarga', value: families.length, to: '/keluarga' },
+    { label: 'Keluarga', value: families.length, to: scope ? '/anggota' : '/keluarga' },
     { label: 'Jiwa', value: members.length, to: '/anggota' },
     {
       label: 'Laki-laki',
@@ -172,30 +176,32 @@ export default function Beranda() {
               )}
             </section>
 
-            <section className="card">
-              <header className="family-head">
-                <h2>HUT Pernikahan — {MONTHS[month]}</h2>
-                <Link to="/hut-pernikahan" className="small">
-                  Semua →
-                </Link>
-              </header>
-              {anniversaries.length ? (
-                <ul className="celebrations">
-                  {anniversaries.map(({ f, d, years }) => (
-                    <li key={f.id} className={d === day ? 'today' : d < day ? 'past' : ''}>
-                      <span className="cal-day">{d}</span>
-                      <div className="grow">
-                        <strong>Kel. {f.name}</strong>
-                        {years !== null && <span className="muted small">{years} tahun pernikahan</span>}
-                      </div>
-                      {d === day && <span className="badge green">Hari ini</span>}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="status">Tidak ada HUT pernikahan bulan ini.</p>
-              )}
-            </section>
+            {!scope && (
+              <section className="card">
+                <header className="family-head">
+                  <h2>HUT Pernikahan — {MONTHS[month]}</h2>
+                  <Link to="/hut-pernikahan" className="small">
+                    Semua →
+                  </Link>
+                </header>
+                {anniversaries.length ? (
+                  <ul className="celebrations">
+                    {anniversaries.map(({ f, d, years }) => (
+                      <li key={f.id} className={d === day ? 'today' : d < day ? 'past' : ''}>
+                        <span className="cal-day">{d}</span>
+                        <div className="grow">
+                          <strong>Kel. {f.name}</strong>
+                          {years !== null && <span className="muted small">{years} tahun pernikahan</span>}
+                        </div>
+                        {d === day && <span className="badge green">Hari ini</span>}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="status">Tidak ada HUT pernikahan bulan ini.</p>
+                )}
+              </section>
+            )}
           </div>
         </>
       )}
@@ -227,7 +233,7 @@ function ServiceItem({ s, withDay }: { s: Service; withDay: boolean }) {
 
 /** Today's services and the coming week's (of the viewed kolom), beside the birthdays. */
 function TodayServices({ today }: { today: Date }) {
-  const { services, loading, error } = useSchedule()
+  const { homeServices: services, loading, error } = useSchedule()
   const { today: todays, week, next } = upcomingServices(services, today, WEEK_AHEAD_DAYS)
   const dateText = `${today.getDate()} ${MONTHS[today.getMonth()]} ${today.getFullYear()}`
 

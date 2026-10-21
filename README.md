@@ -14,7 +14,11 @@ of worship services per kolom. Each service can be added to Google Calendar
 or Apple Calendar (`.ics`), and "Tambahkan ke Kalender Saya" subscribes a
 calendar app to `/api/calendar.ics` (optionally `?kolom=N`), so changes show
 up automatically. The kinds of service ("Jenis Ibadah": Kolom, WKI, PKB,
-Pemuda, Remaja, ASM, with their colors) are managed on their own page. The
+Pemuda, Remaja, ASM, with their colors) are managed on their own page; each
+can be linked to a BIPRA category (WKI, PKB, Pemuda, Remaja and ASM are linked
+by name once, automatically). A service of a linked jenis may have no kolom
+("Semua kolom", the whole congregation): it shows in every kolom, in each
+kolom's calendar feed and in the Android app. The
 **Khadim** (who leads the service) and the **Pembawa Acara** are picked from
 the members who are baptized and sidi (the service's kolom first), or typed in
 as another name, e.g. a pastor from outside the congregation. On opening the
@@ -183,11 +187,20 @@ reach the app (not signed in, not an admin) are not logged either.
   | Admin | all jemaat data, koloms, jenis ibadah, users, Android version, log | every kolom |
   | Pengguna | all jemaat data, koloms, jenis ibadah | every kolom |
   | Pengguna – kelola data kolom | families, members and services of **their one kolom** (chosen when the account is created; required) | their kolom only — other koloms show as for visitors |
+  | Pengguna – kelola data BIPRA | only **services** whose jenis ibadah is linked to **their one BIPRA category** (chosen when the account is created; required); the kolom is optional | their category's members only |
 
   The server enforces this (`403` otherwise, also for moving data into or out
   of the kolom); the web app starts a kolom user on their kolom, offers only
   that kolom in forms, hides *Kelola Kolom* and *Jenis Ibadah*, and marks other
   koloms "Hanya baca". A kolom assigned to a user cannot be deleted.
+
+  A *kelola data BIPRA* user (e.g. for Pemuda) sees, on Beranda, Daftar HUT
+  Jemaat and Daftar Anggota Jemaat, only their category's members (and on
+  Beranda only their category's services and statistics); Daftar Keluarga,
+  Data Base Keluarga, Daftar HUT Pernikahan and Kategorial BIPRA are hidden.
+  Their Jadwal Ibadah form offers only their category's jenis, with
+  "Semua kolom" as the default. A category assigned to a user cannot be
+  deleted.
 - **Account lockout:** after **3 wrong passwords in a row** an account is locked
   for **3 minutes** (`MAX_FAILED_LOGINS`, `LOCK_DURATION`; the sign-in page shows
   the current values). During the lock it cannot sign in — not even with the
@@ -480,8 +493,8 @@ user has proven who they are).
 | PUT    | `/api/auth/passkeys/{id}`              | rename `{name}`                           |
 | DELETE | `/api/auth/passkeys/{id}`              |                                           |
 | GET    | `/api/users`                           | admin                                     |
-| POST   | `/api/users`                           | admin: `{username, password, role, kolom}` — role `admin`, `user` or `kolom` (then `kolom` is required) |
-| PUT    | `/api/users/{id}`                      | admin: `{username, role, kolom}`          |
+| POST   | `/api/users`                           | admin: `{username, password, role, kolom, bipraId}` — role `admin`, `user`, `kolom` (then `kolom` is required) or `bipra` (then `bipraId`, a BIPRA category's id, is required) |
+| PUT    | `/api/users/{id}`                      | admin: `{username, role, kolom, bipraId}` |
 | POST   | `/api/users/{id}/reset-password`       | admin: `{password, clearPasskeys}`; also unlocks |
 | DELETE | `/api/users/{id}`                      | admin                                     |
 | GET    | `/api/koloms`                          | public                                    |
@@ -497,12 +510,12 @@ user has proven who they are).
 | GET    | `/api/members/{id}`                    |                                           |
 | PUT    | `/api/members/{id}`                    | moving to another family appends it there |
 | DELETE | `/api/members/{id}`                    | renumbers the family                      |
-| GET    | `/api/worship-types`                   | jenis ibadah with `color` (public)        |
-| POST   | `/api/worship-types`                   | `{name, color}`                           |
-| PUT    | `/api/worship-types/{id}`              | `{name, color}`                           |
+| GET    | `/api/worship-types`                   | jenis ibadah with `color` and `bipraId` (the linked BIPRA category, or null) (public) |
+| POST   | `/api/worship-types`                   | `{name, color, bipraId}`                  |
+| PUT    | `/api/worship-types/{id}`              | `{name, color, bipraId}`                  |
 | DELETE | `/api/worship-types/{id}`              | only when no service uses it              |
 | GET    | `/api/services`                        | with `typeName`, `typeColor`, `start`, `end`; `leader` (khadim) and `mc` show the linked member's current name (public) |
-| POST   | `/api/services`                        | `leaderId` / `mcId` link a member, or give `leader` / `mc` as a name |
+| POST   | `/api/services`                        | `leaderId` / `mcId` link a member, or give `leader` / `mc` as a name; `kolom` 0 (the whole congregation) only for a jenis linked to a BIPRA category |
 | PUT    | `/api/services/{id}`                   |                                           |
 | DELETE | `/api/services/{id}`                   |                                           |
 | GET    | `/api/services/{id}/ics`               | one service as an `.ics` file (public)    |

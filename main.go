@@ -99,6 +99,9 @@ func run() error {
 	if err := s.SeedWorshipTypes(ctx); err != nil {
 		return fmt.Errorf("seed worship types: %w", err)
 	}
+	if err := s.LinkWorshipTypesToBipra(ctx); err != nil {
+		return fmt.Errorf("link worship types to bipra: %w", err)
+	}
 	if *importSchedule != "" {
 		return runImportSchedule(ctx, s, *importSchedule, *importKolom, *replace)
 	}

@@ -15,6 +15,7 @@ type Dialog =
 
 export default function AdminUsers() {
   const { user: me } = useAuth()
+  const { categories } = useData()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -79,8 +80,8 @@ export default function AdminUsers() {
                       {u.username} {self && <span className="muted">(Anda)</span>}
                     </td>
                     <td>
-                      <Badge tone={u.role === 'admin' ? 'pkb' : u.role === 'kolom' ? 'pemuda' : undefined}>
-                        {roleLabel(u)}
+                      <Badge tone={u.role === 'admin' ? 'pkb' : u.role === 'kolom' || u.role === 'bipra' ? 'pemuda' : undefined}>
+                        {roleLabel(u, categories)}
                       </Badge>
                     </td>
                     <td>
@@ -227,6 +228,7 @@ function AddUser({ onClose, onCreated }: { onClose: () => void; onCreated: (u: U
   const [username, setUsername] = useState('')
   const [role, setRole] = useState<Role>('user')
   const [kolom, setKolom] = useState(0)
+  const [bipraId, setBipraId] = useState('')
   const [password, setPassword] = useState(generatePassword)
   return (
     <Modal title="Tambah Pengguna" onClose={onClose}>
@@ -236,7 +238,13 @@ function AddUser({ onClose, onCreated }: { onClose: () => void; onCreated: (u: U
         onSubmit={async () => {
           requireValid(password, username)
           onCreated(
-            await usersApi.create({ username, password, role, kolom: role === 'kolom' ? kolom : undefined }),
+            await usersApi.create({
+              username,
+              password,
+              role,
+              kolom: role === 'kolom' ? kolom : undefined,
+              bipraId: role === 'bipra' ? bipraId : undefined,
+            }),
             password,
           )
         }}
@@ -244,7 +252,7 @@ function AddUser({ onClose, onCreated }: { onClose: () => void; onCreated: (u: U
         <Field label="Username">
           <input autoCapitalize="none" required minLength={3} maxLength={32} value={username} onChange={(e) => setUsername(e.target.value)} />
         </Field>
-        <RoleFields role={role} kolom={kolom} onRole={setRole} onKolom={setKolom} />
+        <RoleFields role={role} kolom={kolom} bipraId={bipraId} onRole={setRole} onKolom={setKolom} onBipra={setBipraId} />
         <Field label="Password sementara" wide>
           <PasswordInput value={password} username={username} onChange={setPassword} />
         </Field>
@@ -268,12 +276,18 @@ function EditUser({
   const [username, setUsername] = useState(user.username)
   const [role, setRole] = useState<Role>(user.role)
   const [kolom, setKolom] = useState(user.kolom ?? 0)
+  const [bipraId, setBipraId] = useState(user.bipraId ?? '')
   return (
     <Modal title="Ubah Pengguna" onClose={onClose}>
       <FormShell
         onCancel={onClose}
         onSubmit={async () => {
-          await usersApi.update(user.id, { username, role, kolom: role === 'kolom' ? kolom : undefined })
+          await usersApi.update(user.id, {
+            username,
+            role,
+            kolom: role === 'kolom' ? kolom : undefined,
+            bipraId: role === 'bipra' ? bipraId : undefined,
+          })
           await onSaved()
           onClose()
         }}
@@ -281,34 +295,47 @@ function EditUser({
         <Field label="Username">
           <input autoCapitalize="none" required minLength={3} maxLength={32} value={username} onChange={(e) => setUsername(e.target.value)} />
         </Field>
-        <RoleFields role={role} kolom={kolom} disabled={self} onRole={setRole} onKolom={setKolom} />
+        <RoleFields
+          role={role}
+          kolom={kolom}
+          bipraId={bipraId}
+          disabled={self}
+          onRole={setRole}
+          onKolom={setKolom}
+          onBipra={setBipraId}
+        />
         {self && <p className="wide muted small">Role akun sendiri tidak dapat diubah.</p>}
       </FormShell>
     </Modal>
   )
 }
 
-/** Role, and for "kelola data kolom" the kolom they manage (required). */
+/** Role, and what a limited role manages (required): a kolom, or a BIPRA category. */
 function RoleFields({
   role,
   kolom,
+  bipraId,
   disabled,
   onRole,
   onKolom,
+  onBipra,
 }: {
   role: Role
   kolom: number
+  bipraId: string
   disabled?: boolean
   onRole: (r: Role) => void
   onKolom: (k: number) => void
+  onBipra: (id: string) => void
 }) {
-  const { koloms } = useData()
+  const { koloms, categories } = useData()
   return (
     <>
       <Field label="Role" wide>
         <select value={role} disabled={disabled} onChange={(e) => onRole(e.target.value as Role)}>
           <option value="user">Pengguna — kelola data semua kolom</option>
           <option value="kolom">Pengguna – kelola data kolom — hanya satu kolom</option>
+          <option value="bipra">Pengguna – kelola data BIPRA — jadwal ibadah satu kategori</option>
           <option value="admin">Admin — juga kelola pengguna</option>
         </select>
       </Field>
@@ -323,6 +350,25 @@ function RoleFields({
             ))}
           </select>
         </Field>
+      )}
+      {role === 'bipra' && (
+        <Field label="Kategori BIPRA yang dikelola" wide>
+          <select required disabled={disabled} value={bipraId} onChange={(e) => onBipra(e.target.value)}>
+            <option value="">— pilih kategori —</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      {role === 'bipra' && (
+        <p className="wide muted small">
+          Hanya dapat menambah, mengubah dan menghapus jadwal ibadah jenis yang terhubung ke kategori ini (lihat Jenis
+          Ibadah); kolom boleh dikosongkan. Beranda, Daftar HUT Jemaat dan Daftar Anggota Jemaat hanya menampilkan
+          anggota kategori ini; halaman keluarga, HUT pernikahan dan Kategorial BIPRA disembunyikan.
+        </p>
       )}
       {role === 'kolom' && (
         <p className="wide muted small">

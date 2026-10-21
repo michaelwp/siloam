@@ -164,7 +164,7 @@ func TestLastAdminCannotBeRemovedConcurrently(t *testing.T) {
 		a := newUser(t, s, "a"+bson.NewObjectID().Hex()[:6], model.RoleAdmin)
 		b := newUser(t, s, "b"+bson.NewObjectID().Hex()[:6], model.RoleAdmin)
 		var wg sync.WaitGroup
-		wg.Go(func() { _, _ = s.SetRole(ctx, a.ID, model.RoleUser, 0) })
+		wg.Go(func() { _, _ = s.SetRole(ctx, a.ID, model.RoleUser, 0, nil) })
 		wg.Go(func() { _ = s.DeleteUser(ctx, b.ID) })
 		wg.Wait()
 		if n, _ := s.CountAdmins(ctx); n == 0 {
@@ -174,7 +174,7 @@ func TestLastAdminCannotBeRemovedConcurrently(t *testing.T) {
 		_, _ = s.users.DeleteMany(ctx, bson.D{})
 	}
 	only := newUser(t, s, "only", model.RoleAdmin)
-	if _, err := s.SetRole(ctx, only.ID, model.RoleUser, 0); !errors.Is(err, ErrLastAdmin) {
+	if _, err := s.SetRole(ctx, only.ID, model.RoleUser, 0, nil); !errors.Is(err, ErrLastAdmin) {
 		t.Fatalf("demote last admin = %v", err)
 	}
 	if err := s.DeleteUser(ctx, only.ID); !errors.Is(err, ErrLastAdmin) {

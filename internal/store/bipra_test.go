@@ -68,3 +68,63 @@ func TestBipraCategories(t *testing.T) {
 		t.Fatalf("defaults came back: %d", len(rules))
 	}
 }
+
+func TestBipraLinksAndUsers(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	if err := s.SeedBipra(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SeedWorshipTypes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkWorshipTypesToBipra(ctx); err != nil {
+		t.Fatal(err)
+	}
+	rules, _ := s.BipraRules(ctx)
+	keyOf := map[bson.ObjectID]string{}
+	for _, c := range rules {
+		keyOf[c.ID] = c.Key
+	}
+	types, _ := s.ListWorshipTypes(ctx)
+	links := map[string]string{}
+	var pemudaType model.WorshipType
+	for _, ty := range types {
+		if ty.BipraID != nil {
+			links[ty.Name] = keyOf[*ty.BipraID]
+		}
+		if ty.Name == "Pemuda" {
+			pemudaType = ty
+		}
+	}
+	want := map[string]string{"Wanita Kaum Ibu (WKI)": "WKI", "Pria Kaum Bapa (PKB)": "PKB", "Pemuda": "Pemuda", "Remaja": "Remaja", "Anak Sekolah Minggu (ASM)": "Anak"}
+	if len(links) != len(want) {
+		t.Fatalf("links = %v", links)
+	}
+	for k, v := range want {
+		if links[k] != v {
+			t.Errorf("%s → %s, want %s", k, links[k], v)
+		}
+	}
+
+	// a category with a user cannot go; without, it goes and its jenis lose the link
+	newUser(t, s, "admin", model.RoleAdmin)
+	u := newUser(t, s, "pemuda", model.RoleUser)
+	pemuda := *pemudaType.BipraID
+	got, err := s.SetRole(ctx, u.ID, model.RoleBipra, 0, &pemuda)
+	if err != nil || got.BipraID == nil || *got.BipraID != pemuda || got.Kolom != 0 {
+		t.Fatalf("to bipra user: %+v %v", got, err)
+	}
+	if err := s.DeleteBipra(ctx, pemuda); !errors.Is(err, ErrBipraHasUsers) {
+		t.Fatalf("delete an assigned category: %v", err)
+	}
+	if got, err = s.SetRole(ctx, u.ID, model.RoleUser, 0, nil); err != nil || got.BipraID != nil {
+		t.Fatalf("back to regular user keeps the category: %+v %v", got, err)
+	}
+	if err := s.DeleteBipra(ctx, pemuda); err != nil {
+		t.Fatal(err)
+	}
+	if ty, _ := s.GetWorshipType(ctx, pemudaType.ID); ty.BipraID != nil {
+		t.Fatal("the jenis still links to the deleted category")
+	}
+}

@@ -3,6 +3,8 @@ package model
 import (
 	"slices"
 	"testing"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // oldCategory is the fixed rule the app used before categories were
@@ -86,6 +88,35 @@ func TestBipraNormalize(t *testing.T) {
 	} {
 		if err := c.Normalize(); err == nil {
 			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func TestGuessBipra(t *testing.T) {
+	rules := DefaultBipra()
+	for i := range rules {
+		rules[i].ID = bson.NewObjectID()
+	}
+	byKey := map[string]bson.ObjectID{}
+	for _, c := range rules {
+		byKey[c.Key] = c.ID
+	}
+	for name, want := range map[string]string{
+		"Kolom":                     "",
+		"Wanita Kaum Ibu (WKI)":     "WKI",
+		"Pria Kaum Bapa (PKB)":      "PKB",
+		"Pemuda":                    "Pemuda",
+		"remaja":                    "Remaja",
+		"Anak Sekolah Minggu (ASM)": "Anak",
+		"Minggu":                    "",
+		"Lansia":                    "", // a flag, not a main category
+	} {
+		got := GuessBipra(name, rules)
+		switch {
+		case want == "" && got != nil:
+			t.Errorf("%s: linked, want none", name)
+		case want != "" && (got == nil || *got != byKey[want]):
+			t.Errorf("%s: %v, want %s", name, got, want)
 		}
 	}
 }

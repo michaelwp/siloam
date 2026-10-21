@@ -105,7 +105,7 @@ func TestKolomUsersRole(t *testing.T) {
 	ctx := context.Background()
 	newUser(t, s, "admin", model.RoleAdmin)
 	u := newUser(t, s, "budi", model.RoleUser)
-	got, err := s.SetRole(ctx, u.ID, model.RoleKolom, 3)
+	got, err := s.SetRole(ctx, u.ID, model.RoleKolom, 3, nil)
 	if err != nil || got.Role != model.RoleKolom || got.Kolom != 3 {
 		t.Fatalf("to kolom user: %+v %v", got, err)
 	}
@@ -122,7 +122,7 @@ func TestKolomUsersRole(t *testing.T) {
 	if err := s.DeleteKolom(ctx, k3.ID); !errors.Is(err, ErrKolomHasUsers) {
 		t.Fatalf("delete an assigned kolom: %v", err)
 	}
-	if got, err = s.SetRole(ctx, u.ID, model.RoleUser, 0); err != nil || got.Kolom != 0 {
+	if got, err = s.SetRole(ctx, u.ID, model.RoleUser, 0, nil); err != nil || got.Kolom != 0 {
 		t.Fatalf("back to regular user keeps the kolom: %+v %v", got, err)
 	}
 	if err := s.DeleteKolom(ctx, k3.ID); err != nil {

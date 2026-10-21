@@ -1,6 +1,6 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import { scheduleApi, serviceToInput, type Member, type Service, type ServiceInput, type WorshipType } from '../api'
-import { useCanEdit } from '../auth'
+import { managesService, useAuth, useCanAddServices } from '../auth'
 import { KolomField } from '../components/forms'
 import { ConfirmDelete, Field, FormShell, Modal, Status } from '../components/ui'
 import { kolomLabel, useData } from '../data'
@@ -34,7 +34,8 @@ const narrow = () => typeof window !== 'undefined' && window.matchMedia('(max-wi
 /** Google-Calendar-like schedule: a month grid or a schedule list, per kolom. */
 export default function JadwalIbadah() {
   const { kolom } = useData()
-  const canEdit = useCanEdit()
+  const canEdit = useCanAddServices()
+  const { user } = useAuth()
   const { services, types, loading, error, reload } = useSchedule()
   const [today] = useState(() => new Date())
   const [cursor, setCursor] = useState(() => ({ y: today.getFullYear(), m: today.getMonth() }))
@@ -161,7 +162,7 @@ export default function JadwalIbadah() {
       {dialog?.kind === 'show' && (
         <ServiceDetails
           service={dialog.service}
-          canEdit={canEdit}
+          canEdit={managesService(user, dialog.service, types)}
           onClose={() => setDialog(null)}
           onEdit={() => setDialog({ kind: 'edit', service: dialog.service })}
           onDelete={() => setDialog({ kind: 'delete', service: dialog.service })}
@@ -411,7 +412,7 @@ function ServiceDetails({
     ['Lokasi', s.location],
     ['Khadim', s.leader],
     ['Pembawa Acara', s.mc],
-    ['Kolom', String(s.kolom)],
+    ['Kolom', s.kolom ? String(s.kolom) : 'Semua kolom'],
     ['Keterangan', s.note],
   ]
   return (
@@ -505,12 +506,15 @@ function ServiceForm({
   onSaved: () => Promise<void>
 }) {
   const { kolom, allFamilies, allMembers } = useData()
+  const { user } = useAuth()
+  // a "kelola data BIPRA" user: only their category's jenis
+  const choices = user?.role === 'bipra' ? types.filter((t) => t.bipraId && t.bipraId === user.bipraId) : types
   const [s, setS] = useState<ServiceInput>(
     service
       ? serviceToInput(service)
       : {
-          kolom: kolom ?? 0,
-          typeId: types[0]?.id ?? '',
+          kolom: user?.role === 'bipra' ? 0 : (kolom ?? 0),
+          typeId: choices[0]?.id ?? '',
           date: date ? fromInputDate(date) : null,
           time: '19:00',
           host: '',
@@ -523,8 +527,10 @@ function ServiceForm({
         },
   )
   const set = (patch: Partial<ServiceInput>) => setS((prev) => ({ ...prev, ...patch }))
-  const off = !s.kolom
-  const hosts = allFamilies.filter((f) => f.kolom === s.kolom).map((f) => f.name)
+  // a jenis linked to a BIPRA category may be for the whole congregation (no kolom)
+  const linked = !!types.find((t) => t.id === s.typeId)?.bipraId
+  const off = !s.typeId || (!s.kolom && !linked)
+  const hosts = allFamilies.filter((f) => !s.kolom || f.kolom === s.kolom).map((f) => f.name)
 
   return (
     <Modal title={service ? 'Ubah Jadwal Ibadah' : 'Buat Jadwal Ibadah'} onClose={onClose}>
@@ -537,17 +543,22 @@ function ServiceForm({
           onClose()
         }}
       >
-        <KolomField value={s.kolom} onChange={(k) => set({ kolom: k })} />
         <Field label="Jenis Ibadah" wide>
-          <select required disabled={off} value={s.typeId} onChange={(e) => set({ typeId: e.target.value })}>
+          <select required value={s.typeId} onChange={(e) => set({ typeId: e.target.value })}>
             <option value="">— pilih jenis ibadah —</option>
-            {types.map((t) => (
+            {choices.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
               </option>
             ))}
           </select>
         </Field>
+        {user?.role === 'bipra' && !choices.length && (
+          <p className="wide form-error flush">
+            Belum ada jenis ibadah yang terhubung ke kategori BIPRA Anda. Minta admin menghubungkannya di Jenis Ibadah.
+          </p>
+        )}
+        <KolomField value={s.kolom} allowAll={linked} onChange={(k) => set({ kolom: k })} />
         <Field label="Tanggal">
           <input
             type="date"

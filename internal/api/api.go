@@ -3,8 +3,8 @@ package api
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -349,11 +349,12 @@ func (a *API) memberViews(r *http.Request, members []model.Member) ([]model.Memb
 	}
 	now := time.Now()
 	full := auth.SignedIn(r)
+	own := ownBipra(r, rules)
 	out := make([]model.MemberView, 0, len(members))
 	for _, m := range members {
 		f := byID[m.FamilyID]
 		v := model.NewMemberView(m, f, now, rules)
-		if !seesPrivate(r, full, f.Kolom) {
+		if !seesMember(r, full, f.Kolom, v, own) {
 			v = v.Public()
 		}
 		out = append(out, v)
@@ -483,7 +484,7 @@ func (a *API) writeMember(w http.ResponseWriter, r *http.Request, status int, m 
 		return
 	}
 	v := model.NewMemberView(m, f, time.Now(), rules)
-	if !seesPrivate(r, dataView(w, r), f.Kolom) {
+	if !seesMember(r, dataView(w, r), f.Kolom, v, ownBipra(r, rules)) {
 		v = v.Public()
 	}
 	writeJSON(w, status, v)
@@ -498,7 +499,7 @@ func mayManage(w http.ResponseWriter, r *http.Request, k int) bool {
 	if u == nil || u.ManagesKolom(k) { // writes always have a user (auth middleware)
 		return true
 	}
-	writeError(w, http.StatusForbidden, fmt.Sprintf("Anda hanya dapat mengelola data Kolom %d", u.Kolom), "forbidden")
+	writeError(w, http.StatusForbidden, u.Scope(), "forbidden")
 	return false
 }
 
@@ -523,6 +524,37 @@ func dataView(w http.ResponseWriter, r *http.Request) bool {
 	}
 	w.Header().Set("X-Data-View", view)
 	return full
+}
+
+// ownBipra is the category of a "kelola data BIPRA" user (they see its
+// members' private data), or nil.
+func ownBipra(r *http.Request, rules model.BipraRules) *model.BipraCategory {
+	u := auth.CurrentUser(r)
+	if u == nil || u.Role != model.RoleBipra || u.BipraID == nil {
+		return nil
+	}
+	for _, c := range rules {
+		if c.ID == *u.BipraID {
+			return &c
+		}
+	}
+	return nil
+}
+
+// seesMember: seesPrivate for the member's kolom, or the member is in the
+// category of a "kelola data BIPRA" user.
+func seesMember(r *http.Request, full bool, kolom int, v model.MemberView, own *model.BipraCategory) bool {
+	return seesPrivate(r, full, kolom) || (full && inBipra(v, own))
+}
+
+func inBipra(v model.MemberView, c *model.BipraCategory) bool {
+	if c == nil {
+		return false
+	}
+	if c.Kind == model.KindFlag {
+		return slices.Contains(v.Flags, c.Key)
+	}
+	return v.Category == c.Key
 }
 
 // mayManageFamily is mayManage for the kolom of family id (a missing family

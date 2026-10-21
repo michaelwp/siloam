@@ -49,7 +49,7 @@ function write(storage: () => Storage, key: string, value: string) {
  */
 export function DailyNotice() {
   const { members, loading } = useData()
-  const { services, loading: scheduleLoading } = useSchedule()
+  const { homeServices: services, loading: scheduleLoading } = useSchedule()
   const [today] = useState(() => new Date())
   const key = storageKey(today)
   const [hidden, setHidden] = useState(

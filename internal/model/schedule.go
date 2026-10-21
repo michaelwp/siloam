@@ -8,11 +8,14 @@ import (
 
 // WorshipType is a kind of service ("jenis ibadah"), e.g. Kolom or Pemuda.
 type WorshipType struct {
-	ID        bson.ObjectID `bson:"_id,omitempty" json:"id"`
-	Name      string        `bson:"name" json:"name"`
-	Color     string        `bson:"color" json:"color"` // #rrggbb, the type's calendar color
-	Order     int           `bson:"order" json:"order"`
-	CreatedAt time.Time     `bson:"createdAt" json:"createdAt,omitzero"`
+	ID    bson.ObjectID `bson:"_id,omitempty" json:"id"`
+	Name  string        `bson:"name" json:"name"`
+	Color string        `bson:"color" json:"color"` // #rrggbb, the type's calendar color
+	Order int           `bson:"order" json:"order"`
+	// BipraID links the jenis to a BIPRA category: its services may have no
+	// kolom (the whole congregation) and its "kelola data BIPRA" users manage them
+	BipraID   *bson.ObjectID `bson:"bipraId,omitempty" json:"bipraId"`
+	CreatedAt time.Time      `bson:"createdAt" json:"createdAt,omitzero"`
 }
 
 // DefaultWorshipTypes seed a new database, in this order.
@@ -28,7 +31,7 @@ var DefaultWorshipTypes = []WorshipType{
 // Service is one scheduled worship service ("Jadwal Ibadah" row).
 type Service struct {
 	ID       bson.ObjectID `bson:"_id,omitempty" json:"id"`
-	Kolom    int           `bson:"kolom" json:"kolom"`
+	Kolom    int           `bson:"kolom" json:"kolom"` // 0: the whole congregation (jenis linked to a BIPRA category)
 	TypeID   bson.ObjectID `bson:"typeId" json:"typeId"`
 	Date     time.Time     `bson:"date" json:"date"` // midnight UTC of the local date
 	Time     string        `bson:"time" json:"time"` // "19:00", local time

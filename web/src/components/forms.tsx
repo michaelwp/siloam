@@ -10,13 +10,27 @@ import { ConfirmDelete, Field, FormShell, Modal } from './ui'
  * chosen. It offers only the koloms the user may change (a "kelola data
  * kolom" user: their own).
  */
-export function KolomField({ value, onChange }: { value: number; onChange: (k: number) => void }) {
+export function KolomField({
+  value,
+  onChange,
+  allowAll,
+}: {
+  value: number
+  onChange: (k: number) => void
+  /** offer "Semua kolom" (0): a service of a jenis linked to a BIPRA category */
+  allowAll?: boolean
+}) {
   const { user } = useAuth()
-  const koloms = useData().koloms.filter((k) => managesKolom(user, k.number))
+  // a "kelola data BIPRA" user's services may be in any kolom
+  const koloms = useData().koloms.filter((k) => user?.role === 'bipra' || managesKolom(user, k.number))
   return (
     <Field label="Kolom" wide>
-      <select required value={value || ''} onChange={(e) => onChange(Number(e.target.value))}>
-        <option value="">— pilih kolom terlebih dahulu —</option>
+      <select required value={allowAll ? String(value) : value || ''} onChange={(e) => onChange(Number(e.target.value))}>
+        {allowAll ? (
+          <option value="0">Semua kolom (seluruh jemaat)</option>
+        ) : (
+          <option value="">— pilih kolom terlebih dahulu —</option>
+        )}
         {koloms.map((k) => (
           <option key={k.id} value={k.number}>
             Kolom {k.number}

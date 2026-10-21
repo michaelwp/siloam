@@ -30,12 +30,12 @@ import Login from './pages/Login'
 const PAGES = [
   { path: '/', label: 'Beranda', element: <Beranda /> },
   { path: '/jadwal', label: 'Jadwal Ibadah', element: <JadwalIbadah /> },
-  { path: '/keluarga', label: 'Daftar Keluarga', element: <DaftarKeluarga /> },
-  { path: '/database', label: 'Data Base Keluarga', element: <DataBaseKeluarga /> },
+  { path: '/keluarga', label: 'Daftar Keluarga', element: <DaftarKeluarga />, noBipra: true },
+  { path: '/database', label: 'Data Base Keluarga', element: <DataBaseKeluarga />, noBipra: true },
   { path: '/hut-jemaat', label: 'Daftar HUT Jemaat', element: <HutJemaat /> },
-  { path: '/hut-pernikahan', label: 'Daftar HUT Pernikahan', element: <HutPernikahan /> },
+  { path: '/hut-pernikahan', label: 'Daftar HUT Pernikahan', element: <HutPernikahan />, noBipra: true },
   { path: '/anggota', label: 'Daftar Anggota Jemaat', element: <AnggotaJemaat /> },
-  { path: '/bipra', label: 'Kategorial BIPRA', element: <KategorialBipra /> },
+  { path: '/bipra', label: 'Kategorial BIPRA', element: <KategorialBipra />, noBipra: true },
 ]
 
 export default function App() {
@@ -87,6 +87,7 @@ function RequireUser({ children, admin, all }: { children: ReactNode; admin?: bo
 
 function Shell() {
   const { user, logout } = useAuth()
+  const { categories } = useData()
   const navigate = useNavigate()
   const location = useLocation()
   const isAdmin = user?.role === 'admin'
@@ -103,7 +104,8 @@ function Shell() {
         </Link>
         <KolomPicker />
         <nav>
-          {PAGES.map((p) => (
+          {/* a "kelola data BIPRA" user sees only their category's members: no family pages */}
+          {PAGES.filter((p) => !(p.noBipra && user?.role === 'bipra')).map((p) => (
             <NavLink key={p.path} to={p.path} end={p.path === '/'}>
               {p.label}
             </NavLink>
@@ -118,7 +120,7 @@ function Shell() {
                 </span>
                 <div className="grow">
                   <strong>{user.username}</strong>
-                  <small>{roleLabel(user)}</small>
+                  <small>{roleLabel(user, categories)}</small>
                 </div>
                 <ThemeToggle />
               </div>
@@ -165,7 +167,11 @@ function Shell() {
       <main className="content">
         <Routes>
           {PAGES.map((p) => (
-            <Route key={p.path} path={p.path} element={p.element} />
+            <Route
+              key={p.path}
+              path={p.path}
+              element={p.noBipra && user?.role === 'bipra' ? <Navigate to="/" replace /> : p.element}
+            />
           ))}
           <Route
             path="/jenis-ibadah"

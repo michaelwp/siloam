@@ -177,7 +177,7 @@ export function memberToInput(m: Member): MemberInput {
 
 // ---- auth & users ----
 
-export type Role = 'admin' | 'user' | 'kolom'
+export type Role = 'admin' | 'user' | 'kolom' | 'bipra'
 
 export type Passkey = {
   id: string
@@ -191,6 +191,7 @@ export type User = {
   username: string
   role: Role
   kolom?: number // role 'kolom': the kolom they manage
+  bipraId?: string // role 'bipra': the BIPRA category they manage
   mustChangePassword: boolean
   failedLogins: number
   lockedAt: string | null
@@ -277,9 +278,9 @@ export const adminApi = {
 
 export const usersApi = {
   list: () => request<User[]>('GET', '/api/users'),
-  create: (body: { username: string; password: string; role: Role; kolom?: number }) =>
+  create: (body: { username: string; password: string; role: Role; kolom?: number; bipraId?: string }) =>
     request<User>('POST', '/api/users', body),
-  update: (id: string, body: { username: string; role: Role; kolom?: number }) =>
+  update: (id: string, body: { username: string; role: Role; kolom?: number; bipraId?: string }) =>
     request<User>('PUT', `/api/users/${id}`, body),
   resetPassword: (id: string, body: { password: string; clearPasskeys: boolean }) =>
     request<User>('POST', `/api/users/${id}/reset-password`, body),
@@ -294,6 +295,7 @@ export type WorshipType = {
   name: string
   color: string // #rrggbb
   order: number
+  bipraId: string | null // linked BIPRA category: services may have no kolom (0); its 'bipra' users manage them
 }
 
 export type Service = {
@@ -333,7 +335,8 @@ export const scheduleApi = {
   createService: (s: ServiceInput) => request<Service>('POST', '/api/services', s),
   updateService: (id: string, s: ServiceInput) => request<Service>('PUT', `/api/services/${id}`, s),
   deleteService: (id: string) => request<void>('DELETE', `/api/services/${id}`),
-  createType: (t: { name: string; color: string }) => request<WorshipType>('POST', '/api/worship-types', t),
-  updateType: (id: string, t: { name: string; color: string }) => request<WorshipType>('PUT', `/api/worship-types/${id}`, t),
+  createType: (t: { name: string; color: string; bipraId: string }) => request<WorshipType>('POST', '/api/worship-types', t),
+  updateType: (id: string, t: { name: string; color: string; bipraId: string }) =>
+    request<WorshipType>('PUT', `/api/worship-types/${id}`, t),
   deleteType: (id: string) => request<void>('DELETE', `/api/worship-types/${id}`),
 }

@@ -30,6 +30,7 @@ import id.gmimsiloam.jemaat.data.Snapshot
 import id.gmimsiloam.jemaat.data.anniversariesToday
 import id.gmimsiloam.jemaat.data.birthdaysToday
 import id.gmimsiloam.jemaat.data.clock
+import id.gmimsiloam.jemaat.data.forKolom
 import id.gmimsiloam.jemaat.data.inKolom
 import id.gmimsiloam.jemaat.data.longDate
 import id.gmimsiloam.jemaat.data.shortDate
@@ -43,7 +44,7 @@ import java.util.Date
 @Composable
 fun HomeScreen(data: Snapshot, kolom: Int?, error: String?, update: AppRelease?, onCategory: (String) -> Unit) {
     val today = rememberToday()
-    val services = data.services.inKolom(kolom) { it.kolom }
+    val services = data.services.forKolom(kolom)
     val members = data.members.inKolom(kolom) { it.kolom }
     val families = data.families.inKolom(kolom) { it.kolom }
     val up = upcomingServices(services, today)

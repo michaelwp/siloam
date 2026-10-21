@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { api, type BipraCategory, type DataView, type Family, type Kolom, type Member } from './api'
 import { useAuth } from './auth'
 import { DataContext } from './data'
+import { inBipra } from './format'
 
 type State = {
   koloms: Kolom[]
@@ -44,11 +45,13 @@ function DataProvider({
   expectFull,
   onStale,
   startKolom,
+  bipraId,
 }: {
   children: ReactNode
   expectFull: boolean
   onStale: () => void
   startKolom: number | null // a "kelola data kolom" user starts on their kolom
+  bipraId: string | null // a "kelola data BIPRA" user sees only this category's members
 }) {
   const [state, setState] = useState<State>({ koloms: [], categories: [], families: [], members: [], view: null, loading: true, error: null })
   const [chosen, setChosen] = useState(() => startKolom ?? savedKolom())
@@ -80,13 +83,21 @@ function DataProvider({
 
   // a remembered kolom that no longer exists falls back to all koloms
   const kolom = chosen !== null && state.koloms.some((k) => k.number === chosen) ? chosen : null
+  // a "kelola data BIPRA" user: only their category's members, and the families they are in
+  const scope = state.categories.find((c) => c.id === bipraId)
+  const scoped = useMemo(() => {
+    if (!bipraId) return { families: state.families, members: state.members }
+    const members = scope ? state.members.filter((m) => inBipra(m, scope)) : []
+    const ids = new Set(members.map((m) => m.familyId))
+    return { families: state.families.filter((f) => ids.has(f.id)), members }
+  }, [state.families, state.members, bipraId, scope])
   const families = useMemo(
-    () => (kolom === null ? state.families : state.families.filter((f) => f.kolom === kolom)),
-    [state.families, kolom],
+    () => (kolom === null ? scoped.families : scoped.families.filter((f) => f.kolom === kolom)),
+    [scoped.families, kolom],
   )
   const members = useMemo(
-    () => (kolom === null ? state.members : state.members.filter((m) => m.kolom === kolom)),
-    [state.members, kolom],
+    () => (kolom === null ? scoped.members : scoped.members.filter((m) => m.kolom === kolom)),
+    [scoped.members, kolom],
   )
 
   return (
@@ -123,6 +134,7 @@ export function DataScope({ children }: { children: ReactNode }) {
       expectFull={full}
       onStale={refresh}
       startKolom={user?.role === 'kolom' ? (user.kolom ?? null) : null}
+      bipraId={user?.role === 'bipra' ? (user.bipraId ?? null) : null}
     >
       {children}
     </DataProvider>

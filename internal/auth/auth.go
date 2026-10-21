@@ -241,7 +241,7 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 		// a "kelola data kolom" user changes their kolom's data, not the
 		// koloms or jenis ibadah themselves (the data rules are in the API)
 		if isUnsafe(r.Method) && !u.ManagesAll() && managesAllOnly(path) {
-			httpx.WriteError(w, http.StatusForbidden, fmt.Sprintf("Anda hanya dapat mengelola data Kolom %d", u.Kolom), "forbidden")
+			httpx.WriteError(w, http.StatusForbidden, u.Scope(), "forbidden")
 			return
 		}
 		ctx := context.WithValue(r.Context(), ctxKey{}, &principal{user: u, session: sess})

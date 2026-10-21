@@ -69,7 +69,8 @@ import id.gmimsiloam.jemaat.data.Service
 import id.gmimsiloam.jemaat.data.Snapshot
 import id.gmimsiloam.jemaat.data.WEEKDAYS
 import id.gmimsiloam.jemaat.data.clock
-import id.gmimsiloam.jemaat.data.inKolom
+import id.gmimsiloam.jemaat.data.forKolom
+import id.gmimsiloam.jemaat.data.kolomText
 import id.gmimsiloam.jemaat.data.longDate
 import id.gmimsiloam.jemaat.data.monthGrid
 import id.gmimsiloam.jemaat.data.timeRange
@@ -93,7 +94,7 @@ fun ScheduleScreen(data: Snapshot, kolom: Int?) {
     var day by rememberSaveable { mutableStateOf(today) } // the calendar's chosen day
     var hidden by rememberSaveable { mutableStateOf(setOf<String>()) }
     var selected by remember { mutableStateOf<Service?>(null) }
-    val shown = data.services.inKolom(kolom) { it.kolom }
+    val shown = data.services.forKolom(kolom)
         .filter { it.typeId !in hidden }
         .sortedWith(compareBy({ it.date }, { it.time }))
     fun goTo(m: YearMonth) {
@@ -352,7 +353,7 @@ fun ServiceSheet(s: Service, onDismiss: () -> Unit) {
                 "Lokasi" to s.place,
                 "Khadim" to s.leader,
                 "Pembawa Acara" to s.mc,
-                "Kolom" to "${s.kolom}",
+                "Kolom" to if (s.kolom == 0) "Semua kolom" else "${s.kolom}",
                 "Keterangan" to s.note,
             ).filter { it.second.isNotEmpty() }.forEach { (k, v) ->
                 Row {
@@ -385,7 +386,7 @@ private fun addToCalendar(context: Context, s: Service) {
         .putExtra(
             CalendarContract.Events.DESCRIPTION,
             listOfNotNull(
-                "Kolom ${s.kolom}",
+                s.kolomText,
                 s.leader.ifEmpty { null }?.let { "Khadim: $it" },
                 s.mc.ifEmpty { null }?.let { "Pembawa Acara: $it" },
                 s.note.ifEmpty { null },

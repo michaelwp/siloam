@@ -203,3 +203,72 @@ func TestBipraRulesDecideMemberCategories(t *testing.T) {
 		t.Errorf("min > max accepted: %d", code)
 	}
 }
+
+func TestBipraUserManagesOnlyTheirServices(t *testing.T) {
+	_, st, h := testAPI(t)
+	ctx := context.Background()
+	if err := st.SeedBipra(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.LinkWorshipTypesToBipra(ctx); err != nil {
+		t.Fatal(err)
+	}
+	types, _ := st.ListWorshipTypes(ctx)
+	typeID := map[string]string{}
+	var pemuda bson.ObjectID
+	for _, ty := range types {
+		typeID[ty.Name] = ty.ID.Hex()
+		if ty.Name == "Pemuda" {
+			pemuda = *ty.BipraID
+		}
+	}
+	day := time.Date(2026, 11, 4, 0, 0, 0, 0, time.UTC)
+	kolomService, err := st.CreateService(ctx, model.Service{Kolom: 3, TypeID: types[0].ID, Date: day, Time: "19:00"}) // "Kolom"
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, _ := st.CreateFamily(ctx, model.Family{Kolom: 3, Name: "Umboh"})
+	young := time.Now().AddDate(-20, 0, -1)
+	old := time.Now().AddDate(-45, 0, -1)
+	_, _ = st.CreateMember(ctx, model.Member{FamilyID: f.ID, Name: "Budi", Gender: model.GenderMale, MaritalStatus: model.StatusSingle, BirthDate: &young})
+	_, _ = st.CreateMember(ctx, model.Member{FamilyID: f.ID, Name: "Erwin", Gender: model.GenderMale, MaritalStatus: "Menikah", BirthDate: &old})
+
+	u := &model.User{ID: bson.NewObjectID(), Username: "pemuda", Role: model.RoleBipra, BipraID: &pemuda}
+	service := func(kind string, kolom string) string {
+		return `{"kolom":` + kolom + `,"typeId":"` + typeID[kind] + `","date":"2026-11-11T00:00:00Z","time":"18:00"}`
+	}
+	for _, c := range []struct {
+		what, method, path, body string
+		want                     int
+	}{
+		{"a Pemuda service for the whole congregation", "POST", "/api/services", service("Pemuda", "0"), 201},
+		{"a Pemuda service in one kolom", "POST", "/api/services", service("Pemuda", "3"), 201},
+		{"another category's service", "POST", "/api/services", service("Pria Kaum Bapa (PKB)", "0"), 403},
+		{"a kolom service", "POST", "/api/services", service("Kolom", "3"), 403},
+		{"turn a kolom service into theirs", "PUT", "/api/services/" + kolomService.ID.Hex(), service("Pemuda", "0"), 403},
+		{"delete a kolom service", "DELETE", "/api/services/" + kolomService.ID.Hex(), "", 403},
+		{"add a family", "POST", "/api/families", `{"kolom":3,"name":"Baru"}`, 403},
+		{"add a member", "POST", "/api/members", `{"familyId":"` + f.ID.Hex() + `","name":"x"}`, 403},
+	} {
+		if got, body := call(h, u, c.method, c.path, c.body); got != c.want {
+			t.Errorf("%s: %d, want %d (%v)", c.what, got, c.want, body)
+		}
+	}
+	// a service without a kolom needs a jenis linked to a category (also for admins)
+	admin := &model.User{ID: bson.NewObjectID(), Username: "admin", Role: model.RoleAdmin}
+	if got, body := call(h, admin, "POST", "/api/services", service("Kolom", "0")); got != 400 {
+		t.Errorf("kolom service without a kolom: %d %v", got, body)
+	}
+
+	// private data: their category's members only
+	r := auth.WithUser(httptest.NewRequest(http.MethodGet, "/api/members", nil), u)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, r)
+	var members []model.MemberView
+	_ = json.Unmarshal(rec.Body.Bytes(), &members)
+	for _, m := range members {
+		if (m.BirthDate != nil) != (m.Name == "Budi") {
+			t.Errorf("%s (%s): birth date visible = %v", m.Name, m.Category, m.BirthDate != nil)
+		}
+	}
+}

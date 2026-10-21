@@ -105,7 +105,7 @@ func (s *Store) UpdateWorshipType(ctx context.Context, t model.WorshipType) (mod
 	var out model.WorshipType
 	err := s.worshipTypes.FindOneAndUpdate(ctx,
 		bson.D{{Key: "_id", Value: t.ID}},
-		bson.D{{Key: "$set", Value: bson.D{{Key: "name", Value: t.Name}, {Key: "color", Value: t.Color}}}},
+		typeUpdate(t),
 		options.FindOneAndUpdate().SetReturnDocument(options.After),
 	).Decode(&out)
 	switch {
@@ -115,6 +115,53 @@ func (s *Store) UpdateWorshipType(ctx context.Context, t model.WorshipType) (mod
 		return out, ErrTypeExists
 	}
 	return out, err
+}
+
+// typeUpdate sets a type's name, color and BIPRA link (or removes the link).
+func typeUpdate(t model.WorshipType) bson.D {
+	u := bson.D{{Key: "$set", Value: bson.D{{Key: "name", Value: t.Name}, {Key: "color", Value: t.Color}}}}
+	if t.BipraID != nil {
+		u[0].Value = append(u[0].Value.(bson.D), bson.E{Key: "bipraId", Value: *t.BipraID})
+	} else {
+		u = append(u, bson.E{Key: "$unset", Value: bson.D{{Key: "bipraId", Value: ""}}})
+	}
+	return u
+}
+
+const typesLinkedMarker = "worshipTypesBipraLinked"
+
+// LinkWorshipTypesToBipra links, once, the jenis ibadah without a link to the
+// BIPRA category their name names (model.GuessBipra): "Pemuda" to Pemuda,
+// "Anak Sekolah Minggu (ASM)" to Anak (ASM), … Admins change links on Jenis
+// Ibadah afterwards. Runs at server start, after SeedBipra.
+func (s *Store) LinkWorshipTypesToBipra(ctx context.Context) error {
+	n, err := s.meta().CountDocuments(ctx, bson.D{{Key: "_id", Value: typesLinkedMarker}})
+	if err != nil || n > 0 {
+		return err
+	}
+	rules, err := s.BipraRules(ctx)
+	if err != nil {
+		return err
+	}
+	types, err := s.ListWorshipTypes(ctx)
+	if err != nil {
+		return err
+	}
+	for _, t := range types {
+		if t.BipraID != nil {
+			continue
+		}
+		if id := model.GuessBipra(t.Name, rules); id != nil {
+			if _, err := s.worshipTypes.UpdateOne(ctx, bson.D{{Key: "_id", Value: t.ID}},
+				bson.D{{Key: "$set", Value: bson.D{{Key: "bipraId", Value: *id}}}}); err != nil {
+				return err
+			}
+		}
+	}
+	_, err = s.meta().UpdateOne(ctx, bson.D{{Key: "_id", Value: typesLinkedMarker}},
+		bson.D{{Key: "$set", Value: bson.D{{Key: "at", Value: time.Now().UTC()}}}},
+		options.UpdateOne().SetUpsert(true))
+	return err
 }
 
 // DeleteWorshipType removes a type no service uses.
@@ -157,8 +204,10 @@ func (s *Store) GetService(ctx context.Context, id bson.ObjectID) (model.Service
 }
 
 func (s *Store) checkServiceRefs(ctx context.Context, sv model.Service) error {
-	if err := s.requireKolom(ctx, sv.Kolom); err != nil {
-		return err
+	if sv.Kolom != 0 { // 0: the whole congregation (the API checks it is allowed)
+		if err := s.requireKolom(ctx, sv.Kolom); err != nil {
+			return err
+		}
 	}
 	_, err := s.GetWorshipType(ctx, sv.TypeID)
 	return err

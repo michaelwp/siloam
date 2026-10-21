@@ -19,6 +19,7 @@ import id.gmimsiloam.jemaat.data.Snapshot
 import id.gmimsiloam.jemaat.data.birthdaysToday
 import id.gmimsiloam.jemaat.data.clock
 import id.gmimsiloam.jemaat.data.effectiveKolom
+import id.gmimsiloam.jemaat.data.forKolom
 import id.gmimsiloam.jemaat.data.inKolom
 import id.gmimsiloam.jemaat.data.longDate
 import id.gmimsiloam.jemaat.data.upcomingServices
@@ -102,7 +103,7 @@ internal fun showDaily(ctx: Context, prefs: Prefs, data: Snapshot, today: LocalD
     val kolom = data.effectiveKolom(prefs.kolom)
     if (prefs.notifyServices && (force || prefs.lastDailyServices != day)) {
         prefs.lastDailyServices = day
-        val todays = upcomingServices(data.services.inKolom(kolom) { it.kolom }, today).today
+        val todays = upcomingServices(data.services.forKolom(kolom), today).today
         if (todays.isNotEmpty()) {
             val first = todays.first()
             Notifier.post(
@@ -155,7 +156,7 @@ private fun scheduleReminders(ctx: Context, prefs: Prefs, data: Snapshot, today:
     val before = prefs.remindBeforeMinutes
     if (!prefs.notifyServices || before <= 0) return
     // forget reminders of other days
-    val todays = upcomingServices(data.services.inKolom(data.effectiveKolom(prefs.kolom)) { it.kolom }, today).today
+    val todays = upcomingServices(data.services.forKolom(data.effectiveKolom(prefs.kolom)), today).today
     prefs.remindedServices = prefs.remindedServices.filter { id -> todays.any { it.id == id } }.toSet()
     val wm = WorkManager.getInstance(ctx)
     for (s in todays) {
@@ -201,7 +202,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         // (null from effectiveKolom means "all koloms", so no ?: fallback here)
         val chosen = Repository(applicationContext).cached().let { if (it == null) prefs.kolom else it.effectiveKolom(prefs.kolom) }
         val started = start > 0 && System.currentTimeMillis() >= start
-        if (!prefs.notifyServices || id in prefs.remindedServices || started || (chosen != null && chosen != kolom)) {
+        if (!prefs.notifyServices || id in prefs.remindedServices || started || (chosen != null && kolom != 0 && chosen != kolom)) {
             return Result.success()
         }
         Notifier.post(

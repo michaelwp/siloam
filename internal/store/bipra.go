@@ -12,8 +12,12 @@ import (
 	"siloam/internal/model"
 )
 
-// ErrBipraExists: another category already has this code (case ignored).
-var ErrBipraExists = errors.New("bipra category key already exists")
+var (
+	// ErrBipraExists: another category already has this code (case ignored).
+	ErrBipraExists = errors.New("bipra category key already exists")
+	// ErrBipraHasUsers: a "kelola data BIPRA" user is assigned to the category.
+	ErrBipraHasUsers = errors.New("bipra category has users assigned")
+)
 
 const bipraSeededMarker = "bipraSeeded"
 
@@ -118,7 +122,16 @@ func (s *Store) UpdateBipra(ctx context.Context, c model.BipraCategory) (model.B
 	return c, nil
 }
 
+// DeleteBipra removes a category no user is assigned to; jenis ibadah
+// linked to it lose the link.
 func (s *Store) DeleteBipra(ctx context.Context, id bson.ObjectID) error {
+	n, err := s.users.CountDocuments(ctx, bson.D{{Key: "role", Value: model.RoleBipra}, {Key: "bipraId", Value: id}})
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		return ErrBipraHasUsers
+	}
 	res, err := s.bipra().DeleteOne(ctx, bson.D{{Key: "_id", Value: id}})
 	if err != nil {
 		return err
@@ -126,7 +139,18 @@ func (s *Store) DeleteBipra(ctx context.Context, id bson.ObjectID) error {
 	if res.DeletedCount == 0 {
 		return ErrNotFound
 	}
-	return nil
+	_, err = s.worshipTypes.UpdateMany(ctx, bson.D{{Key: "bipraId", Value: id}}, bson.D{{Key: "$unset", Value: bson.D{{Key: "bipraId", Value: ""}}}})
+	return err
+}
+
+// BipraCategory returns one category by id.
+func (s *Store) BipraCategory(ctx context.Context, id bson.ObjectID) (model.BipraCategory, error) {
+	var c model.BipraCategory
+	err := s.bipra().FindOne(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&c)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return c, ErrNotFound
+	}
+	return c, err
 }
 
 // ReorderBipra sets the order to the position of each id in ids (which must

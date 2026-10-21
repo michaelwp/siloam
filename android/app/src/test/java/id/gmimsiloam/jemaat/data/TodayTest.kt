@@ -80,4 +80,13 @@ class TodayTest {
         // August 2026 starts on a Saturday and has 31 days: 6 weeks
         assertEquals(42, monthGrid(java.time.YearMonth.of(2026, 8)).size)
     }
+
+    @Test
+    fun congregationServicesShowInEveryKolom() {
+        val all = listOf(service("k11", "2026-10-22", kolom = 11), service("k3", "2026-10-22", kolom = 3), service("pemuda", "2026-10-24", kolom = 0))
+        assertEquals(listOf("k11", "pemuda"), all.forKolom(11).map { it.id })
+        assertEquals(3, all.forKolom(null).size)
+        assertEquals("Semua kolom", all[2].kolomText)
+        assertEquals("Kolom 11", all[0].kolomText)
+    }
 }

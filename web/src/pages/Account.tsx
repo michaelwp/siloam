@@ -4,15 +4,17 @@ import { passkeyError, passkeysSupported, registerPasskey, roleLabel, useAuth } 
 import { CredentialsForm } from '../components/CredentialsForm'
 import { ConfirmDelete, Field, FormShell, Modal, PageHeader } from '../components/ui'
 import { longDate } from '../format'
+import { useData } from '../data'
 import { KeyIcon } from './Login'
 
 export default function Account() {
   const { user } = useAuth()
+  const { categories } = useData()
   if (!user) return null
 
   return (
     <>
-      <PageHeader title="Akun Saya" subtitle={<>Masuk sebagai <b>{user.username}</b> ({roleLabel(user)})</>} />
+      <PageHeader title="Akun Saya" subtitle={<>Masuk sebagai <b>{user.username}</b> ({roleLabel(user, categories)})</>} />
       <section className="card panel">
         <header className="panel-head">
           <h2>Username & Password</h2>

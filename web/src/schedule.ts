@@ -3,8 +3,10 @@ import type { Service, WorshipType } from './api'
 import { MONTHS, parts } from './format'
 
 export type Schedule = {
-  /** services of the viewed kolom (all when no kolom is chosen) */
+  /** services of the viewed kolom, and those of the whole congregation (kolom 0); all when no kolom is chosen */
   services: Service[]
+  /** services for Beranda and the daily notice: for a "kelola data BIPRA" user only their category's */
+  homeServices: Service[]
   allServices: Service[]
   types: WorshipType[]
   loading: boolean
@@ -77,7 +79,7 @@ function gcalStamp(iso: string) {
 
 function details(s: Service) {
   return [
-    `Kolom ${s.kolom}`,
+    s.kolom ? `Kolom ${s.kolom}` : 'Semua kolom',
     s.leader && `Khadim: ${s.leader}`,
     s.mc && `Pembawa Acara: ${s.mc}`,
     s.note,

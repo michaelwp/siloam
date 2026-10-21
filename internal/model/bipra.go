@@ -147,3 +147,27 @@ func DefaultBipra() BipraRules {
 		{Key: LansiaKey, Name: "Lansia", Kind: KindFlag, Order: 6, Color: "#616161", MinAge: intp(60)},
 	}
 }
+
+// GuessBipra finds the category a jenis ibadah named name belongs to: the
+// name is the category's code ("Pemuda") or contains it in brackets
+// ("Pria Kaum Bapa (PKB)"), or a bracketed short form of the category's name
+// ("Anak Sekolah Minggu (ASM)" for "Anak (ASM)"). Flags (Lansia) never match.
+func GuessBipra(name string, rules BipraRules) *bson.ObjectID {
+	n := strings.ToLower(strings.TrimSpace(name))
+	for _, c := range rules {
+		if c.Kind != KindMain || c.ID.IsZero() {
+			continue
+		}
+		tokens := []string{strings.ToLower(c.Key)}
+		if i, j := strings.Index(c.Name, "("), strings.Index(c.Name, ")"); i >= 0 && j > i+1 {
+			tokens = append(tokens, strings.ToLower(c.Name[i+1:j]))
+		}
+		for _, t := range tokens {
+			if n == t || strings.Contains(n, "("+t+")") {
+				id := c.ID
+				return &id
+			}
+		}
+	}
+	return nil
+}
