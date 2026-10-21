@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@file:OptIn(ExperimentalLayoutApi::class)
 
 package id.gmimsiloam.jemaat.ui
 
@@ -17,21 +17,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,39 +48,19 @@ import id.gmimsiloam.jemaat.data.inKolom
 import id.gmimsiloam.jemaat.data.stats
 import java.time.LocalDate
 
-/** "Statistik" (totals, BIPRA counts, charts) and "BIPRA" (members per category). */
+/**
+ * The statistics shown on Beranda: totals, BIPRA counts (a tap opens that
+ * category on the BIPRA tab) and charts. Laid out in the caller's scrolling column.
+ */
 @Composable
-fun StatsScreen(data: Snapshot, kolom: Int?) {
-    var view by rememberSaveable { mutableStateOf(0) }
-    var category by rememberSaveable { mutableStateOf<String?>(null) }
-    Column(Modifier.fillMaxSize()) {
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-            listOf("Statistik", "Kategorial BIPRA").forEachIndexed { i, label ->
-                SegmentedButton(selected = view == i, onClick = { view = i }, shape = SegmentedButtonDefaults.itemShape(i, 2)) {
-                    Text(label)
-                }
-            }
-        }
-        if (view == 0) {
-            Overview(data, kolom, onCategory = { category = it; view = 1 })
-        } else {
-            Bipra(data, kolom, category, onCategory = { category = it })
-        }
-    }
-}
-
-@Composable
-private fun Overview(data: Snapshot, kolom: Int?, onCategory: (String) -> Unit) {
+fun StatsSection(data: Snapshot, kolom: Int?, onCategory: (String) -> Unit) {
     val members = data.members.inKolom(kolom) { it.kolom }
     val families = data.families.inKolom(kolom) { it.kolom }
     val s = stats(members, families)
     val month = remember { LocalDate.now().monthValue }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text(kolomLabel(kolom), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Statistik · ${kolomLabel(kolom)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         TileRow(listOf("Keluarga" to s.families, "Jiwa" to s.members))
         TileRow(listOf("Laki-laki" to s.male, "Perempuan" to s.female))
 
@@ -164,9 +138,9 @@ private fun ChartCard(title: String, subtitle: String, content: @Composable () -
     }
 }
 
-/** Members per BIPRA category (as the web's Kategorial BIPRA page), searchable. */
+/** The BIPRA tab: members per category (as the web's Kategorial BIPRA page), searchable. */
 @Composable
-private fun Bipra(data: Snapshot, kolom: Int?, category: String?, onCategory: (String?) -> Unit) {
+fun BipraScreen(data: Snapshot, kolom: Int?, category: String?, onCategory: (String?) -> Unit) {
     var q by rememberSaveable { mutableStateOf("") }
     val members = data.members.inKolom(kolom) { it.kolom }
     val query = q.trim().lowercase()
@@ -182,7 +156,7 @@ private fun Bipra(data: Snapshot, kolom: Int?, category: String?, onCategory: (S
         chips.animateScrollToItem(all.indexOfFirst { it?.key == category }.coerceAtLeast(0))
     }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().padding(top = 8.dp)) {
         LazyRow(state = chips, contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(all, key = { it?.key ?: "all" }) { c ->
                 val n = if (c == null) members.size else members.count { inCategory(it, c.key) }

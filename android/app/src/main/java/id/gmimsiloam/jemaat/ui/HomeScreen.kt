@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -39,7 +38,7 @@ import java.util.Date
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun HomeScreen(data: Snapshot, kolom: Int?, error: String?) {
+fun HomeScreen(data: Snapshot, kolom: Int?, error: String?, onCategory: (String) -> Unit) {
     val today = remember { LocalDate.now() }
     val services = data.services.inKolom(kolom) { it.kolom }
     val members = data.members.inKolom(kolom) { it.kolom }
@@ -109,22 +108,9 @@ fun HomeScreen(data: Snapshot, kolom: Int?, error: String?) {
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            Stat("Keluarga", families.size, Modifier.weight(1f))
-            Stat("Jiwa", members.size, Modifier.weight(1f))
-            Stat("Ibadah", services.size, Modifier.weight(1f))
-        }
+        StatsSection(data, kolom, onCategory)
     }
 
     selected?.let { ServiceSheet(it) { selected = null } }
 }
 
-@Composable
-private fun Stat(label: String, value: Int, modifier: Modifier) {
-    Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surface, tonalElevation = 1.dp, modifier = modifier) {
-        Column(Modifier.padding(14.dp)) {
-            Text("$value", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}

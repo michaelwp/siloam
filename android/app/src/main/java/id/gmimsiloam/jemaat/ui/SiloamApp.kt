@@ -54,7 +54,7 @@ enum class Tab(val key: String, val label: String, val icon: ImageVector) {
     Schedule("schedule", "Jadwal", Icons.Filled.DateRange),
     Birthdays("birthdays", "HUT", Icons.Filled.Star),
     Members("members", "Jemaat", Icons.Filled.Person),
-    Stats("stats", "Statistik", Icons.AutoMirrored.Filled.List),
+    Bipra("bipra", "BIPRA", Icons.AutoMirrored.Filled.List),
 }
 
 @Composable
@@ -62,6 +62,7 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
     val state by vm.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
     var settings by rememberSaveable { mutableStateOf(false) }
+    var category by rememberSaveable { mutableStateOf<String?>(null) } // BIPRA tab's filter
 
     // a tapped notification opens its tab
     LaunchedEffect(requestedTab) {
@@ -135,11 +136,11 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
                 )
                 else -> Box(Modifier.fillMaxSize()) {
                     when (tab) {
-                        Tab.Home -> HomeScreen(data, kolom, state.error)
+                        Tab.Home -> HomeScreen(data, kolom, state.error, onCategory = { category = it; tab = Tab.Bipra })
                         Tab.Schedule -> ScheduleScreen(data, kolom)
                         Tab.Birthdays -> BirthdaysScreen(data, kolom)
                         Tab.Members -> MembersScreen(data, kolom)
-                        Tab.Stats -> StatsScreen(data, kolom)
+                        Tab.Bipra -> BipraScreen(data, kolom, category, onCategory = { category = it })
                     }
                 }
             }
