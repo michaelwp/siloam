@@ -78,7 +78,8 @@ Needs JDK 17+ and the Android SDK (`android/local.properties` →
 make android-test      # unit tests (dates, birthdays, statistics, calendar grid, JSON parsing)
 make android-apk       # debug APK → android/app/build/outputs/apk/debug/app-debug.apk
 make android-install   # install it on a phone/emulator via adb
-make android-release   # release APK (unsigned: sign it with your key before publishing)
+make android-release   # release APK (signed when android/keystore.properties exists)
+make android-publish VERSION=1.0.1   # signed APK into downloads/android/ (see below)
 ```
 
 **New versions.** The app asks the server for the newest version
@@ -87,15 +88,18 @@ it is newer than the installed one, the app shows a notification (once per
 version) and a "Versi baru tersedia · Unduh" banner on Beranda and in
 Pengaturan; *Unduh* opens the download link. To publish a version:
 
-1. raise `versionCode` and `versionName` in `android/app/build.gradle.kts`;
-2. build and sign the release APK — always with **the same key** (Android
-   refuses an update signed with a different key);
-3. upload it to a GitHub release, under a fixed file name such as
-   `jemaat-siloam.apk`;
-4. an admin enters the version and the link on **Aplikasi Android** (web
-   sidebar), e.g. `1.0.1` and
-   `https://github.com/michaelwp/siloam/releases/latest/download/jemaat-siloam.apk`
-   (that link always points to the newest release's file).
+1. once: create the release key and `android/keystore.properties` as described
+   in `android/keystore.properties.example` (both are git-ignored — keep them
+   and their passwords safe and backed up: Android refuses an update signed
+   with a different key);
+2. raise `versionCode` and `versionName` in `android/app/build.gradle.kts`;
+3. `make android-publish VERSION=1.0.1` — builds and signs the release APK
+   and adds it as `downloads/android/jemaat-siloam-1.0.1.apk` (the only APKs
+   git does not ignore); commit and push it;
+4. an admin enters the version and the link it prints on **Aplikasi Android**
+   (web sidebar), e.g. `1.0.1` and
+   `https://raw.githubusercontent.com/michaelwp/siloam/main/downloads/android/jemaat-siloam-1.0.1.apk`
+   (public: the repository is).
 
 Until an admin saves a version there, the server's `ANDROID_LATEST_VERSION` /
 `ANDROID_DOWNLOAD_URL` settings apply (e.g. in `fly.toml` `[env]`); the page

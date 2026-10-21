@@ -368,9 +368,32 @@ android-apk: ## Build the debug APK (android/app/build/outputs/apk/debug/app-deb
 	@echo "→ android/app/build/outputs/apk/debug/app-debug.apk"
 
 .PHONY: android-release
-android-release: ## Build the release APK (unsigned; sign it before publishing)
+android-release: ## Build the release APK (signed when android/keystore.properties exists)
 	$(GRADLE) assembleRelease
-	@echo "→ android/app/build/outputs/apk/release/app-release-unsigned.apk"
+	@ls android/app/build/outputs/apk/release/*.apk | sed 's/^/→ /'
+
+# Published APKs live in the repository (public on GitHub); every other APK
+# stays git-ignored.
+APK_DIR  := downloads/android
+APK_REPO := $(shell git remote get-url origin 2>/dev/null | sed -E -e 's,git@github.com:,,' -e 's,https://github.com/,,' -e 's,\.git$$,,')
+
+.PHONY: android-publish
+android-publish: ## Build, sign and add the APK to downloads/android: make android-publish VERSION=1.0.1
+	@echo "$(VERSION)" | grep -qE '^[0-9]+(\.[0-9]+){1,3}$$' || (echo "usage: make android-publish VERSION=1.0.1" && exit 1)
+	@test -f android/keystore.properties || (echo "android/keystore.properties is missing: see android/keystore.properties.example" && exit 1)
+	@grep -q 'versionName = "$(VERSION)"' android/app/build.gradle.kts || \
+		(echo "versionName in android/app/build.gradle.kts is not $(VERSION): raise it (and versionCode) first" && exit 1)
+	@test ! -e $(APK_DIR)/jemaat-siloam-$(VERSION).apk || (echo "$(APK_DIR)/jemaat-siloam-$(VERSION).apk already exists" && exit 1)
+	$(GRADLE) assembleRelease
+	@test -f android/app/build/outputs/apk/release/app-release.apk || (echo "the release APK was not signed" && exit 1)
+	@mkdir -p $(APK_DIR)
+	cp android/app/build/outputs/apk/release/app-release.apk $(APK_DIR)/jemaat-siloam-$(VERSION).apk
+	@echo
+	@echo "Added $(APK_DIR)/jemaat-siloam-$(VERSION).apk. Next:"
+	@echo "  git add $(APK_DIR)/jemaat-siloam-$(VERSION).apk android/app/build.gradle.kts"
+	@echo "  git commit -m 'Android $(VERSION)' && git push"
+	@echo "Then, as admin, on Aplikasi Android: version $(VERSION) and link"
+	@echo "  https://raw.githubusercontent.com/$(APK_REPO)/main/$(APK_DIR)/jemaat-siloam-$(VERSION).apk"
 
 ANDROID_SDK ?= $(or $(ANDROID_HOME),$(HOME)/Library/Android/sdk)
 ADB = $(or $(shell command -v adb),$(ANDROID_SDK)/platform-tools/adb)

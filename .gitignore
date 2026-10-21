@@ -36,7 +36,9 @@ dump/
 *.pfx
 
 # Android: built apps and signing keys (the app's own rules are in android/.gitignore)
+# — except the published APKs (make android-publish), which are downloaded from GitHub
 *.apk
+!/downloads/android/*.apk
 *.aab
 *.idsig
 *.jks
