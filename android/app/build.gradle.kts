@@ -14,8 +14,12 @@ android {
         applicationId = "id.gmimsiloam.jemaat"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        // the one place for the version: `make android-publish VERSION=x.y.z`
+        // sets it; versionCode follows from it (1.2.3 → 10203), so it always
+        // grows with the version, as Android requires for updates
+        versionName = "1.1.0"
+        versionCode = versionName!!.split(".").map { it.toInt() }
+            .let { (major, minor, patch) -> major * 10_000 + minor * 100 + patch }
     }
 
     // The release key, from android/keystore.properties (never committed; see

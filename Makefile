@@ -378,12 +378,16 @@ APK_DIR  := downloads/android
 APK_REPO := $(shell git remote get-url origin 2>/dev/null | sed -E -e 's,git@github.com:,,' -e 's,https://github.com/,,' -e 's,\.git$$,,')
 
 .PHONY: android-publish
-android-publish: ## Build, sign and add the APK to downloads/android: make android-publish VERSION=1.0.1
-	@echo "$(VERSION)" | grep -qE '^[0-9]+(\.[0-9]+){1,3}$$' || (echo "usage: make android-publish VERSION=1.0.1" && exit 1)
+android-publish: ## Set the version, build, sign and add the APK to downloads/android: make android-publish VERSION=1.2.0
+	@echo "$(VERSION)" | grep -qE '^[0-9]+\.[0-9]{1,2}\.[0-9]{1,2}$$' || (echo "usage: make android-publish VERSION=1.2.0 (major.minor.patch; minor and patch up to 99)" && exit 1)
 	@test -f android/keystore.properties || (echo "android/keystore.properties is missing: see android/keystore.properties.example" && exit 1)
-	@grep -q 'versionName = "$(VERSION)"' android/app/build.gradle.kts || \
-		(echo "versionName in android/app/build.gradle.kts is not $(VERSION): raise it (and versionCode) first" && exit 1)
 	@test ! -e $(APK_DIR)/jemaat-siloam-$(VERSION).apk || (echo "$(APK_DIR)/jemaat-siloam-$(VERSION).apk already exists" && exit 1)
+	@cur=$$(sed -nE 's/^ *versionName = "([0-9.]+)".*/\1/p' android/app/build.gradle.kts); \
+	code() { echo "$$1" | awk -F. '{print $$1*10000 + $$2*100 + $$3}'; }; \
+	if [ "$$cur" != "$(VERSION)" ] && [ $$(code $(VERSION)) -le $$(code $$cur) ]; then \
+		echo "$(VERSION) is not higher than the current version $$cur"; exit 1; fi; \
+	sed -i.bak -E 's/^( *versionName = )"[0-9.]+"/\1"$(VERSION)"/' android/app/build.gradle.kts && rm -f android/app/build.gradle.kts.bak; \
+	echo "version: $$cur → $(VERSION) (versionCode $$(code $(VERSION)))"
 	$(GRADLE) assembleRelease
 	@test -f android/app/build/outputs/apk/release/app-release.apk || (echo "the release APK was not signed" && exit 1)
 	@mkdir -p $(APK_DIR)
