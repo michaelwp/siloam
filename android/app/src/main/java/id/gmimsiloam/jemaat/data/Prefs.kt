@@ -53,6 +53,11 @@ class Prefs(context: Context) {
         get() = p.getStringSet("reminded", emptySet()) ?: emptySet()
         set(v) = p.edit { putStringSet("reminded", v) }
 
+    /** Beranda's open accordion sections (both open at first). */
+    var openSections: Set<String>
+        get() = p.getStringSet("openSections", null) ?: setOf("notices", "stats")
+        set(v) = p.edit { putStringSet("openSections", v) }
+
     companion object {
         const val DEFAULT_SERVER = "https://siloam.fly.dev"
     }

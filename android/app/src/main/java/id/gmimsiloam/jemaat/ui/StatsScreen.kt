@@ -49,7 +49,7 @@ import id.gmimsiloam.jemaat.data.stats
 import java.time.LocalDate
 
 /**
- * The statistics shown on Beranda: totals, BIPRA counts (a tap opens that
+ * The statistics shown on Beranda (in its Statistik accordion): totals, BIPRA counts (a tap opens that
  * category on the BIPRA tab) and charts. Laid out in the caller's scrolling column.
  */
 @Composable
@@ -60,7 +60,6 @@ fun StatsSection(data: Snapshot, kolom: Int?, onCategory: (String) -> Unit) {
     val month = remember { LocalDate.now().monthValue }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Statistik · ${kolomLabel(kolom)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         TileRow(listOf("Keluarga" to s.families, "Jiwa" to s.members))
         TileRow(listOf("Laki-laki" to s.male, "Perempuan" to s.female))
 
