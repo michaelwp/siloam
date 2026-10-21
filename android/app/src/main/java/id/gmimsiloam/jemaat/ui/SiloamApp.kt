@@ -22,6 +22,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -40,13 +41,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import id.gmimsiloam.jemaat.AppViewModel
 import id.gmimsiloam.jemaat.data.Prefs
-import id.gmimsiloam.jemaat.data.effectiveKolom
+import id.gmimsiloam.jemaat.data.DataFilter
+import id.gmimsiloam.jemaat.data.Snapshot
 import id.gmimsiloam.jemaat.notify.DailyWorker
 import id.gmimsiloam.jemaat.notify.Notifier
 
@@ -87,9 +90,8 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
             askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
-    // a remembered kolom that no longer exists shows all koloms (as on the web)
-    // (null from effectiveKolom means "all koloms", so no ?: fallback here)
-    val kolom = state.data.let { if (it == null) state.kolom else it.effectiveKolom(state.kolom) }
+    // the "filter data bawaan" (a kolom or category that no longer exists: everything, see DataFilter)
+    val filter = state.filter
 
     // Back from another tab returns to Beranda before leaving the app
     BackHandler(enabled = !settings && tab != Tab.Home) { tab = Tab.Home }
@@ -111,7 +113,7 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
                     }
                 },
                 actions = {
-                    KolomMenu(kolom = kolom, koloms = state.data?.koloms?.map { it.number } ?: emptyList(), onPick = vm::setKolom)
+                    FilterMenu(filter, state.data, onPick = vm::setFilter)
                     IconButton(onClick = { settings = true }) { Icon(Icons.Filled.Settings, contentDescription = "Pengaturan") }
                 },
             )
@@ -143,11 +145,11 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
                 else -> Box(Modifier.fillMaxSize()) {
                     tabState.SaveableStateProvider(tab.key) {
                         when (tab) {
-                            Tab.Home -> HomeScreen(data, kolom, state.error, state.update, onCategory = { category = it; tab = Tab.Bipra })
-                            Tab.Schedule -> ScheduleScreen(data, kolom)
-                            Tab.Birthdays -> BirthdaysScreen(data, kolom)
-                            Tab.Members -> MembersScreen(data, kolom)
-                            Tab.Bipra -> BipraScreen(data, kolom, category, onCategory = { category = it })
+                            Tab.Home -> HomeScreen(data, filter, state.error, state.update, onCategory = { category = it; tab = Tab.Bipra })
+                            Tab.Schedule -> ScheduleScreen(data, filter)
+                            Tab.Birthdays -> BirthdaysScreen(data, filter)
+                            Tab.Members -> MembersScreen(data, filter)
+                            Tab.Bipra -> BipraScreen(data, filter, category, onCategory = { category = it })
                         }
                     }
                 }
@@ -156,22 +158,44 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
     }
 }
 
-/** "Semua Kolom" / "Kolom 11" picker; the choice is also used for notifications. */
+/**
+ * The "filter data bawaan": Semua Kolom, a BIPRA category, or a kolom. The
+ * screens and the notifications follow it; it is also in Pengaturan.
+ */
 @Composable
-private fun KolomMenu(kolom: Int?, koloms: List<Int>, onPick: (Int?) -> Unit) {
+private fun FilterMenu(filter: DataFilter, data: Snapshot?, onPick: (DataFilter) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         TextButton(onClick = { open = true }) {
-            Text(kolomLabel(kolom))
+            Text(filter.label(data))
             Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text(kolomLabel(null)) }, onClick = { onPick(null); open = false })
-            koloms.forEach { k ->
-                DropdownMenuItem(text = { Text(kolomLabel(k)) }, onClick = { onPick(k); open = false })
+            DropdownMenuItem(text = { Text("Semua Kolom") }, onClick = { onPick(DataFilter.all); open = false })
+            data?.categories?.takeIf { it.isNotEmpty() }?.let { categories ->
+                HorizontalDivider()
+                MenuHeading("Kategori BIPRA")
+                categories.forEach { c ->
+                    DropdownMenuItem(text = { Text(c.label) }, onClick = { onPick(DataFilter.bipra(c.key)); open = false })
+                }
+            }
+            HorizontalDivider()
+            MenuHeading("Kolom")
+            data?.koloms?.forEach { k ->
+                DropdownMenuItem(text = { Text(kolomLabel(k.number)) }, onClick = { onPick(DataFilter.kolom(k.number)); open = false })
             }
         }
     }
+}
+
+@Composable
+private fun MenuHeading(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+    )
 }
 
 fun kolomLabel(k: Int?) = if (k == null) "Semua Kolom" else "Kolom $k"

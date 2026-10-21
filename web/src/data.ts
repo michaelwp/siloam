@@ -5,9 +5,16 @@ export type Data = {
   koloms: Kolom[]
   /** Kategorial BIPRA categories, in order (main categories and flags) */
   categories: BipraCategory[]
-  /** the kolom being viewed; null = all koloms */
+  /** the kolom being viewed; null = all koloms (or a BIPRA category is viewed) */
   kolom: number | null
   setKolom: (k: number | null) => void
+  /** the filter: '' all, 'k:11' a kolom, 'b:<id>' a BIPRA category */
+  filter: string
+  setFilter: (v: string) => void
+  /** the BIPRA category being viewed (its members, their families and its services), or null */
+  bipraFilter: BipraCategory | null
+  /** "Semua Kolom", "Kolom 11" or the category's name */
+  filterLabel: string
   /** families and members of the viewed kolom (all when kolom is null) */
   families: Family[]
   members: Member[]

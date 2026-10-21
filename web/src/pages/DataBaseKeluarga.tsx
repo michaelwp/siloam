@@ -9,7 +9,7 @@ import { birthLine, dayMonth, longDate, matches, triState } from '../format'
 
 export default function DataBaseKeluarga() {
   const full = useFullView()
-  const { families, members, kolom, loading, error } = useData()
+  const { families, members, kolom, filterLabel, loading, error } = useData()
   const [q, setQ] = useState('')
   const [memberDialog, setMemberDialog] = useState<MemberDialog>(null)
   const [familyDialog, setFamilyDialog] = useState<FamilyDialog>(null)
@@ -32,7 +32,7 @@ export default function DataBaseKeluarga() {
 
   return (
     <>
-      <PageHeader title="Data Base Keluarga" subtitle={`${kolomLabel(kolom)} · data lengkap setiap keluarga dan anggotanya`}>
+      <PageHeader title="Data Base Keluarga" subtitle={`${filterLabel} · data lengkap setiap keluarga dan anggotanya`}>
         <Search value={q} onChange={setQ} placeholder="Cari keluarga / anggota…" />
         <EditOnly>
           <button className="btn primary" onClick={() => setFamilyDialog({ kind: 'add' })}>

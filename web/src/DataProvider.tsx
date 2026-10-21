@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api, type BipraCategory, type DataView, type Family, type Kolom, type Member } from './api'
 import { useAuth } from './auth'
-import { DataContext } from './data'
+import { DataContext, kolomLabel } from './data'
 import { inBipra } from './format'
 
 type State = {
@@ -14,22 +14,23 @@ type State = {
   error: string | null
 }
 
-// The viewed kolom is remembered per browser (a convenience; never required).
-const KOLOM_KEY = 'kolom-filter'
+// The viewed filter is remembered per browser (a convenience; never required):
+// '' all, 'k:11' a kolom, 'b:<category id>' a BIPRA category.
+const FILTER_KEY = 'kolom-filter'
 
-function savedKolom(): number | null {
+function savedFilter(): string {
   try {
-    const n = Number(localStorage.getItem(KOLOM_KEY))
-    return Number.isInteger(n) && n > 0 ? n : null
+    const v = localStorage.getItem(FILTER_KEY) ?? ''
+    return /^\d+$/.test(v) ? `k:${v}` : v // a kolom number, as saved before categories
   } catch {
-    return null
+    return ''
   }
 }
 
-function saveKolom(k: number | null) {
+function saveFilter(v: string) {
   try {
-    if (k === null) localStorage.removeItem(KOLOM_KEY)
-    else localStorage.setItem(KOLOM_KEY, String(k))
+    if (!v) localStorage.removeItem(FILTER_KEY)
+    else localStorage.setItem(FILTER_KEY, v)
   } catch {
     // storage blocked: the choice lasts until the page is reloaded
   }
@@ -54,7 +55,7 @@ function DataProvider({
   bipraId: string | null // a "kelola data BIPRA" user sees only this category's members
 }) {
   const [state, setState] = useState<State>({ koloms: [], categories: [], families: [], members: [], view: null, loading: true, error: null })
-  const [chosen, setChosen] = useState(savedKolom)
+  const [chosen, setChosen] = useState(savedFilter)
   const latest = useRef(0) // ignore responses of superseded loads
 
   const load = useCallback(() => {
@@ -76,22 +77,29 @@ function DataProvider({
     void load()
   }, [load])
 
-  const setKolom = useCallback(
-    (k: number | null) => {
+  const setFilter = useCallback(
+    (v: string) => {
       if (lockedKolom !== null) return // a kolom user cannot switch
-      saveKolom(k)
-      setChosen(k)
+      saveFilter(v)
+      setChosen(v)
     },
     [lockedKolom],
   )
+  const setKolom = useCallback((k: number | null) => setFilter(k === null ? '' : `k:${k}`), [setFilter])
 
-  // a remembered kolom that no longer exists falls back to all koloms
-  const kolom =
-    lockedKolom ?? (chosen !== null && state.koloms.some((k) => k.number === chosen) ? chosen : null)
-  // a "kelola data BIPRA" user: only their category's members, and the families they are in
-  const scope = state.categories.find((c) => c.id === bipraId)
+  // a remembered kolom or category that no longer exists falls back to all
+  const chosenKolom = chosen.startsWith('k:') ? Number(chosen.slice(2)) : null
+  const kolom = lockedKolom ?? (chosenKolom !== null && state.koloms.some((k) => k.number === chosenKolom) ? chosenKolom : null)
+  // a BIPRA category chosen in the filter (not for kolom users; a BIPRA user has their own)
+  const bipraFilter =
+    lockedKolom === null && !bipraId && chosen.startsWith('b:')
+      ? (state.categories.find((c) => c.id === chosen.slice(2)) ?? null)
+      : null
+  // only one category's members, and the families they are in: a "kelola data
+  // BIPRA" user's own, or the category chosen in the filter
+  const scope = state.categories.find((c) => c.id === bipraId) ?? bipraFilter ?? undefined
   const scoped = useMemo(() => {
-    if (!bipraId) return { families: state.families, members: state.members }
+    if (!bipraId && !scope) return { families: state.families, members: state.members }
     const members = scope ? state.members.filter((m) => inBipra(m, scope)) : []
     const ids = new Set(members.map((m) => m.familyId))
     return { families: state.families.filter((f) => ids.has(f.id)), members }
@@ -112,6 +120,10 @@ function DataProvider({
         categories: state.categories,
         kolom,
         setKolom,
+        filter: kolom !== null ? `k:${kolom}` : bipraFilter ? `b:${bipraFilter.id}` : '',
+        setFilter,
+        bipraFilter,
+        filterLabel: bipraFilter?.name ?? kolomLabel(kolom),
         families,
         members,
         allFamilies: state.families,

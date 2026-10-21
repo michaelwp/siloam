@@ -27,10 +27,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import id.gmimsiloam.jemaat.data.DataFilter
 import id.gmimsiloam.jemaat.data.MONTHS
 import id.gmimsiloam.jemaat.data.Member
 import id.gmimsiloam.jemaat.data.Snapshot
-import id.gmimsiloam.jemaat.data.inKolom
 
 private fun Boolean?.label(yes: String) = when (this) {
     true -> yes
@@ -41,11 +41,13 @@ private fun Boolean?.label(yes: String) = when (this) {
 /** Families and their members, searchable by family or member name. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun MembersScreen(data: Snapshot, kolom: Int?) {
+fun MembersScreen(data: Snapshot, filter: DataFilter) {
     var q by rememberSaveable { mutableStateOf("") }
     val query = q.trim().lowercase()
-    val byFamily = data.members.groupBy { it.familyId }
-    val families = data.families.inKolom(kolom) { it.kolom }
+    // a BIPRA filter: its members only, and the families they are in
+    val byFamily = filter.members(data).groupBy { it.familyId }
+    val kolom = filter.kolomOf(data)
+    val families = filter.families(data)
         .sortedWith(compareBy({ it.kolom }, { it.no }))
         .map { f -> f to (byFamily[f.id] ?: emptyList()) }
         .filter { (f, ms) -> query.isEmpty() || f.name.lowercase().contains(query) || ms.any { it.name.lowercase().contains(query) } }

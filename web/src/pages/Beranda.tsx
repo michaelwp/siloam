@@ -4,16 +4,18 @@ import { Link } from 'react-router-dom'
 import { ChartCard, ColumnChart, StackedBarChart } from '../components/charts'
 import { BirthdaysByKolom, ByKolom, PageHeader, Status } from '../components/ui'
 import { useBipraScope } from '../auth'
-import { kolomLabel, useData } from '../data'
+import { useData } from '../data'
 import { bipraRange, byText, dayMonth, daysUntil, inBipra, MONTHS, parts } from '../format'
 import { clock, serviceDayKey, serviceTitle, shortDay, upcomingServices, useSchedule, WEEK_AHEAD_DAYS } from '../schedule'
 
 /** Public homepage: totals plus this month's birthdays and wedding anniversaries. */
 export default function Beranda() {
-  const { families, members, categories: allCategories, kolom, loading, error } = useData()
-  // a "kelola data BIPRA" user: members, families and statistics of their category only
+  const { families, members, categories: allCategories, filterLabel, bipraFilter, loading, error } = useData()
+  // a "kelola data BIPRA" user (scope), or a category chosen in the filter:
+  // members, families and statistics of that category only
   const scope = useBipraScope()
-  const categories = scope ? [scope] : allCategories
+  const shown = scope ?? bipraFilter
+  const categories = shown ? [shown] : allCategories
   const [today] = useState(() => new Date())
   const month = today.getMonth()
   const day = today.getDate()
@@ -60,7 +62,7 @@ export default function Beranda() {
 
   return (
     <>
-      <PageHeader title="Beranda" subtitle={`GMIM Siloam · ${kolomLabel(kolom)}`} />
+      <PageHeader title="Beranda" subtitle={`GMIM Siloam · ${filterLabel}`} />
       <Status loading={loading} error={error} />
 
       {!loading && !error && (
@@ -320,14 +322,20 @@ function TodayBirthdays({ members, today }: { members: Member[]; today: Date }) 
           {upcoming.length > 0 && (
             <div className="next-birthdays">
               <span className="muted small">Berikutnya:</span>
-              <ul className="chips">
-                {upcoming.map(({ m, days }) => (
-                  <li key={m.id} className="chip">
-                    <strong>{m.name}</strong>
-                    <span className="chip-date">{days === 1 ? 'besok' : dayMonth(m.birthDay, m.birthMonth)}</span>
-                  </li>
-                ))}
-              </ul>
+              {/* per kolom, one line each: "Kolom 11: Budi Umboh (besok), Sari Kowaas (25 Oktober)" */}
+              <ByKolom items={upcoming} kolomOf={({ m }) => m.kolom}>
+                {(list) => (
+                  <p className="kolom-names">
+                    {list.map(({ m, days }, i) => (
+                      <span key={m.id}>
+                        {i > 0 && ', '}
+                        {m.name}{' '}
+                        <span className="muted small">({days === 1 ? 'besok' : dayMonth(m.birthDay, m.birthMonth)})</span>
+                      </span>
+                    ))}
+                  </p>
+                )}
+              </ByKolom>
             </div>
           )}
         </div>

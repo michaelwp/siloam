@@ -63,13 +63,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import id.gmimsiloam.jemaat.data.DataFilter
 import id.gmimsiloam.jemaat.data.MONTHS
 import id.gmimsiloam.jemaat.data.Prefs
 import id.gmimsiloam.jemaat.data.Service
 import id.gmimsiloam.jemaat.data.Snapshot
 import id.gmimsiloam.jemaat.data.WEEKDAYS
 import id.gmimsiloam.jemaat.data.clock
-import id.gmimsiloam.jemaat.data.forKolom
 import id.gmimsiloam.jemaat.data.kolomText
 import id.gmimsiloam.jemaat.data.longDate
 import id.gmimsiloam.jemaat.data.monthGrid
@@ -84,7 +84,7 @@ import java.time.YearMonth
  * view) or as a month calendar; the choice is remembered.
  */
 @Composable
-fun ScheduleScreen(data: Snapshot, kolom: Int?) {
+fun ScheduleScreen(data: Snapshot, filter: DataFilter) {
     val today = rememberToday()
     val context = LocalContext.current
     val prefs = remember { Prefs(context) }
@@ -94,7 +94,7 @@ fun ScheduleScreen(data: Snapshot, kolom: Int?) {
     var day by rememberSaveable { mutableStateOf(today) } // the calendar's chosen day
     var hidden by rememberSaveable { mutableStateOf(setOf<String>()) }
     var selected by remember { mutableStateOf<Service?>(null) }
-    val shown = data.services.forKolom(kolom)
+    val shown = filter.services(data)
         .filter { it.typeId !in hidden }
         .sortedWith(compareBy({ it.date }, { it.time }))
     fun goTo(m: YearMonth) {

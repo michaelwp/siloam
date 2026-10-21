@@ -11,7 +11,7 @@ class Prefs(context: Context) {
         get() = p.getString("serverUrl", DEFAULT_SERVER) ?: DEFAULT_SERVER
         set(v) = p.edit { putString("serverUrl", v.trim().trimEnd('/')) }
 
-    /** The kolom shown and notified about; null = all koloms. */
+    /** The kolom chosen before [filter] existed (its starting value); null = all koloms. */
     var kolom: Int?
         get() = p.getInt("kolom", 0).takeIf { it > 0 }
         set(v) = p.edit { putInt("kolom", v ?: 0) }
@@ -82,25 +82,21 @@ class Prefs(context: Context) {
         AppRelease(latestVersion, downloadUrl).takeIf { it.downloadUrl.isNotEmpty() && isNewer(it.latestVersion, currentVersion) }
 
     /**
-     * Which services and birthdays the notifications are about: [NotifyFilter.ALL],
-     * [NotifyFilter.BIPRA] ([notifyBipra]) or [NotifyFilter.KOLOM] ([notifyKolom]).
-     * Until chosen: the kolom shown in the app, if one is (as before the filter existed).
+     * The "filter data bawaan": what the app shows and notifies about (see
+     * [DataFilter]). Until one is chosen, the kolom chosen before the filter
+     * existed ([kolom]), else everything.
      */
-    var notifyMode: String
-        get() = p.getString("notifyMode", null) ?: if (kolom != null) NotifyFilter.KOLOM else NotifyFilter.ALL
-        set(v) = p.edit { putString("notifyMode", v) }
-
-    /** The category key for [NotifyFilter.BIPRA], e.g. "Pemuda". */
-    var notifyBipra: String
-        get() = p.getString("notifyBipra", "") ?: ""
-        set(v) = p.edit { putString("notifyBipra", v) }
-
-    /** The kolom for [NotifyFilter.KOLOM]; until chosen, the app's kolom. */
-    var notifyKolom: Int?
-        get() = p.getInt("notifyKolom", 0).takeIf { it > 0 } ?: kolom
-        set(v) = p.edit { putInt("notifyKolom", v ?: 0) }
-
-    val notifyFilter: NotifyFilter get() = NotifyFilter(notifyMode, notifyKolom, notifyBipra)
+    var filter: DataFilter
+        get() = DataFilter(
+            mode = p.getString("notifyMode", null) ?: if (kolom != null) DataFilter.KOLOM else DataFilter.ALL,
+            kolom = p.getInt("notifyKolom", 0).takeIf { it > 0 } ?: kolom,
+            bipra = p.getString("notifyBipra", "") ?: "",
+        )
+        set(f) = p.edit {
+            putString("notifyMode", f.mode)
+            putInt("notifyKolom", f.kolom ?: 0)
+            putString("notifyBipra", f.bipra)
+        }
 
     companion object {
         const val DEFAULT_SERVER = "https://siloam.fly.dev"

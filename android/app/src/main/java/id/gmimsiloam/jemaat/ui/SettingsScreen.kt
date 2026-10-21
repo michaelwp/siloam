@@ -48,7 +48,7 @@ import androidx.compose.ui.unit.dp
 import id.gmimsiloam.jemaat.AppViewModel
 import id.gmimsiloam.jemaat.BuildConfig
 import id.gmimsiloam.jemaat.UiState
-import id.gmimsiloam.jemaat.data.NotifyFilter
+import id.gmimsiloam.jemaat.data.DataFilter
 import id.gmimsiloam.jemaat.data.Prefs
 import id.gmimsiloam.jemaat.notify.DailyWorker
 import id.gmimsiloam.jemaat.notify.Notifier
@@ -85,6 +85,8 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            DataFilterFields(state, vm::setFilter)
+            HorizontalDivider()
             Text("Notifikasi", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             if (!allowed) {
                 Text(
@@ -135,7 +137,6 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
                     }, label = { Text(label) })
                 }
             }
-            NotifyFilterFields(state, prefs) { DailyWorker.rescheduleReminders(context) }
             Text(
                 "Aplikasi memeriksa jadwal di latar belakang sekitar setiap jam, juga setelah ponsel dinyalakan ulang.",
                 style = MaterialTheme.typography.bodySmall,
@@ -190,66 +191,55 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
 }
 
 /**
- * What the notifications are about: everything, one BIPRA category (its
- * services in every kolom and its members' birthdays), or one kolom.
+ * The "filter data bawaan" (the same choice as the top bar): everything, one
+ * BIPRA category, or one kolom. The screens and the notifications follow it.
  */
 @Composable
-private fun NotifyFilterFields(state: UiState, prefs: Prefs, onChange: () -> Unit) {
-    var mode by remember { mutableStateOf(prefs.notifyMode) }
-    var bipra by remember { mutableStateOf(prefs.notifyBipra) }
-    var kolom by remember { mutableStateOf(prefs.notifyKolom) }
+private fun DataFilterFields(state: UiState, onPick: (DataFilter) -> Unit) {
+    val f = state.filter
     val categories = state.data?.categories.orEmpty()
     val koloms = state.data?.koloms.orEmpty().map { it.number }
 
-    Text("Notifikasi untuk", style = MaterialTheme.typography.bodyLarge)
-    val modes = listOf(NotifyFilter.ALL to "Semua", NotifyFilter.BIPRA to "Per BIPRA", NotifyFilter.KOLOM to "Kolom")
+    Text("Filter data bawaan", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+    val modes = listOf(DataFilter.ALL to "Semua", DataFilter.BIPRA to "Per BIPRA", DataFilter.KOLOM to "Kolom")
     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
         modes.forEachIndexed { i, (key, label) ->
             SegmentedButton(
-                selected = mode == key,
+                selected = f.mode == key,
                 onClick = {
-                    mode = key
-                    prefs.notifyMode = key
-                    // a first choice: the first category / the app's kolom
-                    if (key == NotifyFilter.BIPRA && categories.none { it.key == bipra }) {
-                        categories.firstOrNull()?.let { bipra = it.key; prefs.notifyBipra = it.key }
-                    }
-                    if (key == NotifyFilter.KOLOM && kolom == null) {
-                        (state.kolom ?: koloms.firstOrNull())?.let { kolom = it; prefs.notifyKolom = it }
-                    }
-                    onChange()
+                    // a first choice: the category / kolom chosen before, else the first one
+                    onPick(
+                        when (key) {
+                            DataFilter.BIPRA -> DataFilter.bipra(f.bipra.takeIf { b -> categories.any { it.key == b } } ?: categories.firstOrNull()?.key ?: "")
+                            DataFilter.KOLOM -> (f.kolom ?: koloms.firstOrNull())?.let { DataFilter.kolom(it) } ?: DataFilter.all
+                            else -> DataFilter.all
+                        },
+                    )
                 },
                 shape = SegmentedButtonDefaults.itemShape(i, modes.size),
             ) { Text(label) }
         }
     }
-    when (mode) {
-        NotifyFilter.BIPRA -> {
+    when (f.mode) {
+        DataFilter.BIPRA -> {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 categories.forEach { c ->
-                    FilterChip(selected = bipra == c.key, onClick = {
-                        bipra = c.key
-                        prefs.notifyBipra = c.key
-                        onChange()
-                    }, label = { Text(c.label) })
+                    FilterChip(selected = f.bipra == c.key, onClick = { onPick(DataFilter.bipra(c.key)) }, label = { Text(c.label) })
                 }
             }
-            Hint("Ibadah jenis kategori ini (di semua kolom), dan ulang tahun anggotanya.")
+            Hint("Anggota kategori ini dan keluarganya, ibadah jenis kategori ini (di semua kolom), dan notifikasinya.")
         }
-        NotifyFilter.KOLOM -> {
+        DataFilter.KOLOM -> {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 koloms.forEach { k ->
-                    FilterChip(selected = kolom == k, onClick = {
-                        kolom = k
-                        prefs.notifyKolom = k
-                        onChange()
-                    }, label = { Text("Kolom $k") })
+                    FilterChip(selected = f.kolom == k, onClick = { onPick(DataFilter.kolom(k)) }, label = { Text("Kolom $k") })
                 }
             }
-            Hint("Ibadah kolom ini dan ibadah untuk seluruh jemaat, dan ulang tahun anggota kolom ini.")
+            Hint("Data kolom ini, ibadahnya dan ibadah untuk seluruh jemaat, dan notifikasinya.")
         }
-        else -> Hint("Semua ibadah dan ulang tahun, dikelompokkan per kolom.")
+        else -> Hint("Semua data jemaat, ibadah dan notifikasi (dikelompokkan per kolom).")
     }
+    Hint("Dipakai saat aplikasi dibuka dan untuk notifikasi; dapat juga diubah di bagian atas layar.")
 }
 
 @Composable

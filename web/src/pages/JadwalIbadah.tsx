@@ -3,7 +3,7 @@ import { scheduleApi, serviceToInput, type Member, type Service, type ServiceInp
 import { managesService, useAuth, useCanAddServices } from '../auth'
 import { KolomField } from '../components/forms'
 import { ConfirmDelete, Field, FormShell, Modal, Status } from '../components/ui'
-import { kolomLabel, useData } from '../data'
+import { useData } from '../data'
 import { byText, fromInputDate, MONTHS, toInputDate } from '../format'
 import {
   clock,
@@ -33,7 +33,7 @@ const narrow = () => typeof window !== 'undefined' && window.matchMedia('(max-wi
 
 /** Google-Calendar-like schedule: a month grid or a schedule list, per kolom. */
 export default function JadwalIbadah() {
-  const { kolom } = useData()
+  const { kolom, filterLabel, bipraFilter } = useData()
   const canEdit = useCanAddServices()
   const { user } = useAuth()
   const { services, types, loading, error, reload } = useSchedule()
@@ -124,7 +124,7 @@ export default function JadwalIbadah() {
           </div>
           <h1 className="cal-title">
             {MONTHS[cursor.m]} {cursor.y}
-            <small>Jadwal Ibadah · {kolomLabel(kolom)}</small>
+            <small>Jadwal Ibadah · {filterLabel}</small>
           </h1>
           <fieldset className="segmented">
             <legend className="sr-only">Tampilan</legend>
@@ -205,7 +205,15 @@ export default function JadwalIbadah() {
       {dialog?.kind === 'subscribe' && (
         <Subscribe
           kolom={kolom}
-          types={hidden.size ? types.filter((t) => !hidden.has(t.id)) : null}
+          label={filterLabel}
+          // a BIPRA category: the jenis linked to it; else the jenis left ticked
+          types={
+            bipraFilter
+              ? types.filter((t) => t.bipraId === bipraFilter.id && !hidden.has(t.id))
+              : hidden.size
+                ? types.filter((t) => !hidden.has(t.id))
+                : null
+          }
           onClose={() => setDialog(null)}
         />
       )}
@@ -615,7 +623,17 @@ function ServiceForm({
 }
 
 /** types: the jenis left ticked in the filter, or null when all are shown. */
-function Subscribe({ kolom, types, onClose }: { kolom: number | null; types: WorshipType[] | null; onClose: () => void }) {
+function Subscribe({
+  kolom,
+  label,
+  types,
+  onClose,
+}: {
+  kolom: number | null
+  label: string
+  types: WorshipType[] | null
+  onClose: () => void
+}) {
   const url = feedUrl(kolom, types?.map((t) => t.id))
   const webcal = url.replace(/^https?:/, 'webcal:')
   const [copy, setCopy] = useState<'idle' | 'done' | 'manual'>('idle')
@@ -624,7 +642,7 @@ function Subscribe({ kolom, types, onClose }: { kolom: number | null; types: Wor
     <Modal title="Tambahkan ke Kalender Saya" onClose={onClose}>
       <div className="subscribe">
         <p>
-          Berlangganan jadwal ibadah <b>{kolomLabel(kolom)}</b>
+          Berlangganan jadwal ibadah <b>{label}</b>
           {types && (
             <>
               {' '}

@@ -38,11 +38,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import id.gmimsiloam.jemaat.data.DataFilter
 import id.gmimsiloam.jemaat.data.Category
 import id.gmimsiloam.jemaat.data.MONTHS
 import id.gmimsiloam.jemaat.data.Snapshot
 import id.gmimsiloam.jemaat.data.inCategory
-import id.gmimsiloam.jemaat.data.inKolom
 import id.gmimsiloam.jemaat.data.stats
 import java.time.LocalDate
 
@@ -51,9 +51,9 @@ import java.time.LocalDate
  * category on the BIPRA tab) and charts. Laid out in the caller's scrolling column.
  */
 @Composable
-fun StatsSection(data: Snapshot, kolom: Int?, onCategory: (String) -> Unit) {
-    val members = data.members.inKolom(kolom) { it.kolom }
-    val families = data.families.inKolom(kolom) { it.kolom }
+fun StatsSection(data: Snapshot, filter: DataFilter, onCategory: (String) -> Unit) {
+    val members = filter.members(data)
+    val families = filter.families(data)
     val s = stats(members, families, data.categories)
     val month = remember { LocalDate.now().monthValue }
 
@@ -137,9 +137,10 @@ private fun ChartCard(title: String, subtitle: String, content: @Composable () -
 
 /** The BIPRA tab: members per category (as the web's Kategorial BIPRA page), searchable. */
 @Composable
-fun BipraScreen(data: Snapshot, kolom: Int?, category: String?, onCategory: (String?) -> Unit) {
+fun BipraScreen(data: Snapshot, filter: DataFilter, category: String?, onCategory: (String?) -> Unit) {
     var q by rememberSaveable { mutableStateOf("") }
-    val members = data.members.inKolom(kolom) { it.kolom }
+    val members = filter.members(data)
+    val kolom = filter.kolomOf(data)
     val query = q.trim().lowercase()
     val all: List<Category?> = listOf(null) + data.categories
     val chosen = data.categories.firstOrNull { it.key == category }

@@ -105,7 +105,7 @@ class DailyWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
 internal fun showDaily(ctx: Context, prefs: Prefs, data: Snapshot, today: LocalDate, force: Boolean) {
     if (!Notifier.canPost(ctx)) return
     val day = today.toString()
-    val filter = prefs.notifyFilter
+    val filter = prefs.filter
     if (prefs.notifyServices && (force || prefs.lastDailyServices != day)) {
         prefs.lastDailyServices = day
         val todays = upcomingServices(filter.services(data), today).today
@@ -180,7 +180,7 @@ private fun scheduleReminders(ctx: Context, prefs: Prefs, data: Snapshot, today:
     val before = prefs.remindBeforeMinutes
     if (!prefs.notifyServices || before <= 0) return
     // forget reminders of other days
-    val todays = upcomingServices(prefs.notifyFilter.services(data), today).today
+    val todays = upcomingServices(prefs.filter.services(data), today).today
     prefs.remindedServices = prefs.remindedServices.filter { id -> todays.any { it.id == id } }.toSet()
     val wm = WorkManager.getInstance(ctx)
     for (s in todays) {
@@ -222,7 +222,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         // service been removed; and Android may run it late (Doze): never
         // remind about a started service
         val cached = Repository(applicationContext).cached()
-        val wanted = cached == null || prefs.notifyFilter.services(cached).any { it.id == id }
+        val wanted = cached == null || prefs.filter.services(cached).any { it.id == id }
         val started = start > 0 && System.currentTimeMillis() >= start
         if (!prefs.notifyServices || id in prefs.remindedServices || started || !wanted) {
             return Result.success()

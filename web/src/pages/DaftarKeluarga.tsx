@@ -3,12 +3,12 @@ import { Link } from 'react-router-dom'
 import { FamilyDialogs, type FamilyDialog } from '../components/forms'
 import { ActionsHeader, Badge, EditOnly, PageHeader, RowActions, Search, Status } from '../components/ui'
 import { useFullView } from '../auth'
-import { kolomLabel, useData } from '../data'
+import { useData } from '../data'
 import { matches } from '../format'
 
 export default function DaftarKeluarga() {
   const full = useFullView()
-  const { families, members, kolom, loading, error } = useData()
+  const { families, members, kolom, filterLabel, loading, error } = useData()
   const [q, setQ] = useState('')
   const [dialog, setDialog] = useState<FamilyDialog>(null)
   const rows = families.filter((f) => matches(q, f.name, f.domicile, f.note))
@@ -17,7 +17,7 @@ export default function DaftarKeluarga() {
     <>
       <PageHeader
         title="Daftar Keluarga"
-        subtitle={`${kolomLabel(kolom)} · ${families.length} keluarga · ${members.length} jiwa`}
+        subtitle={`${filterLabel} · ${families.length} keluarga · ${members.length} jiwa`}
       >
         <Search value={q} onChange={setQ} placeholder="Cari keluarga / domisili…" />
         <EditOnly>

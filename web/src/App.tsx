@@ -238,7 +238,7 @@ function Shell() {
 
 /** Which kolom every page shows; "Semua Kolom" shows the whole congregation. */
 function KolomPicker() {
-  const { koloms, kolom, setKolom } = useData()
+  const { koloms, categories, filter, setFilter } = useData()
   const { user } = useAuth()
   // a "kelola data kolom" user sees only their kolom: no picker
   if (user?.role === 'kolom') {
@@ -251,14 +251,26 @@ function KolomPicker() {
   return (
     <>
       <label className="kolom-picker">
-        <span className="sr-only">Kolom yang ditampilkan</span>
-        <select value={kolom ?? ''} onChange={(e) => setKolom(e.target.value ? Number(e.target.value) : null)}>
+        <span className="sr-only">Data yang ditampilkan</span>
+        <select value={filter} onChange={(e) => setFilter(e.target.value)}>
           <option value="">{kolomLabel(null)}</option>
-          {koloms.map((k) => (
-            <option key={k.id} value={k.number}>
-              {kolomLabel(k.number)}
-            </option>
-          ))}
+          {/* a "kelola data BIPRA" user already sees only their category */}
+          {user?.role !== 'bipra' && categories.length > 0 && (
+            <optgroup label="Kategori BIPRA">
+              {categories.map((c) => (
+                <option key={c.id} value={`b:${c.id}`}>
+                  {c.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          <optgroup label="Kolom">
+            {koloms.map((k) => (
+              <option key={k.id} value={`k:${k.number}`}>
+                {kolomLabel(k.number)}
+              </option>
+            ))}
+          </optgroup>
         </select>
       </label>
     </>

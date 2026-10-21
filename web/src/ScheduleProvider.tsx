@@ -11,7 +11,7 @@ type State = { services: Service[]; types: WorshipType[]; loading: boolean; erro
  * and the daily notice read them from here, and a save reloads them for all.
  */
 export function ScheduleProvider({ children }: { children: ReactNode }) {
-  const { kolom } = useData()
+  const { kolom, bipraFilter } = useData()
   const { user } = useAuth()
   const [state, setState] = useState<State>({ services: [], types: [], loading: true, error: null })
   const latest = useRef(0) // ignore responses of superseded loads
@@ -32,10 +32,14 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
     void reload()
   }, [reload])
 
-  const services = useMemo(
-    () => (kolom === null ? state.services : state.services.filter((s) => s.kolom === kolom || s.kolom === 0)),
-    [state.services, kolom],
-  )
+  const services = useMemo(() => {
+    // a BIPRA category: the services of the jenis linked to it, in every kolom
+    if (bipraFilter) {
+      const linked = new Set(state.types.filter((t) => t.bipraId === bipraFilter.id).map((t) => t.id))
+      return state.services.filter((s) => linked.has(s.typeId))
+    }
+    return kolom === null ? state.services : state.services.filter((s) => s.kolom === kolom || s.kolom === 0)
+  }, [state.services, state.types, kolom, bipraFilter])
   // a "kelola data BIPRA" user's home page: their category's jenis only
   const bipraId = user?.role === 'bipra' ? user.bipraId : undefined
   const homeServices = useMemo(() => {

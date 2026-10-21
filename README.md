@@ -5,7 +5,9 @@ replacing the `Data Base Jemaat Kolom 9 2027 - 2031.xlsx` workbook.
 
 Families belong to a kolom (a new database starts with Kolom 1–12; signed-in
 users add or remove koloms on **Kelola Kolom**). The sidebar picker chooses
-which kolom every page shows, and new families and members must pick their
+what every page shows: all koloms, one kolom, or one BIPRA category (its
+members, the families they are in, and the services of the jenis linked to
+it), and new families and members must pick their
 kolom first. Data from before koloms existed is moved to Kolom 11 at startup,
 and `-import` loads the workbook into Kolom 11 unless you pass `-kolom N`.
 
@@ -54,11 +56,13 @@ It also sends **background notifications**:
   "Kolom 11: Budi Umboh, Erwin Umboh");
 - a reminder before each of today's services (default 1 hour before).
 
-Under **Pengaturan → Notifikasi untuk** the notifications are for *Semua*
-(everything), *Per BIPRA* (one category: services of the jenis linked to it,
-in every kolom, and its members' birthdays) or *Kolom* (one kolom: its
-services, the whole congregation's, and its birthdays). Until chosen, it is
-the kolom shown in the app. Beranda's Pemberitahuan lists the same per kolom.
+The **filter data bawaan** (the top bar's picker, also under Pengaturan) is
+*Semua Kolom*, a BIPRA category (its members, the families they are in, and
+the services of the jenis linked to it, in every kolom) or a kolom (its data,
+its services and the whole congregation's). Every screen and the
+notifications follow it, and the app opens on it; it starts as the kolom
+chosen before the filter existed. Beranda's Pemberitahuan lists the same per
+kolom, also the next birthdays ("Kolom 11: Budi Umboh (besok), …").
 
 A WorkManager job checks about every hour, also after a reboot, without the
 app being open. The times,

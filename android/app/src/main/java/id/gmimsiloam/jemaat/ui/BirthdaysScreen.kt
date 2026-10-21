@@ -29,18 +29,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import id.gmimsiloam.jemaat.data.DataFilter
 import id.gmimsiloam.jemaat.data.MONTHS
 import id.gmimsiloam.jemaat.data.Snapshot
 import id.gmimsiloam.jemaat.data.hasBirthday
-import id.gmimsiloam.jemaat.data.inKolom
 import java.time.LocalDate
 
 /** Birthdays month by month (day and month only: the public view has no birth year). */
 @Composable
-fun BirthdaysScreen(data: Snapshot, kolom: Int?) {
+fun BirthdaysScreen(data: Snapshot, filter: DataFilter) {
     val today = rememberToday()
     var month by rememberSaveable { mutableIntStateOf(today.monthValue) }
-    val list = data.members.inKolom(kolom) { it.kolom }
+    val list = filter.members(data)
         .filter { it.hasBirthday() && it.birthMonth == month }
         .sortedWith(compareBy({ it.birthDay }, { it.name.lowercase() }))
 

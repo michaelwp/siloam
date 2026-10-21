@@ -2,8 +2,6 @@ package id.gmimsiloam.jemaat.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -22,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import id.gmimsiloam.jemaat.data.DataFilter
 import id.gmimsiloam.jemaat.data.AppRelease
 import id.gmimsiloam.jemaat.data.MONTHS
 import id.gmimsiloam.jemaat.data.Prefs
@@ -31,8 +30,6 @@ import id.gmimsiloam.jemaat.data.anniversariesToday
 import id.gmimsiloam.jemaat.data.birthdaysToday
 import id.gmimsiloam.jemaat.data.byKolom
 import id.gmimsiloam.jemaat.data.clock
-import id.gmimsiloam.jemaat.data.forKolom
-import id.gmimsiloam.jemaat.data.inKolom
 import id.gmimsiloam.jemaat.data.kolomHeading
 import id.gmimsiloam.jemaat.data.longDate
 import id.gmimsiloam.jemaat.data.shortDate
@@ -42,13 +39,12 @@ import java.text.DateFormat
 import java.time.LocalDate
 import java.util.Date
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun HomeScreen(data: Snapshot, kolom: Int?, error: String?, update: AppRelease?, onCategory: (String) -> Unit) {
+fun HomeScreen(data: Snapshot, filter: DataFilter, error: String?, update: AppRelease?, onCategory: (String) -> Unit) {
     val today = rememberToday()
-    val services = data.services.forKolom(kolom)
-    val members = data.members.inKolom(kolom) { it.kolom }
-    val families = data.families.inKolom(kolom) { it.kolom }
+    val services = filter.services(data)
+    val members = filter.members(data)
+    val families = filter.families(data)
     val up = upcomingServices(services, today)
     val birthdays = birthdaysToday(members, today)
     val nextBirthdays = upcomingBirthdays(members, today)
@@ -120,13 +116,20 @@ fun HomeScreen(data: Snapshot, kolom: Int?, error: String?, update: AppRelease?,
                     }
                     if (nextBirthdays.isNotEmpty()) {
                         Text("Berikutnya:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            nextBirthdays.forEach { (m, days) ->
-                                Pill(
-                                    "${m.name} · " + if (days == 1L) "besok" else "${m.birthDay} ${MONTHS[m.birthMonth!! - 1].take(3)}",
-                                    MaterialTheme.colorScheme.primaryContainer,
-                                )
-                            }
+                        // per kolom, one line each: "Budi Umboh (besok), Sari Kowaas (25 Okt)"
+                        nextBirthdays.byKolom { it.first.kolom }.forEach { (k, list) ->
+                            Text(
+                                "${kolomHeading(k)}:".uppercase(),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                list.joinToString(", ") { (m, days) ->
+                                    "${m.name} (" + (if (days == 1L) "besok" else "${m.birthDay} ${MONTHS[m.birthMonth!! - 1].take(3)}") + ")"
+                                },
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
                         }
                     }
                 }
@@ -141,11 +144,11 @@ fun HomeScreen(data: Snapshot, kolom: Int?, error: String?, update: AppRelease?,
 
         Accordion(
             "📊 Statistik",
-            "${kolomLabel(kolom)} · ${families.size} keluarga · ${members.size} jiwa",
+            "${filter.label(data)} · ${families.size} keluarga · ${members.size} jiwa",
             open = "stats" in open,
             onToggle = { toggle("stats") },
         ) {
-            StatsSection(data, kolom, onCategory)
+            StatsSection(data, filter, onCategory)
         }
     }
 

@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import id.gmimsiloam.jemaat.data.AppRelease
+import id.gmimsiloam.jemaat.data.DataFilter
 import id.gmimsiloam.jemaat.data.Prefs
 import id.gmimsiloam.jemaat.data.Repository
 import id.gmimsiloam.jemaat.data.Snapshot
@@ -21,8 +22,8 @@ data class UiState(
     val refreshing: Boolean = false,
     /** the last refresh failed (the cached data, if any, is still shown) */
     val error: String? = null,
-    /** viewed kolom; null = all */
-    val kolom: Int? = null,
+    /** what the app shows and notifies about */
+    val filter: DataFilter = DataFilter.all,
     /** a newer app version to offer, if the last check found one */
     val update: AppRelease? = null,
 )
@@ -30,7 +31,7 @@ data class UiState(
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = Prefs(app)
     private val repo = Repository(app)
-    private val _state = MutableStateFlow(UiState(kolom = prefs.kolom, update = prefs.availableUpdate(BuildConfig.VERSION_NAME)))
+    private val _state = MutableStateFlow(UiState(filter = prefs.filter, update = prefs.availableUpdate(BuildConfig.VERSION_NAME)))
     val state: StateFlow<UiState> = _state.asStateFlow()
 
     init {
@@ -68,13 +69,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** The kolom the screens show (notifications have their own filter, in Pengaturan). */
-    fun setKolom(k: Int?) {
-        val before = prefs.notifyFilter
-        prefs.kolom = k
-        _state.update { it.copy(kolom = k) }
-        // until a filter is chosen it follows this kolom: requeue today's reminders
-        if (prefs.notifyFilter != before) DailyWorker.rescheduleReminders(getApplication())
+    /** The "filter data bawaan": the screens and the notifications follow it. */
+    fun setFilter(f: DataFilter) {
+        prefs.filter = f
+        _state.update { it.copy(filter = f) }
+        // today's reminders were queued for the old filter's services
+        DailyWorker.rescheduleReminders(getApplication())
     }
 
     fun setServerUrl(url: String) {
