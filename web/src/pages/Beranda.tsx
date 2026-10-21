@@ -4,12 +4,12 @@ import { Link } from 'react-router-dom'
 import { ChartCard, ColumnChart, StackedBarChart } from '../components/charts'
 import { PageHeader, Status } from '../components/ui'
 import { kolomLabel, useData } from '../data'
-import { byText, CATEGORIES, dayMonth, daysUntil, MONTHS, parts } from '../format'
+import { bipraRange, byText, dayMonth, daysUntil, inBipra, MONTHS, parts } from '../format'
 import { clock, serviceDayKey, serviceTitle, shortDay, upcomingServices, useSchedule, WEEK_AHEAD_DAYS } from '../schedule'
 
 /** Public homepage: totals plus this month's birthdays and wedding anniversaries. */
 export default function Beranda() {
-  const { families, members, kolom, loading, error } = useData()
+  const { families, members, categories, kolom, loading, error } = useData()
   const [today] = useState(() => new Date())
   const month = today.getMonth()
   const day = today.getDate()
@@ -29,14 +29,11 @@ export default function Beranda() {
       to: '/anggota',
     },
   ]
-  const bipra = [
-    ...CATEGORIES.map((c) => ({
-      label: c.label,
-      range: c.range,
-      value: count((m) => m.category === c.key),
-    })),
-    { label: 'Lansia', range: '60+', value: count((m) => m.elderly) },
-  ]
+  const bipra = categories.map((c) => ({
+    label: c.name,
+    range: bipraRange(c),
+    value: count((m) => inBipra(m, c)),
+  }))
 
   // month/day are available to visitors; the year (age, years married) only when signed in
   const year = today.getFullYear()
@@ -114,16 +111,18 @@ export default function Beranda() {
                   { name: 'Laki-laki', cls: 'viz-s1' },
                   { name: 'Perempuan', cls: 'viz-s2' },
                 ]}
-                rows={CATEGORIES.map((c) => {
-                  const inCat = members.filter((m) => m.category === c.key)
-                  return {
-                    label: c.label,
-                    values: [
-                      inCat.filter((m) => m.gender === 'Laki Laki').length,
-                      inCat.filter((m) => m.gender === 'Perempuan').length,
-                    ],
-                  }
-                })}
+                rows={categories
+                  .filter((c) => c.kind === 'main')
+                  .map((c) => {
+                    const inCat = members.filter((m) => m.category === c.key)
+                    return {
+                      label: c.name,
+                      values: [
+                        inCat.filter((m) => m.gender === 'Laki Laki').length,
+                        inCat.filter((m) => m.gender === 'Perempuan').length,
+                      ],
+                    }
+                  })}
               />
             </ChartCard>
             <ChartCard title="Ukuran keluarga" subtitle="Jumlah keluarga menurut banyaknya anggota">

@@ -36,6 +36,11 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/admin/android", a.clearAndroid)
 	mux.HandleFunc("GET /api/admin/audit", a.listAudit)
 	mux.HandleFunc("GET /api/admin/audit/meta", a.auditMeta)
+	mux.HandleFunc("POST /api/admin/bipra", a.createBipra)
+	mux.HandleFunc("PUT /api/admin/bipra/order", a.reorderBipra)
+	mux.HandleFunc("PUT /api/admin/bipra/{id}", a.updateBipra)
+	mux.HandleFunc("DELETE /api/admin/bipra/{id}", a.deleteBipra)
+	mux.HandleFunc("GET /api/bipra-categories", a.listBipra)
 
 	mux.HandleFunc("GET /api/koloms", a.listKoloms)
 	mux.HandleFunc("POST /api/koloms", a.createKolom)
@@ -194,10 +199,15 @@ func (a *API) getFamily(w http.ResponseWriter, r *http.Request) {
 		serverError(w, err)
 		return
 	}
+	rules, err := a.store.BipraRules(r.Context())
+	if err != nil {
+		serverError(w, err)
+		return
+	}
 	now := time.Now()
 	v := model.NewFamilyView(f, len(members), now)
 	for _, m := range members {
-		v.Members = append(v.Members, model.NewMemberView(m, f, now))
+		v.Members = append(v.Members, model.NewMemberView(m, f, now, rules))
 	}
 	if !seesPrivate(r, dataView(w, r), f.Kolom) {
 		v = v.Public()
@@ -333,12 +343,16 @@ func (a *API) memberViews(r *http.Request, members []model.Member) ([]model.Memb
 	for _, f := range fams {
 		byID[f.ID] = f
 	}
+	rules, err := a.store.BipraRules(r.Context())
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	full := auth.SignedIn(r)
 	out := make([]model.MemberView, 0, len(members))
 	for _, m := range members {
 		f := byID[m.FamilyID]
-		v := model.NewMemberView(m, f, now)
+		v := model.NewMemberView(m, f, now, rules)
 		if !seesPrivate(r, full, f.Kolom) {
 			v = v.Public()
 		}
@@ -463,7 +477,12 @@ func (a *API) writeMember(w http.ResponseWriter, r *http.Request, status int, m 
 		storeError(w, err)
 		return
 	}
-	v := model.NewMemberView(m, f, time.Now())
+	rules, err := a.store.BipraRules(r.Context())
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	v := model.NewMemberView(m, f, time.Now(), rules)
 	if !seesPrivate(r, dataView(w, r), f.Kolom) {
 		v = v.Public()
 	}

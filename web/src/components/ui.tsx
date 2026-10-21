@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useCanEdit } from '../auth'
+import { useData } from '../data'
 
 export function Modal({
   title,
@@ -197,4 +198,20 @@ export function Status({ loading, error, empty }: { loading: boolean; error: str
 
 export function Badge({ children, tone }: { children: ReactNode; tone?: string }) {
   return <span className={`badge ${tone ?? ''}`}>{children}</span>
+}
+
+// the default categories keep their hand-tuned light/dark badge colors
+const BIPRA_TONES = new Set(['anak', 'remaja', 'pemuda', 'pkb', 'wki', 'lansia'])
+
+/** A member's BIPRA category or flag; others than the defaults show their color as a dot. */
+export function BipraBadge({ code }: { code: string }) {
+  const c = useData().categories.find((x) => x.key === code)
+  const tone = code.toLowerCase()
+  if (BIPRA_TONES.has(tone)) return <Badge tone={tone}>{code}</Badge>
+  return (
+    <Badge>
+      {c && <span className="badge-dot" style={{ '--dot': c.color } as CSSProperties} aria-hidden="true" />}
+      {code}
+    </Badge>
+  )
 }

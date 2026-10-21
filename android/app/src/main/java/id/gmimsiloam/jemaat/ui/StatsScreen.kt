@@ -38,9 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import id.gmimsiloam.jemaat.data.CATEGORIES
 import id.gmimsiloam.jemaat.data.Category
-import id.gmimsiloam.jemaat.data.LANSIA_CATEGORY
 import id.gmimsiloam.jemaat.data.MONTHS
 import id.gmimsiloam.jemaat.data.Snapshot
 import id.gmimsiloam.jemaat.data.inCategory
@@ -56,7 +54,7 @@ import java.time.LocalDate
 fun StatsSection(data: Snapshot, kolom: Int?, onCategory: (String) -> Unit) {
     val members = data.members.inKolom(kolom) { it.kolom }
     val families = data.families.inKolom(kolom) { it.kolom }
-    val s = stats(members, families)
+    val s = stats(members, families, data.categories)
     val month = remember { LocalDate.now().monthValue }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -65,7 +63,7 @@ fun StatsSection(data: Snapshot, kolom: Int?, onCategory: (String) -> Unit) {
 
         Text("Kategorial BIPRA", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), maxItemsInEachRow = 3) {
-            (CATEGORIES + LANSIA_CATEGORY).forEach { c ->
+            data.categories.forEach { c ->
                 Tile(c.label, s.bipra[c.key] ?: 0, c.range, Modifier.weight(1f).clickable { onCategory(c.key) })
             }
         }
@@ -143,9 +141,10 @@ fun BipraScreen(data: Snapshot, kolom: Int?, category: String?, onCategory: (Str
     var q by rememberSaveable { mutableStateOf("") }
     val members = data.members.inKolom(kolom) { it.kolom }
     val query = q.trim().lowercase()
-    val all: List<Category?> = listOf(null) + CATEGORIES + LANSIA_CATEGORY
+    val all: List<Category?> = listOf(null) + data.categories
+    val chosen = data.categories.firstOrNull { it.key == category }
     val rows = members
-        .filter { category == null || inCategory(it, category) }
+        .filter { chosen == null || inCategory(it, chosen) }
         .filter { query.isEmpty() || it.name.lowercase().contains(query) || it.familyName.lowercase().contains(query) }
         .sortedBy { it.name.lowercase() }
 
@@ -158,7 +157,7 @@ fun BipraScreen(data: Snapshot, kolom: Int?, category: String?, onCategory: (Str
     Column(Modifier.fillMaxSize().padding(top = 8.dp)) {
         LazyRow(state = chips, contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(all, key = { it?.key ?: "all" }) { c ->
-                val n = if (c == null) members.size else members.count { inCategory(it, c.key) }
+                val n = if (c == null) members.size else members.count { inCategory(it, c) }
                 FilterChip(
                     selected = category == c?.key,
                     onClick = { onCategory(if (category == c?.key) null else c?.key) },
@@ -174,7 +173,6 @@ fun BipraScreen(data: Snapshot, kolom: Int?, category: String?, onCategory: (Str
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         )
-        val chosen = all.firstOrNull { it?.key == category }
         Text(
             "${rows.size} jiwa" + (chosen?.let { " · ${it.label} (${it.range})" } ?: ""),
             style = MaterialTheme.typography.bodyMedium,
@@ -202,8 +200,10 @@ fun BipraScreen(data: Snapshot, kolom: Int?, category: String?, onCategory: (Str
                             )
                         }
                         Column(Modifier.width(96.dp), horizontalAlignment = androidx.compose.ui.Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Pill(CATEGORIES.firstOrNull { it.key == m.category }?.label ?: "Tanpa kategori")
-                            if (m.elderly) Pill("Lansia", MaterialTheme.colorScheme.primaryContainer)
+                            Pill(data.categories.firstOrNull { it.key == m.category }?.label ?: m.category.ifEmpty { "Tanpa kategori" })
+                            m.flags.forEach { f ->
+                                Pill(data.categories.firstOrNull { it.key == f }?.label ?: f, MaterialTheme.colorScheme.primaryContainer)
+                            }
                         }
                     }
                 }

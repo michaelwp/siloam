@@ -127,6 +127,8 @@ func (s *Store) AuditLabel(ctx context.Context, kind string, id bson.ObjectID) s
 		coll = s.services
 	case "users":
 		coll = s.users
+	case "bipra":
+		coll = s.bipra()
 	default:
 		return ""
 	}

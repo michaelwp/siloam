@@ -4,6 +4,7 @@ package model
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -68,14 +69,15 @@ type FamilyView struct {
 // MemberView is a Member enriched for API responses.
 type MemberView struct {
 	Member
-	FamilyName string `json:"familyName"`
-	Kolom      int    `json:"kolom"` // the family's kolom
-	Age        *int   `json:"age"`
-	AgeText    string `json:"ageText"`
-	Category   string `json:"category"`
-	Elderly    bool   `json:"elderly"`    // lansia, 60+
-	BirthMonth *int   `json:"birthMonth"` // 1–12; also in the public view (birthday lists)
-	BirthDay   *int   `json:"birthDay"`
+	FamilyName string   `json:"familyName"`
+	Kolom      int      `json:"kolom"` // the family's kolom
+	Age        *int     `json:"age"`
+	AgeText    string   `json:"ageText"`
+	Category   string   `json:"category"`   // the main BIPRA category's key ("" = none)
+	Flags      []string `json:"flags"`      // keys of the matching BIPRA flags, e.g. ["Lansia"]
+	Elderly    bool     `json:"elderly"`    // the Lansia flag (for the Android app 1.0.0)
+	BirthMonth *int     `json:"birthMonth"` // 1–12; also in the public view (birthday lists)
+	BirthDay   *int     `json:"birthDay"`
 }
 
 // Diff returns the whole years, months and days between from and to,
@@ -105,35 +107,15 @@ func dateOnly(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
-// Category applies the BIPRA rules from the "Kategorial BIPRA" sheet:
-// Anak (ASM) 0–11, Remaja 12–16, Pemuda 17–30, PKB/WKI 31+ (or married),
-// and Lansia 60+ as an additional flag.
-func Category(age int, gender, maritalStatus string) (category string, elderly bool) {
-	married := maritalStatus != "" && maritalStatus != StatusSingle
-	switch {
-	case married || age >= 31:
-		if gender == GenderFemale {
-			category = "WKI"
-		} else {
-			category = "PKB"
-		}
-	case age <= 11:
-		category = "Anak"
-	case age <= 16:
-		category = "Remaja"
-	default:
-		category = "Pemuda"
-	}
-	return category, age >= 60
-}
-
-func NewMemberView(m Member, f Family, now time.Time) MemberView {
+// NewMemberView computes a member's age and BIPRA category (by rules) as of now.
+func NewMemberView(m Member, f Family, now time.Time, rules BipraRules) MemberView {
 	v := MemberView{Member: m, FamilyName: f.Name, Kolom: f.Kolom}
 	if m.BirthDate != nil {
 		y, mo, d := Diff(*m.BirthDate, now)
 		v.Age = &y
 		v.AgeText = fmt.Sprintf("%d Tahun %d Bulan %d Hari", y, mo, d)
-		v.Category, v.Elderly = Category(y, m.Gender, m.MaritalStatus)
+		v.Category, v.Flags = rules.Apply(y, m.Gender, m.MaritalStatus)
+		v.Elderly = slices.Contains(v.Flags, LansiaKey)
 		v.BirthMonth, v.BirthDay = monthDay(*m.BirthDate)
 	}
 	return v
@@ -162,6 +144,7 @@ func (v MemberView) Public() MemberView {
 		FamilyName: v.FamilyName,
 		Kolom:      v.Kolom,
 		Category:   v.Category,
+		Flags:      v.Flags,
 		Elderly:    v.Elderly,
 		BirthMonth: v.BirthMonth,
 		BirthDay:   v.BirthDay,

@@ -1,8 +1,10 @@
 import { createContext, useContext } from 'react'
-import type { DataView, Family, Kolom, Member } from './api'
+import type { BipraCategory, DataView, Family, Kolom, Member } from './api'
 
 export type Data = {
   koloms: Kolom[]
+  /** Kategorial BIPRA categories, in order (main categories and flags) */
+  categories: BipraCategory[]
   /** the kolom being viewed; null = all koloms */
   kolom: number | null
   setKolom: (k: number | null) => void

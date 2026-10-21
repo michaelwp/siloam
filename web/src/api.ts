@@ -41,7 +41,8 @@ export type Member = {
   kolom: number // the family's kolom
   age: number | null
   ageText: string
-  category: string
+  category: string // the main BIPRA category's key ('' = none)
+  flags: string[] | null // keys of the BIPRA flags, e.g. ['Lansia']
   elderly: boolean
   birthMonth: number | null // 1–12, also for visitors
   birthDay: number | null
@@ -100,6 +101,23 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   return res.status === 204 ? (undefined as T) : res.json()
 }
 
+/** A Kategorial BIPRA category and its rule (admins manage them). */
+export type BipraCategory = {
+  id: string
+  key: string // what members carry, e.g. 'PKB'
+  name: string
+  kind: 'main' | 'flag' // main: the first matching one; flag: an extra mark (e.g. Lansia)
+  order: number
+  color: string
+  minAge: number | null
+  maxAge: number | null
+  gender: '' | 'Laki Laki' | 'Perempuan'
+  marital: '' | 'married' | 'unmarried'
+  orMarried: boolean // married members pass the age condition whatever their age
+}
+
+export type BipraInput = Omit<BipraCategory, 'id' | 'order'>
+
 /** Which data the server sent: everything (signed in) or the redacted public view. */
 export type DataView = 'full' | 'public'
 
@@ -111,12 +129,19 @@ async function getWithView<T>(url: string): Promise<[T, DataView]> {
 export const api = {
   /** Families and members, plus which view the server actually returned. */
   load: async () => {
-    const [koloms, [families, fv], [members, mv]] = await Promise.all([
+    const [koloms, categories, [families, fv], [members, mv]] = await Promise.all([
       request<Kolom[]>('GET', '/api/koloms'),
+      request<BipraCategory[]>('GET', '/api/bipra-categories'),
       getWithView<Family[]>('/api/families'),
       getWithView<Member[]>('/api/members'),
     ])
-    return { koloms, families, members, view: (fv === 'full' && mv === 'full' ? 'full' : 'public') as DataView }
+    return {
+      koloms,
+      categories,
+      families,
+      members,
+      view: (fv === 'full' && mv === 'full' ? 'full' : 'public') as DataView,
+    }
   },
   createKolom: (number: number) => request<Kolom>('POST', '/api/koloms', { number }),
   deleteKolom: (id: string) => request<void>('DELETE', `/api/koloms/${id}`),
@@ -242,6 +267,10 @@ export const adminApi = {
     const q = new URLSearchParams(Object.entries(f).filter((e): e is [string, string] => !!e[1]))
     return request<AuditEntry[]>('GET', `/api/admin/audit?${q}`)
   },
+  createBipra: (body: BipraInput) => request<BipraCategory>('POST', '/api/admin/bipra', body),
+  updateBipra: (id: string, body: BipraInput) => request<BipraCategory>('PUT', `/api/admin/bipra/${id}`, body),
+  deleteBipra: (id: string) => request<void>('DELETE', `/api/admin/bipra/${id}`),
+  reorderBipra: (ids: string[]) => request<BipraCategory[]>('PUT', '/api/admin/bipra/order', { ids }),
   auditMeta: () =>
     request<{ categories: { key: string; label: string }[]; usernames: string[] }>('GET', '/api/admin/audit/meta'),
 }

@@ -109,8 +109,16 @@ are computed by the server:
 
 - **Umur** – years/months/days since birth (same as Excel `DATEDIF`)
 - **Umur Pernikahan** – full years since the wedding date
-- **Kategori BIPRA** – Anak (ASM) 0–11 · Remaja 12–16 · Pemuda 17–30 ·
-  PKB (male) / WKI (female) 31+ or married · Lansia 60+ as an extra flag
+- **Kategori BIPRA** – by default Anak (ASM) 0–11 · Remaja 12–16 · Pemuda
+  17–30 (unmarried) · PKB (male) / WKI (female) 31+ or married · Lansia 60+ as
+  an extra flag. Admins change these on **Kategori BIPRA**: each category has a
+  code, a name, a colour and a rule (age from–to, gender, marital status, and
+  "also everyone married, whatever their age"). A *kategori utama* is given to
+  each member by the first matching rule in the list's order; a *tanda
+  tambahan* (like Lansia) is added to everyone it matches. Members without a
+  birth date have no category. Categories are computed on every request, so a
+  change applies at once on the web and in the Android app (which reads
+  `/api/bipra-categories`; older servers without it keep the defaults).
 
 ## Public view
 
@@ -142,9 +150,10 @@ public page gets its cookie cleared and the page returns to visitor mode.
 
 ## Sign-in & users
 
-Admins also see **Aplikasi Android** (the update notice above) and **Log
+Admins also see **Kategori BIPRA** (the categories and their rules, see
+Features), **Aplikasi Android** (the update notice above) and **Log
 Aktivitas**: every change made in the app (add/edit/delete of koloms,
-families, members, jenis ibadah, services, users, passkeys, the Android
+families, members, jenis ibadah, services, users, passkeys, BIPRA categories, the Android
 version) and every sign-in and sign-out, with who, what (the item's name, also
 after a delete), success or failure, the IP address and the time, newest first
 and filterable by user, kind, result and date. Request contents are never
@@ -424,7 +433,7 @@ running `make mac-up` / `make docker-up` with a localhost URI) into the remote
 database instead, use `make mac-db-copy` or `make docker-db-copy` (same
 `REPLACE=1` option).
 
-Koloms, families, members, worship types, services and users (with passwords
+Koloms, families, members, worship types, services, BIPRA categories and users (with passwords
 and passkeys) are copied with their IDs, so links between them stay intact. Sessions are not copied — everyone
 signs in again once. The command refuses a non-empty target unless `REPLACE=1`
 (which clears only the collections being copied), and refuses to copy a
@@ -436,7 +445,7 @@ is only read.
 
 Reading koloms, families, members, worship types and services (`GET` on
 `/api/koloms`, `/api/families…`, `/api/members…`, `/api/worship-types`,
-`/api/services…` and `/api/calendar.ics`) and the Android update check are public; families and members come
+`/api/services…`, `/api/calendar.ics` and `/api/bipra-categories`) and the Android update check are public; families and members come
 in the redacted public view unless signed in. Every other
 endpoint except `/api/health` and sign-in requires a session cookie, and
 `/api/users` and `/api/admin/…` require the admin role. Errors are
@@ -454,6 +463,11 @@ user has proven who they are).
 | DELETE | `/api/admin/android`                   | admin: back to the `ANDROID_*` settings |
 | GET    | `/api/admin/audit`                     | admin: log entries newest first; `?username=&category=&result=ok\|failed&from=&to=` (YYYY-MM-DD, `APP_TIMEZONE`), `before=<id>` for the next 50 |
 | GET    | `/api/admin/audit/meta`                | admin: the categories and usernames for the filters |
+| GET    | `/api/bipra-categories`                | the BIPRA categories and their rules, in order (public) |
+| POST   | `/api/admin/bipra`                     | admin: `{key, name, kind (main\|flag), color, minAge, maxAge, gender, marital ("", married, unmarried), orMarried}` |
+| PUT    | `/api/admin/bipra/{id}`                | admin: same fields                        |
+| DELETE | `/api/admin/bipra/{id}`                | admin                                     |
+| PUT    | `/api/admin/bipra/order`               | admin: `{ids}` — every category, in the new order (the priority of main categories) |
 | GET    | `/api/auth/config`                     | `{maxFailedLogins, lockSeconds}` for the sign-in page (public) |
 | POST   | `/api/auth/login`                      | `{username, password}` (public)           |
 | POST   | `/api/auth/logout`                     |                                           |
@@ -478,7 +492,7 @@ user has proven who they are).
 | GET    | `/api/families/{id}`                   | includes `members`                        |
 | PUT    | `/api/families/{id}`                   |                                           |
 | DELETE | `/api/families/{id}`                   | also deletes its members, renumbers rest  |
-| GET    | `/api/members[?familyId=]`             | with `familyName`, `age`, `ageText`, `category`, `elderly`, `birthMonth`, `birthDay` (public: redacted) |
+| GET    | `/api/members[?familyId=]`             | with `familyName`, `age`, `ageText`, `category` (main BIPRA key), `flags` (BIPRA flags), `elderly` (= the Lansia flag), `birthMonth`, `birthDay` (public: redacted) |
 | POST   | `/api/members`                         | `order` is assigned automatically         |
 | GET    | `/api/members/{id}`                    |                                           |
 | PUT    | `/api/members/{id}`                    | moving to another family appends it there |

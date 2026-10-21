@@ -2148,3 +2148,23 @@ textarea {
   margin: -4px 4px 8px;
   color: var(--muted);
 }
+
+/* BIPRA categories beyond the defaults: their color as a dot */
+.badge-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot);
+  margin-right: 5px;
+  vertical-align: 1px;
+}
+.icon-btn.small {
+  width: 28px;
+  height: 28px;
+  font-size: 0.95rem;
+}
+.icon-btn.small:disabled {
+  opacity: 0.35;
+  cursor: default;
+}

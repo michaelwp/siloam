@@ -36,6 +36,7 @@ var Categories = []Category{
 	{"jenis-ibadah", "Jenis ibadah"},
 	{"jadwal", "Jadwal ibadah"},
 	{"android", "Aplikasi Android"},
+	{"bipra", "Kategori BIPRA"},
 }
 
 type route struct{ category, action string }
@@ -70,6 +71,10 @@ var routes = map[string]route{
 	"DELETE /api/services/{id}":               {"jadwal", "Hapus jadwal ibadah"},
 	"PUT /api/admin/android":                  {"android", "Ubah versi aplikasi Android"},
 	"DELETE /api/admin/android":               {"android", "Kembalikan versi Android ke pengaturan server"},
+	"POST /api/admin/bipra":                   {"bipra", "Tambah kategori BIPRA"},
+	"PUT /api/admin/bipra/{id}":               {"bipra", "Ubah kategori BIPRA"},
+	"DELETE /api/admin/bipra/{id}":            {"bipra", "Hapus kategori BIPRA"},
+	"PUT /api/admin/bipra/order":              {"bipra", "Ubah urutan kategori BIPRA"},
 }
 
 // Store is where entries go (the MongoDB store; a fake in tests).
@@ -211,9 +216,13 @@ func (rec *Recorder) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-// pathTarget splits /api/<kind>/<id>… into the kind and (if it is one) the id.
+// pathTarget splits /api/<kind>/<id>… (or /api/admin/<kind>/<id>) into the
+// kind and (if it is one) the id.
 func pathTarget(path string) (string, bson.ObjectID) {
 	parts := strings.Split(strings.TrimPrefix(path, "/api/"), "/")
+	if parts[0] == "admin" && len(parts) > 1 {
+		parts = parts[1:]
+	}
 	if len(parts) < 2 {
 		return parts[0], bson.ObjectID{}
 	}
@@ -254,7 +263,7 @@ func labelFromBody(kind string, body []byte) string {
 		return label
 	case "users":
 		return v.Username
-	case "admin":
+	case "android":
 		if v.LatestVersion != "" {
 			return "Versi " + v.LatestVersion
 		}

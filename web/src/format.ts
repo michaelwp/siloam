@@ -1,3 +1,5 @@
+import type { BipraCategory, BipraInput } from './api'
+
 export const MONTHS = [
   'Januari',
   'Februari',
@@ -35,13 +37,52 @@ export const RELATIONSHIPS = [
   'Family Lain',
 ]
 
-export const CATEGORIES = [
-  { key: 'Anak', label: 'Anak (ASM)', range: '0 – 11' },
-  { key: 'Remaja', label: 'Remaja', range: '12 – 16' },
-  { key: 'Pemuda', label: 'Pemuda', range: '17 – 30' },
-  { key: 'PKB', label: 'PKB', range: '31+ / menikah' },
-  { key: 'WKI', label: 'WKI', range: '31+ / menikah' },
-]
+/** Short age hint of a BIPRA rule: "0 – 11", "31+ / menikah", "60+". */
+export function bipraRange(c: BipraInput) {
+  const age =
+    c.minAge !== null && c.maxAge !== null
+      ? `${c.minAge} – ${c.maxAge}`
+      : c.minAge !== null
+        ? `${c.minAge}+`
+        : c.maxAge !== null
+          ? `≤ ${c.maxAge}`
+          : ''
+  const married = c.orMarried || c.marital === 'married'
+  return married ? (age ? `${age} / menikah` : 'menikah') : age
+}
+
+/** The whole rule in words, for the admin page. */
+export function bipraRule(c: BipraInput) {
+  const bits: string[] = []
+  if (c.gender) bits.push(c.gender === 'Laki Laki' ? 'laki-laki' : 'perempuan')
+  const age = bipraRange({ ...c, orMarried: false, marital: '' })
+  if (age) bits.push(`umur ${age}${c.orMarried ? ' atau sudah menikah' : ''}`)
+  else if (c.orMarried) bits.push('sudah menikah')
+  if (c.marital === 'married') bits.push('sudah menikah')
+  if (c.marital === 'unmarried') bits.push('belum menikah')
+  return bits.length ? bits.join(' · ') : 'semua anggota yang memiliki tanggal lahir'
+}
+
+/**
+ * Whether a member falls under rule c (the server's model.BipraCategory.Matches),
+ * for the admin page's preview. Members without an age match nothing.
+ */
+export function matchesBipra(m: { age: number | null; gender: string; maritalStatus: string }, c: BipraInput) {
+  if (m.age === null) return false
+  const married = m.maritalStatus !== '' && m.maritalStatus !== 'Belum Menikah'
+  const ageOK =
+    (c.orMarried && married) || ((c.minAge === null || m.age >= c.minAge) && (c.maxAge === null || m.age <= c.maxAge))
+  if (!ageOK) return false
+  if (c.gender && c.gender !== m.gender) return false
+  if (c.marital === 'married') return married
+  if (c.marital === 'unmarried') return !married
+  return true
+}
+
+/** Whether member m is in category c (its main category, or one of its flags). */
+export function inBipra(m: { category: string; flags: string[] | null }, c: BipraCategory) {
+  return c.kind === 'flag' ? (m.flags ?? []).includes(c.key) : m.category === c.key
+}
 
 /** "2021-09-10T00:00:00Z" → { y, m (0-11), d } read in UTC */
 export function parts(iso: string) {

@@ -6,7 +6,7 @@ import org.junit.Test
 class StatsTest {
     private fun m(name: String, gender: String, category: String, elderly: Boolean = false, month: Int? = null) = Member(
         id = name, familyId = "f", name = name, familyName = "X", kolom = 11, gender = gender, maritalStatus = "",
-        baptized = null, confirmed = null, category = category, elderly = elderly, birthMonth = month, birthDay = month?.let { 1 },
+        baptized = null, confirmed = null, category = category, flags = if (elderly) listOf(LANSIA) else emptyList(), birthMonth = month, birthDay = month?.let { 1 },
     )
 
     private fun f(size: Int) = Family(id = "f$size-${size * 7}", kolom = 11, no = 1, name = "F", note = "", memberCount = size, weddingMonth = null, weddingDay = null)
@@ -40,5 +40,18 @@ class StatsTest {
         val s = stats(emptyList(), emptyList())
         assertEquals(emptyList<Int>(), s.familySizes)
         assertEquals(List(12) { 0 }, s.birthdaysPerMonth)
+    }
+
+    @Test
+    fun countsTheServersCategories() {
+        val cats = listOf(Category("Pemudi", "Pemudi", "17 – 30"), Category("Baru", "Baru menikah", "≤ 35 / menikah", isFlag = true))
+        val members = listOf(
+            m("a", GENDER_FEMALE, "Pemudi"),
+            m("b", GENDER_FEMALE, "Pemudi").copy(flags = listOf("Baru")),
+            m("c", GENDER_MALE, "PKB"), // not in this list
+        )
+        val s = stats(members, emptyList(), cats)
+        assertEquals(mapOf("Pemudi" to 2, "Baru" to 1), s.bipra)
+        assertEquals(listOf("Pemudi"), s.bipraByGender.map { it.first.key }) // flags are not in the gender chart
     }
 }

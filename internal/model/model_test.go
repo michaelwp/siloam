@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -27,6 +28,7 @@ func TestDiff(t *testing.T) {
 	}
 }
 
+// The default rules give the categories of the "Kategorial BIPRA" sheet.
 func TestCategory(t *testing.T) {
 	cases := []struct {
 		age            int
@@ -44,10 +46,13 @@ func TestCategory(t *testing.T) {
 		{28, GenderFemale, "Menikah", "WKI", false},
 		{67, GenderFemale, StatusSingle, "WKI", true},
 		{72, GenderMale, "Menikah", "PKB", true},
+		{20, GenderMale, "Menikah", "PKB", false}, // married: PKB/WKI whatever the age
+		{40, GenderFemale, "Cerai Mati / Janda", "WKI", false},
+		{14, GenderFemale, "", "Remaja", false}, // status not filled in = unmarried
 	}
 	for _, c := range cases {
-		got, elderly := Category(c.age, c.gender, c.status)
-		if got != c.want || elderly != c.elderly {
+		got, flags := DefaultBipra().Apply(c.age, c.gender, c.status)
+		if elderly := slices.Contains(flags, LansiaKey); got != c.want || elderly != c.elderly {
 			t.Errorf("Category(%d,%s,%s) = %s/%v, want %s/%v", c.age, c.gender, c.status, got, elderly, c.want, c.elderly)
 		}
 	}
@@ -61,7 +66,7 @@ func TestPublicViewsHidePrivateData(t *testing.T) {
 		BirthDate: ptr(date(1992, 11, 13)), MaritalStatus: "Menikah",
 		Relationship: "Kepala Keluarga", Baptized: &yes, Confirmed: &yes,
 	}
-	pub := NewMemberView(m, Family{Name: "Najoan Ismawi", Kolom: 11}, now).Public()
+	pub := NewMemberView(m, Family{Name: "Najoan Ismawi", Kolom: 11}, now, DefaultBipra()).Public()
 	b, _ := json.Marshal(pub)
 	for _, private := range []string{"Gorontalo", "1992", "Kepala Keluarga", "Tahun", `"age":3`} {
 		if strings.Contains(string(b), private) {
@@ -76,7 +81,7 @@ func TestPublicViewsHidePrivateData(t *testing.T) {
 
 	f := Family{Kolom: 11, Name: "Najoan Ismawi", Domicile: "Kairagi", WeddingDate: ptr(date(2021, 9, 10))}
 	fv := NewFamilyView(f, 3, now)
-	fv.Members = []MemberView{NewMemberView(m, f, now)}
+	fv.Members = []MemberView{NewMemberView(m, f, now, DefaultBipra())}
 	fb, _ := json.Marshal(fv.Public())
 	for _, private := range []string{"Kairagi", "2021", `"weddingYears":5`, "Gorontalo"} {
 		if strings.Contains(string(fb), private) {

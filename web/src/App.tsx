@@ -9,6 +9,7 @@ import { ScheduleProvider } from './ScheduleProvider'
 import { kolomLabel, useData } from './data'
 import Account from './pages/Account'
 import AdminAndroid from './pages/AdminAndroid'
+import AdminBipra from './pages/AdminBipra'
 import AdminUsers from './pages/AdminUsers'
 import AnggotaJemaat from './pages/AnggotaJemaat'
 import AuditLog from './pages/AuditLog'
@@ -132,6 +133,7 @@ function Shell() {
                 {isAdmin && (
                   <>
                     <NavLink to="/admin/pengguna">Pengguna</NavLink>
+                    <NavLink to="/admin/bipra">Kategori BIPRA</NavLink>
                     <NavLink to="/admin/android">Aplikasi Android</NavLink>
                     <NavLink to="/admin/log">Log Aktivitas</NavLink>
                   </>
@@ -202,6 +204,14 @@ function Shell() {
             element={
               <RequireUser admin>
                 <AdminAndroid />
+              </RequireUser>
+            }
+          />
+          <Route
+            path="/admin/bipra"
+            element={
+              <RequireUser admin>
+                <AdminBipra />
               </RequireUser>
             }
           />

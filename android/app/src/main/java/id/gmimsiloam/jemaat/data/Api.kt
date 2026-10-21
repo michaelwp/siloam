@@ -30,6 +30,8 @@ class Api(private val baseUrl: String) {
         families = get("/api/families"),
         members = get("/api/members"),
         services = get("/api/services"),
+        // older servers have fixed categories (no endpoint): the defaults
+        categories = runCatching { get("/api/bipra-categories") }.getOrNull(),
     )
 }
 
@@ -40,6 +42,8 @@ data class RawData(
     val families: String,
     val members: String,
     val services: String,
+    /** null: the server has no editable categories (DEFAULT_CATEGORIES apply) */
+    val categories: String?,
 ) {
     fun parse(fetchedAt: Long) = Snapshot(
         koloms = Parse.koloms(koloms),
@@ -47,6 +51,7 @@ data class RawData(
         families = Parse.families(families),
         members = Parse.members(members),
         services = Parse.services(services),
+        categories = categories?.let(Parse::categories) ?: DEFAULT_CATEGORIES,
         fetchedAt = fetchedAt,
     )
 }

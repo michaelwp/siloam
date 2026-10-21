@@ -138,3 +138,68 @@ func TestKolomUserManagesOnlyTheirKolom(t *testing.T) {
 		}
 	}
 }
+
+func TestBipraRulesDecideMemberCategories(t *testing.T) {
+	_, st, h := testAPI(t)
+	ctx := context.Background()
+	if err := st.SeedBipra(ctx); err != nil {
+		t.Fatal(err)
+	}
+	f, err := st.CreateFamily(ctx, model.Family{Kolom: 3, Name: "Umboh"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	born := time.Now().AddDate(-20, 0, -1) // 20 years old
+	if _, err := st.CreateMember(ctx, model.Member{FamilyID: f.ID, Name: "Sari", Gender: model.GenderFemale, MaritalStatus: model.StatusSingle, BirthDate: &born}); err != nil {
+		t.Fatal(err)
+	}
+	admin := &model.User{ID: bson.NewObjectID(), Username: "admin", Role: model.RoleAdmin}
+	category := func() (string, []any) {
+		r := auth.WithUser(httptest.NewRequest(http.MethodGet, "/api/members", nil), admin)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, r)
+		var ms []map[string]any
+		_ = json.Unmarshal(rec.Body.Bytes(), &ms)
+		flags, _ := ms[0]["flags"].([]any)
+		return ms[0]["category"].(string), flags
+	}
+	if got, _ := category(); got != "Pemuda" {
+		t.Fatalf("default: %s", got)
+	}
+
+	// a new main category for young women, then moved above Pemuda
+	code, body := call(h, admin, http.MethodPost, "/api/admin/bipra",
+		`{"key":"Pemudi","name":"Pemudi","kind":"main","color":"#8e24aa","minAge":17,"maxAge":30,"gender":"Perempuan","marital":"unmarried"}`)
+	if code != http.StatusCreated {
+		t.Fatalf("create: %d %v", code, body)
+	}
+	if got, _ := category(); got != "Pemuda" {
+		t.Fatalf("listed after Pemuda, Pemuda still wins: %s", got)
+	}
+	rules, _ := st.BipraRules(ctx)
+	ids := []string{body["id"].(string)}
+	for _, r := range rules {
+		if r.Key != "Pemudi" {
+			ids = append(ids, `"`+r.ID.Hex()+`"`)
+		}
+	}
+	order := `{"ids":["` + ids[0] + `",` + strings.Join(ids[1:], ",") + `]}`
+	if code, body := call(h, admin, http.MethodPut, "/api/admin/bipra/order", order); code != http.StatusOK {
+		t.Fatalf("reorder: %d %v", code, body)
+	}
+	if got, _ := category(); got != "Pemudi" {
+		t.Fatalf("after moving it up: %s", got)
+	}
+
+	// a flag on top of the main category
+	if code, body := call(h, admin, http.MethodPost, "/api/admin/bipra",
+		`{"key":"Remaja Akhir","name":"Remaja akhir","kind":"flag","color":"#0b8043","minAge":18,"maxAge":21}`); code != http.StatusCreated {
+		t.Fatalf("flag: %d %v", code, body)
+	}
+	if got, flags := category(); got != "Pemudi" || len(flags) != 1 || flags[0] != "Remaja Akhir" {
+		t.Fatalf("with a flag: %s %v", got, flags)
+	}
+	if code, _ := call(h, admin, http.MethodPost, "/api/admin/bipra", `{"key":"X","name":"x","kind":"main","color":"#000000","minAge":30,"maxAge":10}`); code != http.StatusBadRequest {
+		t.Errorf("min > max accepted: %d", code)
+	}
+}

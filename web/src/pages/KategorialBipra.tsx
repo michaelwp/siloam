@@ -1,26 +1,27 @@
 import { useState } from 'react'
 import { MemberDialogs, type MemberDialog } from '../components/forms'
-import { ActionsHeader, Badge, EditOnly, PageHeader, RowActions, Search, Status } from '../components/ui'
+import { ActionsHeader, BipraBadge, EditOnly, PageHeader, RowActions, Search, Status } from '../components/ui'
 import { useFullView } from '../auth'
 import { useData } from '../data'
-import { birthLine, byText, CATEGORIES, dayMonth, matches, triState } from '../format'
-
-const LANSIA = 'Lansia'
+import { bipraRange, birthLine, byText, dayMonth, inBipra, matches, triState } from '../format'
 
 export default function KategorialBipra() {
   const full = useFullView()
-  const { members, loading, error } = useData()
+  const { members, categories, loading, error } = useData()
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('')
   const [dialog, setDialog] = useState<MemberDialog>(null)
 
-  const count = (key: string) =>
-    key === LANSIA ? members.filter((m) => m.elderly).length : members.filter((m) => m.category === key).length
+  const chosen = categories.find((c) => c.key === filter)
+  const count = (key: string) => {
+    const c = categories.find((x) => x.key === key)
+    return c ? members.filter((m) => inBipra(m, c)).length : 0
+  }
   const unknown = members.filter((m) => !m.category).length
 
   const rows = members
     .filter((m) => matches(q, m.name, m.familyName))
-    .filter((m) => !filter || (filter === LANSIA ? m.elderly : m.category === filter))
+    .filter((m) => !chosen || inBipra(m, chosen))
     .toSorted((a, b) => byText(a.name, b.name))
 
   return (
@@ -39,19 +40,23 @@ export default function KategorialBipra() {
           <span className="stat-value">{members.length}</span>
           <span className="stat-label">Semua</span>
         </button>
-        {[...CATEGORIES, { key: LANSIA, label: 'Lansia', range: '60+' }].map((c) => (
+        {categories.map((c) => (
           <button
             key={c.key}
             className={`stat ${filter === c.key ? 'active' : ''}`}
             onClick={() => setFilter(filter === c.key ? '' : c.key)}
           >
             <span className="stat-value">{count(c.key)}</span>
-            <span className="stat-label">{c.label}</span>
-            <span className="stat-range">{c.range}</span>
+            <span className="stat-label">{c.name}</span>
+            <span className="stat-range">{bipraRange(c)}</span>
           </button>
         ))}
       </div>
-      {unknown > 0 && <p className="muted">{unknown} anggota belum memiliki tanggal lahir sehingga tidak berkategori.</p>}
+      {unknown > 0 && (
+        <p className="muted">
+          {unknown} anggota tidak berkategori: belum memiliki tanggal lahir, atau tidak cocok dengan aturan kategori mana pun.
+        </p>
+      )}
 
       <Status loading={loading} error={error} empty={!members.length} />
       {rows.length > 0 && (
@@ -82,8 +87,10 @@ export default function KategorialBipra() {
                   <td>{m.maritalStatus}</td>
                   {full && <td className="num">{m.age ?? '–'}</td>}
                   <td className="nowrap">
-                    {m.category && <Badge tone={m.category.toLowerCase()}>{m.category}</Badge>}{' '}
-                    {m.elderly && <Badge tone="lansia">Lansia</Badge>}
+                    {m.category && <BipraBadge code={m.category} />}{' '}
+                    {(m.flags ?? []).map((f) => (
+                      <BipraBadge key={f} code={f} />
+                    ))}
                   </td>
                   <td>{triState(m.baptized, 'Baptis')}</td>
                   <td>{triState(m.confirmed, 'Sidi')}</td>

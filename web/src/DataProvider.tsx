@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { api, type DataView, type Family, type Kolom, type Member } from './api'
+import { api, type BipraCategory, type DataView, type Family, type Kolom, type Member } from './api'
 import { useAuth } from './auth'
 import { DataContext } from './data'
 
 type State = {
   koloms: Kolom[]
+  categories: BipraCategory[]
   families: Family[]
   members: Member[]
   view: DataView | null
@@ -49,16 +50,16 @@ function DataProvider({
   onStale: () => void
   startKolom: number | null // a "kelola data kolom" user starts on their kolom
 }) {
-  const [state, setState] = useState<State>({ koloms: [], families: [], members: [], view: null, loading: true, error: null })
+  const [state, setState] = useState<State>({ koloms: [], categories: [], families: [], members: [], view: null, loading: true, error: null })
   const [chosen, setChosen] = useState(() => startKolom ?? savedKolom())
   const latest = useRef(0) // ignore responses of superseded loads
 
   const load = useCallback(() => {
     const n = ++latest.current
     return api.load().then(
-      ({ koloms, families, members, view }) => {
+      ({ koloms, categories, families, members, view }) => {
         if (n !== latest.current) return
-        setState({ koloms, families, members, view, loading: false, error: null })
+        setState({ koloms, categories, families, members, view, loading: false, error: null })
         // signed in, but the server sent the public view: the session is gone
         if (expectFull && view !== 'full') onStale()
       },
@@ -92,6 +93,7 @@ function DataProvider({
     <DataContext.Provider
       value={{
         koloms: state.koloms,
+        categories: state.categories,
         kolom,
         setKolom,
         families,

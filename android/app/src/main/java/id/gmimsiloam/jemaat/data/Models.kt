@@ -32,8 +32,10 @@ data class Member(
     val maritalStatus: String,
     val baptized: Boolean?,
     val confirmed: Boolean?,
+    /** the main BIPRA category's key ("" = none) */
     val category: String,
-    val elderly: Boolean,
+    /** keys of the BIPRA flags, e.g. ["Lansia"] */
+    val flags: List<String>,
     val birthMonth: Int?,
     val birthDay: Int?,
 )
@@ -70,6 +72,8 @@ data class Snapshot(
     val families: List<Family>,
     val members: List<Member>,
     val services: List<Service>,
+    /** the Kategorial BIPRA categories, in order */
+    val categories: List<Category>,
     val fetchedAt: Long,
 )
 
@@ -110,9 +114,20 @@ object Parse {
             baptized = it.boolOrNull("baptized"),
             confirmed = it.boolOrNull("confirmed"),
             category = it.str("category"),
-            elderly = it.optBoolean("elderly"),
+            // servers before editable categories send only "elderly" (Lansia)
+            flags = it.optJSONArray("flags")?.let { a -> (0 until a.length()).map { i -> a.getString(i) } }
+                ?: if (it.optBoolean("elderly")) listOf(LANSIA) else emptyList(),
             birthMonth = it.intOrNull("birthMonth"),
             birthDay = it.intOrNull("birthDay"),
+        )
+    }
+
+    fun categories(json: String) = JSONArray(json).mapObjects {
+        Category(
+            key = it.str("key"),
+            label = it.str("name"),
+            range = bipraRange(it.intOrNull("minAge"), it.intOrNull("maxAge"), it.optBoolean("orMarried") || it.str("marital") == "married"),
+            isFlag = it.str("kind") == "flag",
         )
     }
 

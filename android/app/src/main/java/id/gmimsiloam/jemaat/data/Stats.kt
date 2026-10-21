@@ -1,26 +1,35 @@
 package id.gmimsiloam.jemaat.data
 
-/** A BIPRA category as the server computes it (the web's CATEGORIES), plus Lansia. */
-data class Category(val key: String, val label: String, val range: String)
+/** A Kategorial BIPRA category (managed by admins on the web); [isFlag]: an extra mark like Lansia. */
+data class Category(val key: String, val label: String, val range: String, val isFlag: Boolean = false)
 
 const val GENDER_MALE = "Laki Laki"
 const val GENDER_FEMALE = "Perempuan"
 const val LANSIA = "Lansia"
 
-/** Anak (ASM) 0–11, Remaja 12–16, Pemuda 17–30, PKB/WKI 31+ or married. */
-val CATEGORIES = listOf(
+/** The categories of servers without editable ones: Anak (ASM) 0–11, …, PKB/WKI 31+ or married, Lansia 60+. */
+val DEFAULT_CATEGORIES = listOf(
     Category("Anak", "Anak (ASM)", "0 – 11"),
     Category("Remaja", "Remaja", "12 – 16"),
     Category("Pemuda", "Pemuda", "17 – 30"),
     Category("PKB", "PKB", "31+ / menikah"),
     Category("WKI", "WKI", "31+ / menikah"),
+    Category(LANSIA, "Lansia", "60+", isFlag = true),
 )
 
-/** Lansia (60+) is a flag on top of the category, not a category of its own. */
-val LANSIA_CATEGORY = Category(LANSIA, "Lansia", "60+")
+/** The short age hint of a rule, as on the web: "0 – 11", "31+ / menikah", "60+". */
+fun bipraRange(minAge: Int?, maxAge: Int?, married: Boolean): String {
+    val age = when {
+        minAge != null && maxAge != null -> "$minAge – $maxAge"
+        minAge != null -> "$minAge+"
+        maxAge != null -> "≤ $maxAge"
+        else -> ""
+    }
+    return if (married) (if (age.isEmpty()) "menikah" else "$age / menikah") else age
+}
 
-/** Whether [m] belongs to the category [key] (or is elderly, for [LANSIA]). */
-fun inCategory(m: Member, key: String) = if (key == LANSIA) m.elderly else m.category == key
+/** Whether [m] is in [c]: its main category, or one of its flags. */
+fun inCategory(m: Member, c: Category) = if (c.isFlag) c.key in m.flags else m.category == c.key
 
 data class GenderSplit(val male: Int, val female: Int) {
     val total get() = male + female
@@ -31,7 +40,7 @@ data class Stats(
     val members: Int,
     val male: Int,
     val female: Int,
-    /** per BIPRA category key, and [LANSIA] */
+    /** per BIPRA category key (main categories and flags) */
     val bipra: Map<String, Int>,
     /** members without a birth date have no category */
     val uncategorized: Int,
@@ -43,16 +52,16 @@ data class Stats(
     val familySizes: List<Int>,
 )
 
-fun stats(members: List<Member>, families: List<Family>): Stats {
+fun stats(members: List<Member>, families: List<Family>, categories: List<Category> = DEFAULT_CATEGORIES): Stats {
     val maxSize = families.maxOfOrNull { it.memberCount } ?: 0
     return Stats(
         families = families.size,
         members = members.size,
         male = members.count { it.gender == GENDER_MALE },
         female = members.count { it.gender == GENDER_FEMALE },
-        bipra = (CATEGORIES + LANSIA_CATEGORY).associate { c -> c.key to members.count { inCategory(it, c.key) } },
+        bipra = categories.associate { c -> c.key to members.count { inCategory(it, c) } },
         uncategorized = members.count { it.category.isEmpty() },
-        bipraByGender = CATEGORIES.map { c ->
+        bipraByGender = categories.filterNot { it.isFlag }.map { c ->
             val inCat = members.filter { it.category == c.key }
             c to GenderSplit(inCat.count { it.gender == GENDER_MALE }, inCat.count { it.gender == GENDER_FEMALE })
         },

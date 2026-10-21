@@ -7,7 +7,7 @@ import org.junit.Test
 class KolomTest {
     private fun snapshot(vararg koloms: Int) = Snapshot(
         koloms = koloms.map { Kolom("k$it", it) }, types = emptyList(), families = emptyList(),
-        members = emptyList(), services = emptyList(), fetchedAt = 0,
+        members = emptyList(), services = emptyList(), categories = DEFAULT_CATEGORIES, fetchedAt = 0,
     )
 
     @Test

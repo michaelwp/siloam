@@ -33,4 +33,25 @@ class ParseTest {
         assertNull(f.weddingMonth)
         assertEquals(4, f.memberCount)
     }
+
+    @Test
+    fun parsesCategoriesAndFlags() {
+        val cats = Parse.categories(
+            """[{"id":"1","key":"PKB","name":"PKB","kind":"main","order":4,"color":"#3f51b5","minAge":31,"maxAge":null,
+                 "gender":"Laki Laki","marital":"","orMarried":true},
+                {"id":"2","key":"Pemudi","name":"Pemudi Gereja","kind":"main","order":7,"color":"#8e24aa","minAge":17,"maxAge":30,
+                 "gender":"Perempuan","marital":"unmarried","orMarried":false},
+                {"id":"3","key":"Lansia","name":"Lansia","kind":"flag","order":6,"color":"#616161","minAge":60,"maxAge":null,
+                 "gender":"","marital":"","orMarried":false}]""",
+        )
+        assertEquals(Category("PKB", "PKB", "31+ / menikah"), cats[0])
+        assertEquals(Category("Pemudi", "Pemudi Gereja", "17 – 30"), cats[1])
+        assertEquals(Category("Lansia", "Lansia", "60+", isFlag = true), cats[2])
+
+        val base = """"id":"m1","familyId":"f1","name":"A","familyName":"X","kolom":11,"gender":"Perempuan","category":"WKI""""
+        assertEquals(listOf("Lansia", "Baru"), Parse.members("""[{$base,"flags":["Lansia","Baru"],"elderly":true}]""").single().flags)
+        // an older server: only "elderly"
+        assertEquals(listOf(LANSIA), Parse.members("""[{$base,"elderly":true}]""").single().flags)
+        assertEquals(emptyList<String>(), Parse.members("""[{$base,"flags":null,"elderly":false}]""").single().flags)
+    }
 }

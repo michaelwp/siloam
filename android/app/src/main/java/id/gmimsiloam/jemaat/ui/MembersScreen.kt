@@ -109,7 +109,7 @@ private fun MemberLine(m: Member, highlight: Boolean) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             listOfNotNull(
                 m.category.ifEmpty { null },
-                if (m.elderly) "Lansia" else null,
+                *m.flags.toTypedArray(),
                 m.maritalStatus.ifEmpty { null },
                 m.baptized.label("Baptis"),
                 m.confirmed.label("Sidi"),

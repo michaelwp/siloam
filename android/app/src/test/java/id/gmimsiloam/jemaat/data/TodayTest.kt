@@ -15,7 +15,7 @@ class TodayTest {
 
     private fun member(name: String, month: Int?, day: Int?, kolom: Int = 11) = Member(
         id = name, familyId = "f", name = name, familyName = "X", kolom = kolom, gender = "",
-        maritalStatus = "", baptized = null, confirmed = null, category = "", elderly = false,
+        maritalStatus = "", baptized = null, confirmed = null, category = "", flags = emptyList(),
         birthMonth = month, birthDay = day,
     )
 

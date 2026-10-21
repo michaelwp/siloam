@@ -161,7 +161,7 @@ func publicRead(r *http.Request) bool {
 		return false
 	}
 	p := r.URL.Path
-	return p == "/api/koloms" || p == "/api/app/android" || p == "/api/worship-types" || p == "/api/calendar.ics" ||
+	return p == "/api/koloms" || p == "/api/app/android" || p == "/api/bipra-categories" || p == "/api/worship-types" || p == "/api/calendar.ics" ||
 		p == "/api/services" || strings.HasPrefix(p, "/api/services/") ||
 		p == "/api/families" || strings.HasPrefix(p, "/api/families/") ||
 		p == "/api/members" || strings.HasPrefix(p, "/api/members/")

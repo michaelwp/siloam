@@ -33,6 +33,7 @@ class Repository(private val context: Context) {
                 families = o.getString("families"),
                 members = o.getString("members"),
                 services = o.getString("services"),
+                categories = if (o.has("categories")) o.getString("categories") else null,
             ).parse(o.getLong("fetchedAt"))
         }.getOrNull()
     }
@@ -55,6 +56,7 @@ class Repository(private val context: Context) {
             .put("families", raw.families)
             .put("members", raw.members)
             .put("services", raw.services)
+            .apply { raw.categories?.let { put("categories", it) } }
             .put("fetchedAt", now)
         cacheLock.withLock {
             if (Prefs(context).serverUrl != server) throw IOException("Alamat server berubah saat memuat data")

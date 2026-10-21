@@ -93,6 +93,9 @@ func run() error {
 	if *importPath != "" {
 		return runImport(ctx, s, *importPath, *importKolom, *replace)
 	}
+	if err := s.SeedBipra(ctx); err != nil {
+		return fmt.Errorf("seed bipra categories: %w", err)
+	}
 	if err := s.SeedWorshipTypes(ctx); err != nil {
 		return fmt.Errorf("seed worship types: %w", err)
 	}
