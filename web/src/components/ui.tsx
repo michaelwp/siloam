@@ -215,3 +215,31 @@ export function BipraBadge({ code }: { code: string }) {
     </Badge>
   )
 }
+
+/**
+ * Lists items per kolom: "Semua kolom" (services for the whole congregation,
+ * kolom 0) first, then Kolom 1, 2, … under a small heading each. With items of
+ * one kolom only (e.g. one kolom is viewed) there are no headings.
+ */
+export function ByKolom<T>({
+  items,
+  kolomOf,
+  children,
+}: {
+  items: T[]
+  kolomOf: (item: T) => number
+  children: (items: T[]) => ReactNode
+}) {
+  const koloms = [...new Set(items.map(kolomOf))].toSorted((a, b) => a - b)
+  if (koloms.length <= 1) return <>{children(items)}</>
+  return (
+    <>
+      {koloms.map((k) => (
+        <div key={k} className="kolom-group">
+          <h4 className="kolom-group-head">{k === 0 ? 'Semua kolom' : `Kolom ${k}`}</h4>
+          {children(items.filter((i) => kolomOf(i) === k))}
+        </div>
+      ))}
+    </>
+  )
+}

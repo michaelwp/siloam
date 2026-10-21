@@ -61,6 +61,8 @@ import androidx.lifecycle.repeatOnLifecycle
 import id.gmimsiloam.jemaat.BuildConfig
 import id.gmimsiloam.jemaat.data.AppRelease
 import id.gmimsiloam.jemaat.data.Service
+import id.gmimsiloam.jemaat.data.byKolom
+import id.gmimsiloam.jemaat.data.kolomHeading
 import id.gmimsiloam.jemaat.data.clock
 import id.gmimsiloam.jemaat.data.shortDate
 import kotlinx.coroutines.delay
@@ -164,6 +166,27 @@ fun UpdateBanner(update: AppRelease) {
             }
             Button(onClick = { openLink(context, update.downloadUrl) }) { Text("Unduh") }
         }
+    }
+}
+
+/**
+ * Items per kolom, "Semua kolom" first: a small heading before each kolom's
+ * items when there are several koloms (e.g. "Semua Kolom" is shown).
+ */
+@Composable
+fun <T> KolomGroups(items: List<T>, kolomOf: (T) -> Int, item: @Composable (T) -> Unit) {
+    val groups = items.byKolom(kolomOf)
+    groups.forEach { (k, list) ->
+        if (groups.size > 1) {
+            Text(
+                kolomHeading(k).uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        list.forEach { item(it) }
     }
 }
 

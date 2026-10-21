@@ -24,7 +24,8 @@ the members who are baptized and sidi (the service's kolom first), or typed in
 as another name, e.g. a pastor from outside the congregation. On opening the
 site, a popup shows today's and this week's services and today's birthdays
 (unless there is nothing to show, or it was hidden for today); Beranda shows
-the same.
+the same. With all koloms shown, both list them per kolom ("Semua kolom"
+first, then Kolom 1, 2, …).
 Service times are in `APP_TIMEZONE` (default `Asia/Makassar`, WITA). Load a
 schedule spreadsheet with
 `siloam -import-jadwal jadwal.xlsx [-kolom 11] [-replace]` (the leader's
@@ -46,11 +47,18 @@ picker, an offline cache, and five tabs:
 
 It also sends **background notifications**:
 
-- a daily summary (default 06:00): today's services and today's birthdays;
+- a daily summary (default 06:00): today's services and today's birthdays,
+  listed per kolom;
 - a reminder before each of today's services (default 1 hour before).
 
+Under **Pengaturan → Notifikasi untuk** the notifications are for *Semua*
+(everything), *Per BIPRA* (one category: services of the jenis linked to it,
+in every kolom, and its members' birthdays) or *Kolom* (one kolom: its
+services, the whole congregation's, and its birthdays). Until chosen, it is
+the kolom shown in the app. Beranda's Pemberitahuan lists the same per kolom.
+
 A WorkManager job checks about every hour, also after a reboot, without the
-app being open. Everything follows the kolom chosen in the app; the times,
+app being open. The times,
 reminders and server address are under **Pengaturan**. The server defaults to
 `https://siloam.fly.dev`; debug builds also allow plain HTTP, e.g.
 `http://10.0.2.2:8080` (your computer, seen from the Android emulator);

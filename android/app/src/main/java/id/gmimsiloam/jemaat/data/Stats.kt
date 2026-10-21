@@ -1,7 +1,7 @@
 package id.gmimsiloam.jemaat.data
 
 /** A Kategorial BIPRA category (managed by admins on the web); [isFlag]: an extra mark like Lansia. */
-data class Category(val key: String, val label: String, val range: String, val isFlag: Boolean = false)
+data class Category(val key: String, val label: String, val range: String, val isFlag: Boolean = false, val id: String = "")
 
 const val GENDER_MALE = "Laki Laki"
 const val GENDER_FEMALE = "Perempuan"

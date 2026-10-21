@@ -44,9 +44,9 @@ class ParseTest {
                 {"id":"3","key":"Lansia","name":"Lansia","kind":"flag","order":6,"color":"#616161","minAge":60,"maxAge":null,
                  "gender":"","marital":"","orMarried":false}]""",
         )
-        assertEquals(Category("PKB", "PKB", "31+ / menikah"), cats[0])
-        assertEquals(Category("Pemudi", "Pemudi Gereja", "17 – 30"), cats[1])
-        assertEquals(Category("Lansia", "Lansia", "60+", isFlag = true), cats[2])
+        assertEquals(Category("PKB", "PKB", "31+ / menikah", id = "1"), cats[0])
+        assertEquals(Category("Pemudi", "Pemudi Gereja", "17 – 30", id = "2"), cats[1])
+        assertEquals(Category("Lansia", "Lansia", "60+", isFlag = true, id = "3"), cats[2])
 
         val base = """"id":"m1","familyId":"f1","name":"A","familyName":"X","kolom":11,"gender":"Perempuan","category":"WKI""""
         assertEquals(listOf("Lansia", "Baru"), Parse.members("""[{$base,"flags":["Lansia","Baru"],"elderly":true}]""").single().flags)

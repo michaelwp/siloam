@@ -1,6 +1,9 @@
 package id.gmimsiloam.jemaat.notify
 
 import android.content.Context
+import android.graphics.Typeface
+import android.text.SpannableString
+import android.text.style.StyleSpan
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -17,10 +20,9 @@ import id.gmimsiloam.jemaat.data.Repository
 import id.gmimsiloam.jemaat.data.Service
 import id.gmimsiloam.jemaat.data.Snapshot
 import id.gmimsiloam.jemaat.data.birthdaysToday
+import id.gmimsiloam.jemaat.data.byKolom
 import id.gmimsiloam.jemaat.data.clock
-import id.gmimsiloam.jemaat.data.effectiveKolom
-import id.gmimsiloam.jemaat.data.forKolom
-import id.gmimsiloam.jemaat.data.inKolom
+import id.gmimsiloam.jemaat.data.kolomHeading
 import id.gmimsiloam.jemaat.data.longDate
 import id.gmimsiloam.jemaat.data.upcomingServices
 import java.time.LocalDate
@@ -74,8 +76,8 @@ class DailyWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
 
         /**
          * Drops the reminders queued for today and runs the check, which queues
-         * them again: call after changing the reminder time, the kolom, or the
-         * services switch (queued reminders keep the delay they were made with).
+         * them again: call after changing the reminder time, the notification
+         * filter, or the services switch (queued reminders keep the delay they were made with).
          */
         fun rescheduleReminders(context: Context) {
             WorkManager.getInstance(context).cancelAllWorkByTag(REMINDER_TAG)
@@ -91,8 +93,8 @@ class DailyWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
 }
 
 /**
- * The daily summary: today's services and today's birthdays (of the chosen
- * kolom), each at most once a day. A kind counts as done only when it could be
+ * The daily summary: today's services and today's birthdays (per the
+ * notification filter, grouped per kolom), each at most once a day. A kind counts as done only when it could be
  * shown (notifications allowed and switched on), so granting permission or
  * switching it on later the same day still brings it. [force] shows it again
  * (the "show now" button) and also counts as today's.
@@ -100,10 +102,10 @@ class DailyWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
 internal fun showDaily(ctx: Context, prefs: Prefs, data: Snapshot, today: LocalDate, force: Boolean) {
     if (!Notifier.canPost(ctx)) return
     val day = today.toString()
-    val kolom = data.effectiveKolom(prefs.kolom)
+    val filter = prefs.notifyFilter
     if (prefs.notifyServices && (force || prefs.lastDailyServices != day)) {
         prefs.lastDailyServices = day
-        val todays = upcomingServices(data.services.forKolom(kolom), today).today
+        val todays = upcomingServices(filter.services(data), today).today
         if (todays.isNotEmpty()) {
             val first = todays.first()
             Notifier.post(
@@ -112,14 +114,14 @@ internal fun showDaily(ctx: Context, prefs: Prefs, data: Snapshot, today: LocalD
                 Notifier.CHANNEL_SERVICES,
                 title = if (todays.size == 1) "Ibadah hari ini, ${clock(first.time)} WITA" else "${todays.size} ibadah hari ini",
                 text = todays.joinToString(" · ") { "${clock(it.time)} ${it.fullTitle}" },
-                lines = todays.map { serviceLine(it) },
+                lines = grouped(todays, { it.kolom }) { serviceLine(it) },
                 tab = "home",
             )
         }
     }
     if (prefs.notifyBirthdays && (force || prefs.lastDailyBirthdays != day)) {
         prefs.lastDailyBirthdays = day
-        val birthdays = birthdaysToday(data.members.inKolom(kolom) { it.kolom }, today)
+        val birthdays = birthdaysToday(filter.members(data), today)
         if (birthdays.isNotEmpty()) {
             Notifier.post(
                 ctx,
@@ -128,7 +130,7 @@ internal fun showDaily(ctx: Context, prefs: Prefs, data: Snapshot, today: LocalD
                 title = if (birthdays.size == 1) "🎂 ${birthdays.first().name} berulang tahun hari ini"
                 else "🎂 ${birthdays.size} anggota jemaat berulang tahun hari ini",
                 text = birthdays.joinToString(", ") { it.name } + ". Selamat ulang tahun!",
-                lines = birthdays.map { "${it.name} · Kel. ${it.familyName}" },
+                lines = grouped(birthdays, { it.kolom }) { "${it.name} · Kel. ${it.familyName}" },
                 tab = "birthdays",
             )
         }
@@ -146,6 +148,19 @@ private fun notifyUpdate(ctx: Context, prefs: Prefs) {
     prefs.notifiedUpdate = update.latestVersion
 }
 
+/**
+ * The expanded notification's lines, per kolom: with items of several koloms,
+ * a bold "Kolom 3" heading before each kolom's lines ("Semua kolom" first).
+ */
+private fun <T> grouped(items: List<T>, kolomOf: (T) -> Int, line: (T) -> String): List<CharSequence> {
+    val groups = items.byKolom(kolomOf)
+    if (groups.size <= 1) return items.map(line)
+    return groups.flatMap { (k, list) ->
+        val heading = SpannableString(kolomHeading(k)).apply { setSpan(StyleSpan(Typeface.BOLD), 0, length, 0) }
+        listOf<CharSequence>(heading) + list.map { "   " + line(it) }
+    }
+}
+
 private fun serviceLine(s: Service) = buildString {
     append("${clock(s.time)} · ${s.fullTitle}")
     if (s.leader.isNotEmpty()) append(" · Khadim: ${s.leader}")
@@ -156,7 +171,7 @@ private fun scheduleReminders(ctx: Context, prefs: Prefs, data: Snapshot, today:
     val before = prefs.remindBeforeMinutes
     if (!prefs.notifyServices || before <= 0) return
     // forget reminders of other days
-    val todays = upcomingServices(data.services.forKolom(data.effectiveKolom(prefs.kolom)), today).today
+    val todays = upcomingServices(prefs.notifyFilter.services(data), today).today
     prefs.remindedServices = prefs.remindedServices.filter { id -> todays.any { it.id == id } }.toSet()
     val wm = WorkManager.getInstance(ctx)
     for (s in todays) {
@@ -170,7 +185,6 @@ private fun scheduleReminders(ctx: Context, prefs: Prefs, data: Snapshot, today:
             .setInputData(
                 workDataOf(
                     "id" to s.id,
-                    "kolom" to s.kolom,
                     "start" to start,
                     "title" to "Ibadah dimulai ${clock(s.time)} WITA",
                     "text" to s.fullTitle + if (s.place.isNotEmpty()) " · ${s.place}" else "",
@@ -194,15 +208,14 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
     override suspend fun doWork(): Result {
         val prefs = Prefs(applicationContext)
         val id = inputData.getString("id") ?: return Result.success()
-        val kolom = inputData.getInt("kolom", 0)
         val start = inputData.getLong("start", 0)
-        // the kolom choice may have changed since the reminder was queued (the
-        // same fallback as when queuing: a deleted kolom means all koloms); and
-        // Android may run it late (Doze): never remind about a started service
-        // (null from effectiveKolom means "all koloms", so no ?: fallback here)
-        val chosen = Repository(applicationContext).cached().let { if (it == null) prefs.kolom else it.effectiveKolom(prefs.kolom) }
+        // the filter may have changed since the reminder was queued, or the
+        // service been removed; and Android may run it late (Doze): never
+        // remind about a started service
+        val cached = Repository(applicationContext).cached()
+        val wanted = cached == null || prefs.notifyFilter.services(cached).any { it.id == id }
         val started = start > 0 && System.currentTimeMillis() >= start
-        if (!prefs.notifyServices || id in prefs.remindedServices || started || (chosen != null && kolom != 0 && chosen != kolom)) {
+        if (!prefs.notifyServices || id in prefs.remindedServices || started || !wanted) {
             return Result.success()
         }
         Notifier.post(

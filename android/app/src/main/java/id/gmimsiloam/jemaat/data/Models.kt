@@ -9,7 +9,8 @@ import java.time.LocalDate
 
 data class Kolom(val id: String, val number: Int)
 
-data class WorshipType(val id: String, val name: String, val color: String)
+/** [bipraId]: the BIPRA category the jenis is linked to ("" = none, or an older server). */
+data class WorshipType(val id: String, val name: String, val color: String, val bipraId: String = "")
 
 data class Family(
     val id: String,
@@ -87,7 +88,7 @@ private inline fun <T> JSONArray.mapObjects(f: (JSONObject) -> T): List<T> =
 object Parse {
     fun koloms(json: String) = JSONArray(json).mapObjects { Kolom(it.str("id"), it.optInt("number")) }
 
-    fun types(json: String) = JSONArray(json).mapObjects { WorshipType(it.str("id"), it.str("name"), it.str("color")) }
+    fun types(json: String) = JSONArray(json).mapObjects { WorshipType(it.str("id"), it.str("name"), it.str("color"), it.str("bipraId")) }
 
     fun families(json: String) = JSONArray(json).mapObjects {
         Family(
@@ -124,6 +125,7 @@ object Parse {
 
     fun categories(json: String) = JSONArray(json).mapObjects {
         Category(
+            id = it.str("id"),
             key = it.str("key"),
             label = it.str("name"),
             range = bipraRange(it.intOrNull("minAge"), it.intOrNull("maxAge"), it.optBoolean("orMarried") || it.str("marital") == "married"),

@@ -81,6 +81,27 @@ class Prefs(context: Context) {
     fun availableUpdate(currentVersion: String): AppRelease? =
         AppRelease(latestVersion, downloadUrl).takeIf { it.downloadUrl.isNotEmpty() && isNewer(it.latestVersion, currentVersion) }
 
+    /**
+     * Which services and birthdays the notifications are about: [NotifyFilter.ALL],
+     * [NotifyFilter.BIPRA] ([notifyBipra]) or [NotifyFilter.KOLOM] ([notifyKolom]).
+     * Until chosen: the kolom shown in the app, if one is (as before the filter existed).
+     */
+    var notifyMode: String
+        get() = p.getString("notifyMode", null) ?: if (kolom != null) NotifyFilter.KOLOM else NotifyFilter.ALL
+        set(v) = p.edit { putString("notifyMode", v) }
+
+    /** The category key for [NotifyFilter.BIPRA], e.g. "Pemuda". */
+    var notifyBipra: String
+        get() = p.getString("notifyBipra", "") ?: ""
+        set(v) = p.edit { putString("notifyBipra", v) }
+
+    /** The kolom for [NotifyFilter.KOLOM]; until chosen, the app's kolom. */
+    var notifyKolom: Int?
+        get() = p.getInt("notifyKolom", 0).takeIf { it > 0 } ?: kolom
+        set(v) = p.edit { putInt("notifyKolom", v ?: 0) }
+
+    val notifyFilter: NotifyFilter get() = NotifyFilter(notifyMode, notifyKolom, notifyBipra)
+
     companion object {
         const val DEFAULT_SERVER = "https://siloam.fly.dev"
     }

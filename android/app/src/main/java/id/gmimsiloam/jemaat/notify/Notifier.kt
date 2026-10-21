@@ -81,7 +81,7 @@ object Notifier {
      * Posts a notification; [lines] become the expanded (inbox) view, so a
      * long list stays readable. Opens the app on [tab] when tapped.
      */
-    fun post(context: Context, id: Int, channel: String, title: String, text: String, lines: List<String>, tab: String) {
+    fun post(context: Context, id: Int, channel: String, title: String, text: String, lines: List<CharSequence>, tab: String) {
         if (!canPost(context)) return
         val open = PendingIntent.getActivity(
             context,

@@ -28,6 +28,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -45,8 +48,8 @@ import androidx.compose.ui.unit.dp
 import id.gmimsiloam.jemaat.AppViewModel
 import id.gmimsiloam.jemaat.BuildConfig
 import id.gmimsiloam.jemaat.UiState
+import id.gmimsiloam.jemaat.data.NotifyFilter
 import id.gmimsiloam.jemaat.data.Prefs
-import id.gmimsiloam.jemaat.data.effectiveKolom
 import id.gmimsiloam.jemaat.notify.DailyWorker
 import id.gmimsiloam.jemaat.notify.Notifier
 import id.gmimsiloam.jemaat.notify.showDaily
@@ -132,9 +135,9 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
                     }, label = { Text(label) })
                 }
             }
+            NotifyFilterFields(state, prefs) { DailyWorker.rescheduleReminders(context) }
             Text(
-                "Notifikasi mengikuti kolom yang dipilih (${kolomLabel(state.data.let { if (it == null) state.kolom else it.effectiveKolom(state.kolom) })}). " +
-                    "Aplikasi memeriksa jadwal di latar belakang sekitar setiap jam, juga setelah ponsel dinyalakan ulang.",
+                "Aplikasi memeriksa jadwal di latar belakang sekitar setiap jam, juga setelah ponsel dinyalakan ulang.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -184,6 +187,74 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
             )
         }
     }
+}
+
+/**
+ * What the notifications are about: everything, one BIPRA category (its
+ * services in every kolom and its members' birthdays), or one kolom.
+ */
+@Composable
+private fun NotifyFilterFields(state: UiState, prefs: Prefs, onChange: () -> Unit) {
+    var mode by remember { mutableStateOf(prefs.notifyMode) }
+    var bipra by remember { mutableStateOf(prefs.notifyBipra) }
+    var kolom by remember { mutableStateOf(prefs.notifyKolom) }
+    val categories = state.data?.categories.orEmpty()
+    val koloms = state.data?.koloms.orEmpty().map { it.number }
+
+    Text("Notifikasi untuk", style = MaterialTheme.typography.bodyLarge)
+    val modes = listOf(NotifyFilter.ALL to "Semua", NotifyFilter.BIPRA to "Per BIPRA", NotifyFilter.KOLOM to "Kolom")
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        modes.forEachIndexed { i, (key, label) ->
+            SegmentedButton(
+                selected = mode == key,
+                onClick = {
+                    mode = key
+                    prefs.notifyMode = key
+                    // a first choice: the first category / the app's kolom
+                    if (key == NotifyFilter.BIPRA && categories.none { it.key == bipra }) {
+                        categories.firstOrNull()?.let { bipra = it.key; prefs.notifyBipra = it.key }
+                    }
+                    if (key == NotifyFilter.KOLOM && kolom == null) {
+                        (state.kolom ?: koloms.firstOrNull())?.let { kolom = it; prefs.notifyKolom = it }
+                    }
+                    onChange()
+                },
+                shape = SegmentedButtonDefaults.itemShape(i, modes.size),
+            ) { Text(label) }
+        }
+    }
+    when (mode) {
+        NotifyFilter.BIPRA -> {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                categories.forEach { c ->
+                    FilterChip(selected = bipra == c.key, onClick = {
+                        bipra = c.key
+                        prefs.notifyBipra = c.key
+                        onChange()
+                    }, label = { Text(c.label) })
+                }
+            }
+            Hint("Ibadah jenis kategori ini (di semua kolom), dan ulang tahun anggotanya.")
+        }
+        NotifyFilter.KOLOM -> {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                koloms.forEach { k ->
+                    FilterChip(selected = kolom == k, onClick = {
+                        kolom = k
+                        prefs.notifyKolom = k
+                        onChange()
+                    }, label = { Text("Kolom $k") })
+                }
+            }
+            Hint("Ibadah kolom ini dan ibadah untuk seluruh jemaat, dan ulang tahun anggota kolom ini.")
+        }
+        else -> Hint("Semua ibadah dan ulang tahun, dikelompokkan per kolom.")
+    }
+}
+
+@Composable
+private fun Hint(text: String) {
+    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable

@@ -84,10 +84,10 @@ fun HomeScreen(data: Snapshot, kolom: Int?, error: String?, update: AppRelease?,
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SectionCard("⛪", "Ibadah Hari Ini", longDate(today)) {
                     if (up.today.isEmpty()) Text("Tidak ada ibadah hari ini.", style = MaterialTheme.typography.bodyLarge)
-                    up.today.forEach { ServiceRow(it, withDate = false, highlight = true) { selected = it } }
+                    KolomGroups(up.today, { it.kolom }) { s -> ServiceRow(s, withDate = false, highlight = true) { selected = s } }
                     if (up.week.isNotEmpty()) {
                         Text("Minggu Ini", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        up.week.forEach { ServiceRow(it, withDate = true) { selected = it } }
+                        KolomGroups(up.week, { it.kolom }) { s -> ServiceRow(s, withDate = true) { selected = s } }
                     } else if (up.next != null) {
                         Text(
                             "Berikutnya: ${up.next.title} (${shortDate(up.next.date)}, ${clock(up.next.time)})",
@@ -101,7 +101,7 @@ fun HomeScreen(data: Snapshot, kolom: Int?, error: String?, update: AppRelease?,
                     if (birthdays.isEmpty()) {
                         Text("Tidak ada anggota jemaat yang berulang tahun hari ini.", style = MaterialTheme.typography.bodyLarge)
                     }
-                    birthdays.forEach { m ->
+                    KolomGroups(birthdays, { it.kolom }) { m ->
                         Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                                 Text(m.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)

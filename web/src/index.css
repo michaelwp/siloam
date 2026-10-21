@@ -2171,3 +2171,16 @@ textarea {
   opacity: 0.35;
   cursor: default;
 }
+
+/* notifications grouped per kolom (when all koloms are shown) */
+.kolom-group + .kolom-group {
+  margin-top: 10px;
+}
+.kolom-group-head {
+  margin: 8px 0 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}

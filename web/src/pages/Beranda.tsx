@@ -2,7 +2,7 @@ import { useState, type CSSProperties } from 'react'
 import type { Member, Service } from '../api'
 import { Link } from 'react-router-dom'
 import { ChartCard, ColumnChart, StackedBarChart } from '../components/charts'
-import { PageHeader, Status } from '../components/ui'
+import { ByKolom, PageHeader, Status } from '../components/ui'
 import { useBipraScope } from '../auth'
 import { kolomLabel, useData } from '../data'
 import { bipraRange, byText, dayMonth, daysUntil, inBipra, MONTHS, parts } from '../format'
@@ -231,7 +231,7 @@ function ServiceItem({ s, withDay }: { s: Service; withDay: boolean }) {
   )
 }
 
-/** Today's services and the coming week's (of the viewed kolom), beside the birthdays. */
+/** Today's services and the coming week's (of the viewed kolom, grouped per kolom), beside the birthdays. */
 function TodayServices({ today }: { today: Date }) {
   const { homeServices: services, loading, error } = useSchedule()
   const { today: todays, week, next } = upcomingServices(services, today, WEEK_AHEAD_DAYS)
@@ -262,22 +262,30 @@ function TodayServices({ today }: { today: Date }) {
       ) : (
         <>
           {todays.length > 0 ? (
-            <ul className="service-list">
-              {todays.map((s) => (
-                <ServiceItem key={s.id} s={s} withDay={false} />
-              ))}
-            </ul>
+            <ByKolom items={todays} kolomOf={(s) => s.kolom}>
+              {(list) => (
+                <ul className="service-list">
+                  {list.map((s) => (
+                    <ServiceItem key={s.id} s={s} withDay={false} />
+                  ))}
+                </ul>
+              )}
+            </ByKolom>
           ) : (
             <p className="today-empty">Tidak ada ibadah hari ini.</p>
           )}
           {week.length > 0 && (
             <>
               <h3 className="service-sub">Minggu Ini</h3>
-              <ul className="service-list compact">
-                {week.map((s) => (
-                  <ServiceItem key={s.id} s={s} withDay />
-                ))}
-              </ul>
+              <ByKolom items={week} kolomOf={(s) => s.kolom}>
+                {(list) => (
+                  <ul className="service-list compact">
+                    {list.map((s) => (
+                      <ServiceItem key={s.id} s={s} withDay />
+                    ))}
+                  </ul>
+                )}
+              </ByKolom>
             </>
           )}
           {week.length === 0 && next && (
@@ -323,17 +331,21 @@ function TodayBirthdays({ members, today }: { members: Member[]; today: Date }) 
       </header>
 
       {todays.length > 0 ? (
-        <ul className="today-list">
-          {todays.map(({ m, turning }) => (
-            <li key={m.id}>
-              <strong>{m.name}</strong>
-              <span className="muted">
-                Kel. {m.familyName}
-                {turning !== null && <> · {turning} tahun</>}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <ByKolom items={todays} kolomOf={({ m }) => m.kolom}>
+          {(list) => (
+            <ul className="today-list">
+              {list.map(({ m, turning }) => (
+                <li key={m.id}>
+                  <strong>{m.name}</strong>
+                  <span className="muted">
+                    Kel. {m.familyName}
+                    {turning !== null && <> · {turning} tahun</>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </ByKolom>
       ) : (
         <div className="today-empty">
           <p>Tidak ada anggota jemaat yang berulang tahun hari ini.</p>

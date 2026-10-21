@@ -12,6 +12,7 @@ import {
   WEEK_AHEAD_DAYS,
   WEEKDAYS,
 } from '../schedule'
+import { ByKolom } from './ui'
 
 // Remembered per browser (nothing is sent to the server):
 //  - "Lewati" hides it for the rest of this tab session (it comes back the next
@@ -44,7 +45,7 @@ function write(storage: () => Storage, key: string, value: string) {
 /**
  * A centered modal shown once the data has loaded, on every page (visitors and
  * signed-in users), for the viewed kolom: today's services, the services of
- * the coming week and today's birthdays. The page behind is blurred and inert
+ * the coming week and today's birthdays, each grouped per kolom. The page behind is blurred and inert
  * (native modal <dialog>) until it is closed. Nothing to tell → not shown.
  */
 export function DailyNotice() {
@@ -90,66 +91,78 @@ export function DailyNotice() {
       {servicesToday.length > 0 && (
         <section className="notice-section">
           <h3>⛪ Ibadah Hari Ini</h3>
-          <ul className="notice-services">
-            {servicesToday.map((s) => (
-              <li key={s.id} className="today" style={{ '--type-color': s.typeColor } as CSSProperties}>
-                <span className="notice-time">{clock(s.time)}</span>
-                <span className="notice-text">
-                  <strong>
-                    Ibadah {s.typeName} · {serviceTitle(s)}
-                  </strong>
-                  {(s.leader || s.mc) && (
-                    <span className="muted small">
-                      {s.leader && <>Khadim: {s.leader}</>}
-                      {s.leader && s.mc && ' · '}
-                      {s.mc && <>Pembawa acara: {s.mc}</>}
+          <ByKolom items={servicesToday} kolomOf={(s) => s.kolom}>
+            {(list) => (
+              <ul className="notice-services">
+                {list.map((s) => (
+                  <li key={s.id} className="today" style={{ '--type-color': s.typeColor } as CSSProperties}>
+                    <span className="notice-time">{clock(s.time)}</span>
+                    <span className="notice-text">
+                      <strong>
+                        Ibadah {s.typeName} · {serviceTitle(s)}
+                      </strong>
+                      {(s.leader || s.mc) && (
+                        <span className="muted small">
+                          {s.leader && <>Khadim: {s.leader}</>}
+                          {s.leader && s.mc && ' · '}
+                          {s.mc && <>Pembawa acara: {s.mc}</>}
+                        </span>
+                      )}
+                      {s.location && <span className="muted small">Lokasi: {s.location}</span>}
                     </span>
-                  )}
-                  {s.location && <span className="muted small">Lokasi: {s.location}</span>}
-                </span>
-              </li>
-            ))}
-          </ul>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ByKolom>
         </section>
       )}
 
       {servicesWeek.length > 0 && (
         <section className="notice-section">
           <h3>📅 Ibadah Minggu Ini</h3>
-          <ul className="notice-services">
-            {servicesWeek.map((s) => (
-              <li key={s.id} style={{ '--type-color': s.typeColor } as CSSProperties}>
-                <span className="notice-time">
-                  {shortDay(serviceDayKey(s))}
-                  <br />
-                  {clock(s.time)}
-                </span>
-                <span className="notice-text">
-                  <strong>
-                    Ibadah {s.typeName} · {serviceTitle(s)}
-                  </strong>
-                  {s.leader && <span className="muted small">Khadim: {s.leader}</span>}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <ByKolom items={servicesWeek} kolomOf={(s) => s.kolom}>
+            {(list) => (
+              <ul className="notice-services">
+                {list.map((s) => (
+                  <li key={s.id} style={{ '--type-color': s.typeColor } as CSSProperties}>
+                    <span className="notice-time">
+                      {shortDay(serviceDayKey(s))}
+                      <br />
+                      {clock(s.time)}
+                    </span>
+                    <span className="notice-text">
+                      <strong>
+                        Ibadah {s.typeName} · {serviceTitle(s)}
+                      </strong>
+                      {s.leader && <span className="muted small">Khadim: {s.leader}</span>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ByKolom>
         </section>
       )}
 
       {birthdays.length > 0 && (
         <section className="notice-section">
           <h3>🎂 Ulang Tahun Hari Ini</h3>
-          <ul className="daily-notice-list">
-            {birthdays.map((m) => (
-              <li key={m.id}>
-                <strong>{m.name}</strong>
-                <span className="muted small">
-                  Kel. {m.familyName}
-                  {m.birthDate && <> · {today.getFullYear() - parts(m.birthDate).y} tahun</>}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <ByKolom items={birthdays} kolomOf={(m) => m.kolom}>
+            {(list) => (
+              <ul className="daily-notice-list">
+                {list.map((m) => (
+                  <li key={m.id}>
+                    <strong>{m.name}</strong>
+                    <span className="muted small">
+                      Kel. {m.familyName}
+                      {m.birthDate && <> · {today.getFullYear() - parts(m.birthDate).y} tahun</>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ByKolom>
         </section>
       )}
 

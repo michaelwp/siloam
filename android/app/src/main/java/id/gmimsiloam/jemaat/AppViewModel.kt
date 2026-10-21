@@ -68,12 +68,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** The kolom both the screens and the notifications follow. */
+    /** The kolom the screens show (notifications have their own filter, in Pengaturan). */
     fun setKolom(k: Int?) {
+        val before = prefs.notifyFilter
         prefs.kolom = k
         _state.update { it.copy(kolom = k) }
-        // reminders queued for the old kolom's services go; the new kolom's come
-        DailyWorker.rescheduleReminders(getApplication())
+        // until a filter is chosen it follows this kolom: requeue today's reminders
+        if (prefs.notifyFilter != before) DailyWorker.rescheduleReminders(getApplication())
     }
 
     fun setServerUrl(url: String) {
