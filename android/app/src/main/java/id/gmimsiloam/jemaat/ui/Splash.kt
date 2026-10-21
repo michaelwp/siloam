@@ -39,9 +39,17 @@ import id.gmimsiloam.jemaat.BuildConfig
 import id.gmimsiloam.jemaat.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** The splash stays at least this long, so the version can be read. */
 private const val SPLASH_MIN_MS = 1_200L
+
+/**
+ * …and at most this long: a first load without a connection (or a slow name
+ * lookup) can take much longer; the app's own "Memuat data…" / error screen,
+ * with pull-to-refresh, is the better place to wait.
+ */
+private const val SPLASH_MAX_MS = 3_000L
 
 /** The launcher icon's blue (ic_launcher_background). */
 private val Brand = Color(0xFF1F5FAE)
@@ -51,7 +59,8 @@ private val Brand = Color(0xFF1F5FAE)
  * (API 31+) can only show the icon, so this one takes over with the icon at
  * the same size and place, plus the app name and version. It goes after
  * [SPLASH_MIN_MS] once there is something to show (cached data, or the first
- * load has finished); [skip] (opened from a notification) leaves it out.
+ * load has finished), and after [SPLASH_MAX_MS] in any case; [skip] (opened
+ * from a notification) leaves it out.
  */
 @Composable
 fun SplashOverlay(skip: Boolean, vm: AppViewModel = viewModel()) {
@@ -60,7 +69,9 @@ fun SplashOverlay(skip: Boolean, vm: AppViewModel = viewModel()) {
     LaunchedEffect(Unit) {
         if (!visible) return@LaunchedEffect
         delay(SPLASH_MIN_MS)
-        snapshotFlow { state.data != null || !state.refreshing }.first { it }
+        withTimeoutOrNull(SPLASH_MAX_MS - SPLASH_MIN_MS) {
+            snapshotFlow { state.data != null || !state.refreshing }.first { it }
+        }
         visible = false
     }
     AnimatedVisibility(visible = visible, exit = fadeOut()) {
