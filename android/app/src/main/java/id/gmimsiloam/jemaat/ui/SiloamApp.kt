@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
@@ -39,16 +40,21 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import id.gmimsiloam.jemaat.AppViewModel
+import id.gmimsiloam.jemaat.data.Prefs
+import id.gmimsiloam.jemaat.data.effectiveKolom
 import id.gmimsiloam.jemaat.notify.DailyWorker
+import id.gmimsiloam.jemaat.notify.Notifier
 
 enum class Tab(val key: String, val label: String, val icon: ImageVector) {
     Home("home", "Beranda", Icons.Filled.Home),
     Schedule("schedule", "Jadwal", Icons.Filled.DateRange),
-    Birthdays("birthdays", "Ulang Tahun", Icons.Filled.Star),
+    Birthdays("birthdays", "HUT", Icons.Filled.Star),
     Members("members", "Jemaat", Icons.Filled.Person),
+    Stats("stats", "Statistik", Icons.AutoMirrored.Filled.List),
 }
 
 @Composable
@@ -66,15 +72,22 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
         if (requestedTab != null) onTabHandled()
     }
 
-    // Android 13+: ask once for permission to show notifications
+    // Android 13+: ask once for permission to show notifications; after
+    // that, Pengaturan links to the system settings
     val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) DailyWorker.runNow(vm.getApplication())
     }
+    val context = LocalContext.current
     LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val prefs = Prefs(context)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !prefs.askedNotificationPermission && !Notifier.canPost(context)) {
+            prefs.askedNotificationPermission = true
             askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
+    // a remembered kolom that no longer exists shows all koloms (as on the web)
+    // (null from effectiveKolom means "all koloms", so no ?: fallback here)
+    val kolom = state.data.let { if (it == null) state.kolom else it.effectiveKolom(state.kolom) }
 
     if (settings) {
         SettingsScreen(state = state, vm = vm, onBack = { settings = false })
@@ -91,7 +104,7 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
                     }
                 },
                 actions = {
-                    KolomMenu(kolom = state.kolom, koloms = state.data?.koloms?.map { it.number } ?: emptyList(), onPick = vm::setKolom)
+                    KolomMenu(kolom = kolom, koloms = state.data?.koloms?.map { it.number } ?: emptyList(), onPick = vm::setKolom)
                     IconButton(onClick = { settings = true }) { Icon(Icons.Filled.Settings, contentDescription = "Pengaturan") }
                 },
             )
@@ -122,10 +135,11 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
                 )
                 else -> Box(Modifier.fillMaxSize()) {
                     when (tab) {
-                        Tab.Home -> HomeScreen(data, state.kolom, state.error)
-                        Tab.Schedule -> ScheduleScreen(data, state.kolom)
-                        Tab.Birthdays -> BirthdaysScreen(data, state.kolom)
-                        Tab.Members -> MembersScreen(data, state.kolom)
+                        Tab.Home -> HomeScreen(data, kolom, state.error)
+                        Tab.Schedule -> ScheduleScreen(data, kolom)
+                        Tab.Birthdays -> BirthdaysScreen(data, kolom)
+                        Tab.Members -> MembersScreen(data, kolom)
+                        Tab.Stats -> StatsScreen(data, kolom)
                     }
                 }
             }

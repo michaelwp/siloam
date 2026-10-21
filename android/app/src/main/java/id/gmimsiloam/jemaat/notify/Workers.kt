@@ -17,6 +17,7 @@ import id.gmimsiloam.jemaat.data.Service
 import id.gmimsiloam.jemaat.data.Snapshot
 import id.gmimsiloam.jemaat.data.birthdaysToday
 import id.gmimsiloam.jemaat.data.clock
+import id.gmimsiloam.jemaat.data.effectiveKolom
 import id.gmimsiloam.jemaat.data.inKolom
 import id.gmimsiloam.jemaat.data.longDate
 import id.gmimsiloam.jemaat.data.upcomingServices
@@ -24,6 +25,9 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.util.concurrent.TimeUnit
+
+/** Tag of the queued service reminders (cancelled together on settings changes). */
+private const val REMINDER_TAG = "service-reminder"
 
 /** Data older than this is fetched again by the background check. */
 private const val STALE_AFTER_MS = 6 * 60 * 60 * 1000L
@@ -45,10 +49,8 @@ class DailyWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         val data = if (stale) repo.refreshOrCached() else cached
         if (data == null) return Result.retry() // nothing to tell yet; try again later
 
-        val now = LocalTime.now()
-        if (prefs.lastDailyNotice != today.toString() && now.toSecondOfDay() / 60 >= prefs.dailyAtMinutes) {
-            showDaily(ctx, prefs, data, today)
-            prefs.lastDailyNotice = today.toString()
+        if (LocalTime.now().toSecondOfDay() / 60 >= prefs.dailyAtMinutes) {
+            showDaily(ctx, prefs, data, today, force = false)
         }
         scheduleReminders(ctx, prefs, data, today)
         return Result.success()
@@ -65,7 +67,17 @@ class DailyWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(WORK, ExistingPeriodicWorkPolicy.UPDATE, req)
         }
 
-        /** Runs the check now (e.g. after changing the kolom or the time). */
+        /**
+         * Drops the reminders queued for today and runs the check, which queues
+         * them again: call after changing the reminder time, the kolom, or the
+         * services switch (queued reminders keep the delay they were made with).
+         */
+        fun rescheduleReminders(context: Context) {
+            WorkManager.getInstance(context).cancelAllWorkByTag(REMINDER_TAG)
+            runNow(context)
+        }
+
+        /** Runs the check now (e.g. after changing the daily time). */
         fun runNow(context: Context) {
             WorkManager.getInstance(context)
                 .enqueueUniqueWork("$WORK-now", ExistingWorkPolicy.REPLACE, OneTimeWorkRequestBuilder<DailyWorker>().build())
@@ -73,10 +85,19 @@ class DailyWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
     }
 }
 
-/** The daily summary: today's services and today's birthdays (of the chosen kolom). */
-internal fun showDaily(ctx: Context, prefs: Prefs, data: Snapshot, today: LocalDate) {
-    val kolom = prefs.kolom
-    if (prefs.notifyServices) {
+/**
+ * The daily summary: today's services and today's birthdays (of the chosen
+ * kolom), each at most once a day. A kind counts as done only when it could be
+ * shown (notifications allowed and switched on), so granting permission or
+ * switching it on later the same day still brings it. [force] shows it again
+ * (the "show now" button) and also counts as today's.
+ */
+internal fun showDaily(ctx: Context, prefs: Prefs, data: Snapshot, today: LocalDate, force: Boolean) {
+    if (!Notifier.canPost(ctx)) return
+    val day = today.toString()
+    val kolom = data.effectiveKolom(prefs.kolom)
+    if (prefs.notifyServices && (force || prefs.lastDailyServices != day)) {
+        prefs.lastDailyServices = day
         val todays = upcomingServices(data.services.inKolom(kolom) { it.kolom }, today).today
         if (todays.isNotEmpty()) {
             val first = todays.first()
@@ -91,7 +112,8 @@ internal fun showDaily(ctx: Context, prefs: Prefs, data: Snapshot, today: LocalD
             )
         }
     }
-    if (prefs.notifyBirthdays) {
+    if (prefs.notifyBirthdays && (force || prefs.lastDailyBirthdays != day)) {
+        prefs.lastDailyBirthdays = day
         val birthdays = birthdaysToday(data.members.inKolom(kolom) { it.kolom }, today)
         if (birthdays.isNotEmpty()) {
             Notifier.post(
@@ -118,7 +140,7 @@ private fun scheduleReminders(ctx: Context, prefs: Prefs, data: Snapshot, today:
     val before = prefs.remindBeforeMinutes
     if (!prefs.notifyServices || before <= 0) return
     // forget reminders of other days
-    val todays = upcomingServices(data.services.inKolom(prefs.kolom) { it.kolom }, today).today
+    val todays = upcomingServices(data.services.inKolom(data.effectiveKolom(prefs.kolom)) { it.kolom }, today).today
     prefs.remindedServices = prefs.remindedServices.filter { id -> todays.any { it.id == id } }.toSet()
     val wm = WorkManager.getInstance(ctx)
     for (s in todays) {
@@ -127,11 +149,13 @@ private fun scheduleReminders(ctx: Context, prefs: Prefs, data: Snapshot, today:
         val delay = start - before * 60_000L - System.currentTimeMillis()
         if (start <= System.currentTimeMillis()) continue // already started
         val req = OneTimeWorkRequestBuilder<ReminderWorker>()
+            .addTag(REMINDER_TAG)
             .setInitialDelay(delay.coerceAtLeast(0), TimeUnit.MILLISECONDS)
             .setInputData(
                 workDataOf(
                     "id" to s.id,
                     "kolom" to s.kolom,
+                    "start" to start,
                     "title" to "Ibadah dimulai ${clock(s.time)} WITA",
                     "text" to s.fullTitle + if (s.place.isNotEmpty()) " · ${s.place}" else "",
                     "detail" to listOfNotNull(
@@ -155,8 +179,13 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val prefs = Prefs(applicationContext)
         val id = inputData.getString("id") ?: return Result.success()
         val kolom = inputData.getInt("kolom", 0)
-        // the kolom choice may have changed since the reminder was queued
-        if (!prefs.notifyServices || id in prefs.remindedServices || (prefs.kolom != null && prefs.kolom != kolom)) {
+        val start = inputData.getLong("start", 0)
+        // the kolom choice may have changed since the reminder was queued; and
+        // Android may run it late (Doze): never remind about a started service
+        val started = start > 0 && System.currentTimeMillis() >= start
+        if (!prefs.notifyServices || id in prefs.remindedServices || started ||
+            (prefs.kolom != null && prefs.kolom != kolom)
+        ) {
             return Result.success()
         }
         Notifier.post(

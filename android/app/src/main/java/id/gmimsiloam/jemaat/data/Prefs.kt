@@ -34,10 +34,19 @@ class Prefs(context: Context) {
         get() = p.getInt("dailyAt", 6 * 60)
         set(v) = p.edit { putInt("dailyAt", v) }
 
-    /** The date (yyyy-MM-dd) the daily summary was last shown, so it shows once a day. */
-    var lastDailyNotice: String
-        get() = p.getString("lastDaily", "") ?: ""
-        set(v) = p.edit { putString("lastDaily", v) }
+    /** The dates (yyyy-MM-dd) today's services / birthdays were last notified, so each shows once a day. */
+    var lastDailyServices: String
+        get() = p.getString("lastDailyServices", "") ?: ""
+        set(v) = p.edit { putString("lastDailyServices", v) }
+
+    var lastDailyBirthdays: String
+        get() = p.getString("lastDailyBirthdays", "") ?: ""
+        set(v) = p.edit { putString("lastDailyBirthdays", v) }
+
+    /** Whether the notification permission was already asked for (asked once; then via settings). */
+    var askedNotificationPermission: Boolean
+        get() = p.getBoolean("askedNotifications", false)
+        set(v) = p.edit { putBoolean("askedNotifications", v) }
 
     /** IDs of services already reminded about (kept small: today's only). */
     var remindedServices: Set<String>

@@ -46,6 +46,7 @@ import id.gmimsiloam.jemaat.AppViewModel
 import id.gmimsiloam.jemaat.BuildConfig
 import id.gmimsiloam.jemaat.UiState
 import id.gmimsiloam.jemaat.data.Prefs
+import id.gmimsiloam.jemaat.data.effectiveKolom
 import id.gmimsiloam.jemaat.notify.DailyWorker
 import id.gmimsiloam.jemaat.notify.Notifier
 import id.gmimsiloam.jemaat.notify.showDaily
@@ -100,10 +101,12 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
             Toggle("Jadwal ibadah", "Ibadah hari ini dan pengingat sebelum ibadah", services) {
                 services = it
                 prefs.notifyServices = it
+                DailyWorker.rescheduleReminders(context)
             }
             Toggle("Ulang tahun", "Anggota jemaat yang berulang tahun hari ini", birthdays) {
                 birthdays = it
                 prefs.notifyBirthdays = it
+                DailyWorker.runNow(context)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -124,31 +127,38 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
                     FilterChip(selected = remind == mins, enabled = services, onClick = {
                         remind = mins
                         prefs.remindBeforeMinutes = mins
-                        DailyWorker.runNow(context)
+                        // today's queued reminders were made with the old time
+                        DailyWorker.rescheduleReminders(context)
                     }, label = { Text(label) })
                 }
             }
             Text(
-                "Notifikasi mengikuti kolom yang dipilih (${kolomLabel(state.kolom)}). " +
+                "Notifikasi mengikuti kolom yang dipilih (${kolomLabel(state.data.let { if (it == null) state.kolom else it.effectiveKolom(state.kolom) })}). " +
                     "Aplikasi memeriksa jadwal di latar belakang sekitar setiap jam, juga setelah ponsel dinyalakan ulang.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             OutlinedButton(onClick = {
-                state.data?.let { showDaily(context, prefs, it, LocalDate.now()) }
+                // counts as today's summary, so it does not come again later today
+                state.data?.let { showDaily(context, prefs, it, LocalDate.now(), force = true) }
             }, enabled = allowed && state.data != null) { Text("Tampilkan notifikasi hari ini sekarang") }
 
             HorizontalDivider()
             Text("Server", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            // release builds only talk HTTPS (network_security_config); debug builds
+            // may use http:// for a computer on the network or the emulator
+            val serverError = serverUrlError(server.trim())
             OutlinedTextField(
                 value = server,
                 onValueChange = { server = it },
                 label = { Text("Alamat server") },
                 singleLine = true,
+                isError = serverError != null,
+                supportingText = serverError?.let { { Text(it) } },
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { vm.setServerUrl(server) }, enabled = server.startsWith("http")) { Text("Simpan & muat ulang") }
+                Button(onClick = { vm.setServerUrl(server.trim()) }, enabled = serverError == null) { Text("Simpan & muat ulang") }
                 OutlinedButton(onClick = { server = Prefs.DEFAULT_SERVER; vm.setServerUrl(Prefs.DEFAULT_SERVER) }) { Text("Bawaan") }
             }
             state.data?.let {
@@ -176,5 +186,17 @@ private fun Toggle(title: String, subtitle: String, checked: Boolean, onChange: 
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+/** Why [url] cannot be used as the server address, or null when it can. */
+internal fun serverUrlError(url: String, debug: Boolean = BuildConfig.DEBUG): String? {
+    val ok = url.startsWith("https://") || (debug && url.startsWith("http://"))
+    return when {
+        url.isEmpty() -> "Isi alamat server"
+        !ok && url.startsWith("http://") -> "Gunakan alamat https:// (koneksi tanpa enkripsi tidak diizinkan)"
+        !ok -> "Alamat harus diawali https://"
+        url.removePrefix("https://").removePrefix("http://").isBlank() -> "Alamat server belum lengkap"
+        else -> null
     }
 }

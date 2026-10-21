@@ -7,6 +7,7 @@ import id.gmimsiloam.jemaat.data.Prefs
 import id.gmimsiloam.jemaat.data.Repository
 import id.gmimsiloam.jemaat.data.Snapshot
 import id.gmimsiloam.jemaat.notify.DailyWorker
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,10 +36,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun refresh() {
-        if (_state.value.refreshing) return
+    private var refreshJob: Job? = null
+
+    /** Loads fresh data; [restart] drops a running load (e.g. it is from the old server). */
+    fun refresh(restart: Boolean = false) {
+        if (_state.value.refreshing && !restart) return
+        refreshJob?.cancel()
         _state.update { it.copy(refreshing = true) }
-        viewModelScope.launch {
+        refreshJob = viewModelScope.launch {
             val result = runCatching { repo.refresh() }
             _state.update { s ->
                 result.fold(
@@ -53,11 +58,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setKolom(k: Int?) {
         prefs.kolom = k
         _state.update { it.copy(kolom = k) }
-        DailyWorker.runNow(getApplication())
+        // reminders queued for the old kolom's services go; the new kolom's come
+        DailyWorker.rescheduleReminders(getApplication())
     }
 
     fun setServerUrl(url: String) {
         prefs.serverUrl = url
-        refresh()
+        refresh(restart = true)
     }
 }

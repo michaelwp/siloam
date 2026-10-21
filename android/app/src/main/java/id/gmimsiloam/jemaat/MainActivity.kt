@@ -19,12 +19,23 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         Notifier.createChannels(this)
         DailyWorker.schedule(this)
-        requestedTab.value = intent?.getStringExtra(Notifier.EXTRA_TAB)
+        // only on a fresh start: after a rotation the user's own tab stays
+        if (savedInstanceState == null) requestedTab.value = intent?.getStringExtra(Notifier.EXTRA_TAB)
         setContent {
             SiloamTheme {
                 SiloamApp(requestedTab = requestedTab.value, onTabHandled = { requestedTab.value = null })
             }
         }
+    }
+
+    /**
+     * Coming to the foreground also runs the check right away: e.g.
+     * notifications were just allowed in Android's settings and today's
+     * summary is still due. (Cheap: data is only fetched when it is stale.)
+     */
+    override fun onStart() {
+        super.onStart()
+        DailyWorker.runNow(this)
     }
 
     override fun onNewIntent(intent: android.content.Intent) {

@@ -88,3 +88,10 @@ fun anniversariesToday(families: List<Family>, today: LocalDate) =
         it.weddingMonth != null && it.weddingDay != null &&
             daysUntil(it.weddingMonth, it.weddingDay, today) == 0L
     }
+
+/**
+ * The kolom to show: the chosen one while it still exists on the server, else
+ * all koloms (as the web falls back when a remembered kolom was deleted).
+ */
+fun Snapshot.effectiveKolom(chosen: Int?): Int? =
+    chosen?.takeIf { k -> koloms.isEmpty() || koloms.any { it.number == k } }
