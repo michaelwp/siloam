@@ -18,8 +18,9 @@ import (
 type API struct {
 	store *store.Store
 	loc   *time.Location // local time of the services (WITA)
-	// Android is the newest Android app, for the app's update check
-	Android AndroidRelease
+	// AndroidDefault is the newest Android app per the server's ANDROID_*
+	// settings; the admin page's setting, once saved, takes precedence
+	AndroidDefault model.AndroidRelease
 }
 
 func New(s *store.Store, loc *time.Location) *API { return &API{store: s, loc: loc} }
@@ -27,6 +28,13 @@ func New(s *store.Store, loc *time.Location) *API { return &API{store: s, loc: l
 func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/health", a.health)
 	mux.HandleFunc("GET /api/app/android", a.androidRelease)
+
+	// admin only (the auth middleware guards /api/admin/)
+	mux.HandleFunc("GET /api/admin/android", a.adminAndroid)
+	mux.HandleFunc("PUT /api/admin/android", a.setAndroid)
+	mux.HandleFunc("DELETE /api/admin/android", a.clearAndroid)
+	mux.HandleFunc("GET /api/admin/audit", a.listAudit)
+	mux.HandleFunc("GET /api/admin/audit/meta", a.auditMeta)
 
 	mux.HandleFunc("GET /api/koloms", a.listKoloms)
 	mux.HandleFunc("POST /api/koloms", a.createKolom)

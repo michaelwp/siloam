@@ -85,3 +85,34 @@ func TestPublicReadSessionHandling(t *testing.T) {
 		t.Fatalf("valid session: code=%d signedIn=%v set-cookie=%q", rec.Code, signedIn, rec.Header().Get("Set-Cookie"))
 	}
 }
+
+func TestAdminPagesNeedTheAdminRole(t *testing.T) {
+	svc, st := testService(t)
+	h := svc.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	session := func(username, role string) string {
+		u := &model.User{Username: username, Role: role, WebAuthnID: []byte(username)}
+		if err := st.CreateUser(context.Background(), u); err != nil {
+			t.Fatal(err)
+		}
+		now := time.Now().UTC()
+		token := "token-" + username
+		if err := st.CreateSession(context.Background(), model.Session{ID: hashToken(token), UserID: u.ID, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}); err != nil {
+			t.Fatal(err)
+		}
+		return token
+	}
+	staff, admin := session("staf", model.RoleUser), session("admin", model.RoleAdmin)
+	for _, path := range []string{"/api/admin/audit", "/api/admin/android"} {
+		for token, want := range map[string]int{"": http.StatusUnauthorized, staff: http.StatusForbidden, admin: http.StatusNoContent} {
+			r := httptest.NewRequest(http.MethodGet, path, nil)
+			if token != "" {
+				r.AddCookie(&http.Cookie{Name: sessionCookie, Value: token})
+			}
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, r)
+			if rec.Code != want {
+				t.Errorf("%s with %q: %d, want %d", path, token, rec.Code, want)
+			}
+		}
+	}
+}

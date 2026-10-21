@@ -32,9 +32,11 @@ import (
 	_ "time/tzdata" // APP_TIMEZONE works in minimal containers too
 
 	"siloam/internal/api"
+	"siloam/internal/audit"
 	"siloam/internal/auth"
 	"siloam/internal/config"
 	"siloam/internal/importer"
+	"siloam/internal/model"
 	"siloam/internal/store"
 	"siloam/web"
 )
@@ -121,14 +123,20 @@ func run() error {
 	mux := http.NewServeMux()
 	authSvc.Register(mux)
 	jemaat := api.New(s, loc)
-	jemaat.Android = api.AndroidRelease{LatestVersion: os.Getenv("ANDROID_LATEST_VERSION"), DownloadURL: os.Getenv("ANDROID_DOWNLOAD_URL")}
-	if err := jemaat.Android.Validate(); err != nil {
-		return err
+	jemaat.AndroidDefault = model.AndroidRelease{LatestVersion: os.Getenv("ANDROID_LATEST_VERSION"), DownloadURL: os.Getenv("ANDROID_DOWNLOAD_URL")}
+	if err := jemaat.AndroidDefault.Validate(); err != nil {
+		return fmt.Errorf("ANDROID_LATEST_VERSION / ANDROID_DOWNLOAD_URL: %w", err)
 	}
 	jemaat.Register(mux)
 	mux.Handle("/", spaHandler(web.Dist()))
 
-	handler := logRequests(securityHeaders(authSvc.RateLimit(authSvc.Middleware(mux)), env("COOKIE_SECURE", "false") == "true"))
+	// the audit log keeps user activities for AUDIT_RETENTION_DAYS (default a year)
+	if err := s.EnsureAuditIndexes(ctx, time.Duration(envInt("AUDIT_RETENTION_DAYS", 365))*24*time.Hour); err != nil {
+		return err
+	}
+	recorder := &audit.Recorder{Store: s, ClientIP: authSvc.ClientIP, User: auth.CurrentUser}
+
+	handler := logRequests(securityHeaders(authSvc.RateLimit(authSvc.Middleware(recorder.Middleware(mux))), env("COOKIE_SECURE", "false") == "true"))
 	srv := &http.Server{Addr: *addr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()

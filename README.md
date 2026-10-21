@@ -73,12 +73,15 @@ Pengaturan; *Unduh* opens the download link. To publish a version:
    refuses an update signed with a different key);
 3. upload it to a GitHub release, under a fixed file name such as
    `jemaat-siloam.apk`;
-4. set on the server, e.g. in `fly.toml` `[env]`:
-   `ANDROID_LATEST_VERSION = '1.0.1'` and
-   `ANDROID_DOWNLOAD_URL = 'https://github.com/michaelwp/siloam/releases/latest/download/jemaat-siloam.apk'`
+4. an admin enters the version and the link on **Aplikasi Android** (web
+   sidebar), e.g. `1.0.1` and
+   `https://github.com/michaelwp/siloam/releases/latest/download/jemaat-siloam.apk`
    (that link always points to the newest release's file).
 
-Without both settings the server reports no version and the app shows nothing.
+Until an admin saves a version there, the server's `ANDROID_LATEST_VERSION` /
+`ANDROID_DOWNLOAD_URL` settings apply (e.g. in `fly.toml` `[env]`); the page
+shows which one is in effect and can go back to the server settings. With
+neither, the server reports no version and the app shows nothing.
 
 - **Backend:** Go 1.25 (`net/http`), MongoDB
 - **Frontend:** React 19 + TypeScript (Vite), embedded into the Go binary with `go:embed`
@@ -138,6 +141,18 @@ private data never stays on screen after signing out. An expired session on a
 public page gets its cookie cleared and the page returns to visitor mode.
 
 ## Sign-in & users
+
+Admins also see **Aplikasi Android** (the update notice above) and **Log
+Aktivitas**: every change made in the app (add/edit/delete of koloms,
+families, members, jenis ibadah, services, users, passkeys, the Android
+version) and every sign-in and sign-out, with who, what (the item's name, also
+after a delete), success or failure, the IP address and the time, newest first
+and filterable by user, kind, result and date. Request contents are never
+stored, so passwords cannot end up in the log; a failed sign-in records the
+username only if that account exists (what was typed may be a password).
+Entries are deleted after `AUDIT_RETENTION_DAYS` (default 365). Imports and
+copies from the command line are not in the log. Requests refused before they
+reach the app (not signed in, not an admin) are not logged either.
 
 - **First run:** when there are no users, the server creates an admin account
   **`admin` / `admin`** (override with `INITIAL_ADMIN_USER` / `INITIAL_ADMIN_PASSWORD`).
@@ -366,6 +381,8 @@ git-ignored and excluded from Docker builds — keep credentials there only.
 | `AUTH_RATE_LIMIT`                | `20` — sign-in attempts per client IP per minute |
 | `TRUSTED_PROXIES`                | none — comma-separated IPs/CIDRs of reverse proxies, e.g. `10.0.0.0/8,127.0.0.1` |
 | `CLIENT_IP_HEADER`               | none — client-IP header set by a platform edge proxy (Fly.io: `Fly-Client-IP`) |
+| `AUDIT_RETENTION_DAYS`           | `365` — how long *Log Aktivitas* keeps entries |
+| `ANDROID_LATEST_VERSION` / `ANDROID_DOWNLOAD_URL` | none — the Android update notice until an admin sets it on *Aplikasi Android* |
 | `-import file.xlsx [-replace]`   | import the workbook and exit              |
 | `-copy-from <uri> [-collections families,members] [-replace]` | copy data from another MongoDB and exit |
 | `-reset-user <name>`             | unlock an account, print a temporary password and exit |
@@ -410,7 +427,7 @@ Reading koloms, families, members, worship types and services (`GET` on
 `/api/services…` and `/api/calendar.ics`) and the Android update check are public; families and members come
 in the redacted public view unless signed in. Every other
 endpoint except `/api/health` and sign-in requires a session cookie, and
-`/api/users` requires the admin role. Errors are
+`/api/users` and `/api/admin/…` require the admin role. Errors are
 `{"error": "...", "code": "..."}`; `code` is `unauthenticated` (401),
 `password_change_required` (403), `forbidden` (403), `rate_limited` (429, with
 `Retry-After`) or `account_locked` (423, only from passkey sign-in, where the
@@ -420,6 +437,11 @@ user has proven who they are).
 |--------|----------------------------------------|-------------------------------------------|
 | GET    | `/api/health`                          | `200` when MongoDB is reachable (public)  |
 | GET    | `/api/app/android`                     | `{latestVersion, downloadUrl}` for the app's update check (public; empty when not configured) |
+| GET    | `/api/admin/android`                   | admin: the release in effect, `source` (`database`/`env`/`none`) and the `ANDROID_*` values |
+| PUT    | `/api/admin/android`                   | admin: `{latestVersion, downloadUrl}` (both empty = no update notice) |
+| DELETE | `/api/admin/android`                   | admin: back to the `ANDROID_*` settings |
+| GET    | `/api/admin/audit`                     | admin: log entries newest first; `?username=&category=&result=ok\|failed&from=&to=` (YYYY-MM-DD, `APP_TIMEZONE`), `before=<id>` for the next 50 |
+| GET    | `/api/admin/audit/meta`                | admin: the categories and usernames for the filters |
 | GET    | `/api/auth/config`                     | `{maxFailedLogins, lockSeconds}` for the sign-in page (public) |
 | POST   | `/api/auth/login`                      | `{username, password}` (public)           |
 | POST   | `/api/auth/logout`                     |                                           |
@@ -477,6 +499,7 @@ spellings and birth dates); Data Base Keluarga is treated as the source of truth
 main.go                 server, flags, SPA handler
 internal/api            REST handlers (koloms, families, members, schedule)
 internal/auth           sign-in, passkeys, sessions, user admin, middleware
+internal/audit          audit log middleware (user activities)
 internal/httpx          JSON helpers
 internal/config         .env loader
 internal/store          MongoDB access

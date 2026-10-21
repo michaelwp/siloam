@@ -219,6 +219,8 @@ func TestPublicReadOnlyData(t *testing.T) {
 		{"GET", "/api/auth/me", false},
 		{"GET", "/api/familiesX", false},
 		{"GET", "/api/app/android", true},
+		{"GET", "/api/admin/android", false},
+		{"GET", "/api/admin/audit", false},
 		{"POST", "/api/app/android", false},
 	}
 	for _, c := range cases {

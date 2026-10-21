@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"siloam/internal/audit"
 	"siloam/internal/httpx"
 	"siloam/internal/model"
 	"siloam/internal/store"
@@ -68,6 +69,11 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 	ok := checkPassword(hash, in.Password)
 	locked := u != nil && u.IsLockedAt(time.Now())
 	if u == nil || locked || !ok {
+		// only an existing account's name: what was typed for an unknown one
+		// may be a password entered in the wrong field
+		if u != nil {
+			audit.SetAttempt(r, u.Username)
+		}
 		s.limiter.fail(ipKey)
 		if u != nil && !locked { // failures during a lock neither count nor extend it
 			if err := s.recordFailure(r, u); err != nil {
@@ -78,6 +84,7 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 		s.loginFailed(w)
 		return
 	}
+	audit.SetAttempt(r, u.Username)
 	u, err = s.startSession(w, r, u.ID)
 	if errors.Is(err, store.ErrLocked) { // locked while the password was checked
 		s.loginFailed(w)
@@ -87,6 +94,7 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 		httpx.ServerError(w, err)
 		return
 	}
+	audit.SetUser(r, u)
 	httpx.WriteJSON(w, http.StatusOK, u)
 }
 
@@ -115,6 +123,10 @@ func writeLocked(w http.ResponseWriter, u *model.User) {
 }
 
 func (s *Service) logout(w http.ResponseWriter, r *http.Request) {
+	// who signs out (logout is reachable without a session check)
+	if u, _, err := s.authenticate(r); err == nil && u != nil {
+		audit.SetUser(r, u)
+	}
 	if c, err := r.Cookie(sessionCookie); err == nil && c.Value != "" {
 		if err := s.store.DeleteSession(r.Context(), hashToken(c.Value)); err != nil {
 			httpx.ServerError(w, err)

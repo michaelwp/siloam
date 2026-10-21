@@ -2099,3 +2099,46 @@ textarea {
   font-size: 1rem;
   color: var(--muted);
 }
+
+/* ---- admin: Android version & audit log ---- */
+.release-now {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 8px 12px;
+  margin: 8px 20px 16px;
+}
+.release-now dt {
+  color: var(--muted);
+}
+.release-now dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 560px) {
+  .release-now {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .release-now dd {
+    margin-bottom: 8px;
+  }
+}
+.panel-foot {
+  margin: 0;
+  padding: 4px 20px 16px;
+}
+.date-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.muted.block {
+  display: block;
+}
+.load-more {
+  display: flex;
+  justify-content: center;
+  margin: 16px 0;
+}

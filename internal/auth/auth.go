@@ -167,6 +167,11 @@ func publicRead(r *http.Request) bool {
 		p == "/api/members" || strings.HasPrefix(p, "/api/members/")
 }
 
+// adminOnly: user management and the admin pages (Android version, audit log).
+func adminOnly(path string) bool {
+	return path == "/api/users" || strings.HasPrefix(path, "/api/users/") || strings.HasPrefix(path, "/api/admin/")
+}
+
 // paths reachable while the user still has to change the initial password
 var changePasswordPaths = map[string]bool{
 	"/api/auth/me":                 true,
@@ -175,7 +180,7 @@ var changePasswordPaths = map[string]bool{
 }
 
 // Middleware guards /api/*: same-origin check for writes, session check,
-// forced password change, and admin-only /api/users.
+// forced password change, and admin-only /api/users and /api/admin/.
 func (s *Service) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -223,7 +228,7 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 			httpx.WriteError(w, http.StatusForbidden, "ubah username dan password terlebih dahulu", "password_change_required")
 			return
 		}
-		if (path == "/api/users" || strings.HasPrefix(path, "/api/users/")) && !u.IsAdmin() {
+		if adminOnly(path) && !u.IsAdmin() {
 			httpx.WriteError(w, http.StatusForbidden, "hanya admin yang dapat mengakses halaman ini", "forbidden")
 			return
 		}
@@ -256,6 +261,17 @@ func hasCookie(r *http.Request, name string) bool {
 // of public read endpoints use it to decide between the full and the public
 // (redacted) view.
 func SignedIn(r *http.Request) bool { return current(r) != nil }
+
+// CurrentUser is the signed-in user making the request, or nil.
+func CurrentUser(r *http.Request) *model.User {
+	if p := current(r); p != nil {
+		return p.user
+	}
+	return nil
+}
+
+// ClientIP is the request's client address (behind the configured proxies).
+func (s *Service) ClientIP(r *http.Request) string { return s.clientIP(r) }
 
 func current(r *http.Request) *principal {
 	p, _ := r.Context().Value(ctxKey{}).(*principal)

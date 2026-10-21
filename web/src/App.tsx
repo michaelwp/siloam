@@ -8,8 +8,10 @@ import { DataScope } from './DataProvider'
 import { ScheduleProvider } from './ScheduleProvider'
 import { kolomLabel, useData } from './data'
 import Account from './pages/Account'
+import AdminAndroid from './pages/AdminAndroid'
 import AdminUsers from './pages/AdminUsers'
 import AnggotaJemaat from './pages/AnggotaJemaat'
+import AuditLog from './pages/AuditLog'
 import Beranda from './pages/Beranda'
 import ChangeCredentials from './pages/ChangeCredentials'
 import DaftarKeluarga from './pages/DaftarKeluarga'
@@ -121,7 +123,13 @@ function Shell() {
                 <NavLink to="/kolom">Kelola Kolom</NavLink>
                 <NavLink to="/jenis-ibadah">Jenis Ibadah</NavLink>
                 <NavLink to="/akun">Akun Saya</NavLink>
-                {isAdmin && <NavLink to="/admin/pengguna">Pengguna</NavLink>}
+                {isAdmin && (
+                  <>
+                    <NavLink to="/admin/pengguna">Pengguna</NavLink>
+                    <NavLink to="/admin/android">Aplikasi Android</NavLink>
+                    <NavLink to="/admin/log">Log Aktivitas</NavLink>
+                  </>
+                )}
                 <button
                   type="button"
                   className="nav-button"
@@ -180,6 +188,22 @@ function Shell() {
             element={
               <RequireUser admin>
                 <AdminUsers />
+              </RequireUser>
+            }
+          />
+          <Route
+            path="/admin/android"
+            element={
+              <RequireUser admin>
+                <AdminAndroid />
+              </RequireUser>
+            }
+          />
+          <Route
+            path="/admin/log"
+            element={
+              <RequireUser admin>
+                <AuditLog />
               </RequireUser>
             }
           />

@@ -14,6 +14,7 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 
+	"siloam/internal/audit"
 	"siloam/internal/httpx"
 	"siloam/internal/model"
 	"siloam/internal/store"
@@ -124,6 +125,7 @@ func (s *Service) passkeyLoginFinish(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusUnauthorized, "passkey tidak dikenali")
 		return
 	}
+	audit.SetAttempt(r, found.Username)
 	if found.IsLockedAt(time.Now()) {
 		writeLocked(w, found)
 		return
@@ -145,6 +147,9 @@ func (s *Service) passkeyLoginFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, err := s.startSession(w, r, found.ID)
+	if err == nil {
+		audit.SetUser(r, u)
+	}
 	if errors.Is(err, store.ErrLocked) {
 		if latest, gerr := s.store.GetUser(r.Context(), found.ID); gerr == nil {
 			found = latest

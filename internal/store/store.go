@@ -28,6 +28,8 @@ type Store struct {
 
 	worshipTypes *mongo.Collection
 	services     *mongo.Collection
+
+	audit *mongo.Collection // user activities (see EnsureAuditIndexes)
 }
 
 // DefaultDatabase is used when the URI has no database path.
@@ -76,6 +78,8 @@ func Connect(ctx context.Context, uri, dbName string) (*Store, error) {
 
 		worshipTypes: db.Collection("worship_types"),
 		services:     db.Collection("services"),
+
+		audit: db.Collection("audit_logs"),
 	}, nil
 }
 

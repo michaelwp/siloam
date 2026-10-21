@@ -193,6 +193,58 @@ export const authApi = {
   deletePasskey: (id: string) => request<User>('DELETE', `/api/auth/passkeys/${id}`),
 }
 
+// ---- admin: Android version & audit log ----
+
+export type AndroidRelease = {
+  latestVersion: string
+  downloadUrl: string
+  updatedAt?: string
+  updatedBy?: string
+}
+
+/** What the app's update check reports, and where it comes from. */
+export type AndroidReleaseView = AndroidRelease & {
+  source: 'database' | 'env' | 'none'
+  server: AndroidRelease // the server's ANDROID_* settings
+}
+
+export type AuditEntry = {
+  id: string
+  at: string
+  userId?: string
+  username: string
+  category: string
+  action: string
+  target?: string
+  targetId?: string
+  method: string
+  path: string
+  status: number
+  ip: string
+}
+
+export type AuditFilter = {
+  username?: string
+  category?: string
+  result?: '' | 'ok' | 'failed'
+  from?: string // YYYY-MM-DD
+  to?: string
+  before?: string
+}
+
+export const adminApi = {
+  android: () => request<AndroidReleaseView>('GET', '/api/admin/android'),
+  setAndroid: (body: { latestVersion: string; downloadUrl: string }) =>
+    request<AndroidReleaseView>('PUT', '/api/admin/android', body),
+  clearAndroid: () => request<AndroidReleaseView>('DELETE', '/api/admin/android'),
+  audit: (f: AuditFilter) => {
+    const q = new URLSearchParams(Object.entries(f).filter((e): e is [string, string] => !!e[1]))
+    return request<AuditEntry[]>('GET', `/api/admin/audit?${q}`)
+  },
+  auditMeta: () =>
+    request<{ categories: { key: string; label: string }[]; usernames: string[] }>('GET', '/api/admin/audit/meta'),
+}
+
 export const usersApi = {
   list: () => request<User[]>('GET', '/api/users'),
   create: (body: { username: string; password: string; role: Role }) => request<User>('POST', '/api/users', body),
