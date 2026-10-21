@@ -240,8 +240,14 @@ function Shell() {
 function KolomPicker() {
   const { koloms, kolom, setKolom } = useData()
   const { user } = useAuth()
-  // a "kelola data kolom" user only reads the other koloms (as visitors see them)
-  const own = user?.role === 'kolom' ? user.kolom : undefined
+  // a "kelola data kolom" user sees only their kolom: no picker
+  if (user?.role === 'kolom') {
+    return (
+      <p className="kolom-picker kolom-fixed" title="Anda mengelola data kolom ini">
+        {kolomLabel(user.kolom ?? null)}
+      </p>
+    )
+  }
   return (
     <>
       <label className="kolom-picker">
@@ -255,14 +261,6 @@ function KolomPicker() {
           ))}
         </select>
       </label>
-      {own !== undefined && kolom !== own && (
-        <p className="kolom-note small">
-          Hanya baca. Anda mengelola data Kolom {own}.{' '}
-          <button type="button" className="link" onClick={() => setKolom(own)}>
-            Buka Kolom {own}
-          </button>
-        </p>
-      )}
     </>
   )
 }

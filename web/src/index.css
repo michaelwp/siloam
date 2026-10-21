@@ -2143,10 +2143,13 @@ textarea {
   margin: 16px 0;
 }
 
-/* a "kelola data kolom" user viewing another kolom */
-.kolom-note {
-  margin: -4px 4px 8px;
-  color: var(--muted);
+/* a "kelola data kolom" user: their kolom, fixed */
+.kolom-fixed {
+  margin: 0 0 12px;
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-weight: 600;
 }
 
 /* BIPRA categories beyond the defaults: their color as a dot */

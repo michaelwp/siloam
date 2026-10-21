@@ -186,13 +186,14 @@ reach the app (not signed in, not an admin) are not logged either.
   |---|---|---|
   | Admin | all jemaat data, koloms, jenis ibadah, users, Android version, log | every kolom |
   | Pengguna | all jemaat data, koloms, jenis ibadah | every kolom |
-  | Pengguna – kelola data kolom | families, members and services of **their one kolom** (chosen when the account is created; required) | their kolom only — other koloms show as for visitors |
+  | Pengguna – kelola data kolom | families, members and services of **their one kolom** (chosen when the account is created; required) | their kolom only — the app shows only their kolom |
   | Pengguna – kelola data BIPRA | only **services** whose jenis ibadah is linked to **their one BIPRA category** (chosen when the account is created; required); the kolom is optional | their category's members only |
 
   The server enforces this (`403` otherwise, also for moving data into or out
-  of the kolom); the web app starts a kolom user on their kolom, offers only
-  that kolom in forms, hides *Kelola Kolom* and *Jenis Ibadah*, and marks other
-  koloms "Hanya baca". A kolom assigned to a user cannot be deleted.
+  of the kolom); the web app shows a kolom user only their kolom (no kolom
+  picker; services for the whole congregation, "Semua kolom", still show),
+  offers only that kolom in forms and hides *Kelola Kolom* and *Jenis Ibadah*.
+  A kolom assigned to a user cannot be deleted.
 
   A *kelola data BIPRA* user (e.g. for Pemuda) sees, on Beranda, Daftar HUT
   Jemaat and Daftar Anggota Jemaat, only their category's members (and on
