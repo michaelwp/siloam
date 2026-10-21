@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import id.gmimsiloam.jemaat.data.AppRelease
 import id.gmimsiloam.jemaat.data.MONTHS
 import id.gmimsiloam.jemaat.data.Prefs
 import id.gmimsiloam.jemaat.data.Service
@@ -40,7 +41,7 @@ import java.util.Date
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun HomeScreen(data: Snapshot, kolom: Int?, error: String?, onCategory: (String) -> Unit) {
+fun HomeScreen(data: Snapshot, kolom: Int?, error: String?, update: AppRelease?, onCategory: (String) -> Unit) {
     val today = rememberToday()
     val services = data.services.inKolom(kolom) { it.kolom }
     val members = data.members.inKolom(kolom) { it.kolom }
@@ -63,6 +64,7 @@ fun HomeScreen(data: Snapshot, kolom: Int?, error: String?, onCategory: (String)
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        update?.let { UpdateBanner(it) }
         if (error != null) {
             Text(
                 "Tidak dapat terhubung ke server; menampilkan data tersimpan dari " +

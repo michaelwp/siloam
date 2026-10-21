@@ -143,7 +143,7 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
                 else -> Box(Modifier.fillMaxSize()) {
                     tabState.SaveableStateProvider(tab.key) {
                         when (tab) {
-                            Tab.Home -> HomeScreen(data, kolom, state.error, onCategory = { category = it; tab = Tab.Bipra })
+                            Tab.Home -> HomeScreen(data, kolom, state.error, state.update, onCategory = { category = it; tab = Tab.Bipra })
                             Tab.Schedule -> ScheduleScreen(data, kolom)
                             Tab.Birthdays -> BirthdaysScreen(data, kolom)
                             Tab.Members -> MembersScreen(data, kolom)

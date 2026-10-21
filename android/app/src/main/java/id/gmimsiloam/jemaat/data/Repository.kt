@@ -69,6 +69,20 @@ class Repository(private val context: Context) {
         snapshot
     }
 
+    /**
+     * Asks the server for the newest app release and remembers it. A failed
+     * check keeps what the last one found; a server without a configured
+     * release clears it.
+     */
+    suspend fun checkRelease() = withContext(Dispatchers.IO) {
+        val prefs = Prefs(context)
+        val api = Api(prefs.serverUrl)
+        val body = runCatching { api.get("/api/app/android") }.getOrNull() ?: return@withContext
+        val release = runCatching { parseRelease(body) }.getOrNull()
+        prefs.latestVersion = release?.latestVersion ?: ""
+        prefs.downloadUrl = release?.downloadUrl ?: ""
+    }
+
     /** Fresh data when the server answers, else the cached copy (null if none). */
     suspend fun refreshOrCached(): Snapshot? = runCatching { refresh() }.getOrElse { cached() }
 }

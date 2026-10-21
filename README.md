@@ -62,6 +62,24 @@ make android-install   # install it on a phone/emulator via adb
 make android-release   # release APK (unsigned: sign it with your key before publishing)
 ```
 
+**New versions.** The app asks the server for the newest version
+(`GET /api/app/android`) when it loads and in the hourly background check. If
+it is newer than the installed one, the app shows a notification (once per
+version) and a "Versi baru tersedia · Unduh" banner on Beranda and in
+Pengaturan; *Unduh* opens the download link. To publish a version:
+
+1. raise `versionCode` and `versionName` in `android/app/build.gradle.kts`;
+2. build and sign the release APK — always with **the same key** (Android
+   refuses an update signed with a different key);
+3. upload it to a GitHub release, under a fixed file name such as
+   `jemaat-siloam.apk`;
+4. set on the server, e.g. in `fly.toml` `[env]`:
+   `ANDROID_LATEST_VERSION = '1.0.1'` and
+   `ANDROID_DOWNLOAD_URL = 'https://github.com/michaelwp/siloam/releases/latest/download/jemaat-siloam.apk'`
+   (that link always points to the newest release's file).
+
+Without both settings the server reports no version and the app shows nothing.
+
 - **Backend:** Go 1.25 (`net/http`), MongoDB
 - **Frontend:** React 19 + TypeScript (Vite), embedded into the Go binary with `go:embed`
 - **Sign-in:** username/password or passkey (WebAuthn), admin-managed accounts
@@ -389,7 +407,7 @@ is only read.
 
 Reading koloms, families, members, worship types and services (`GET` on
 `/api/koloms`, `/api/families…`, `/api/members…`, `/api/worship-types`,
-`/api/services…` and `/api/calendar.ics`) is public; families and members come
+`/api/services…` and `/api/calendar.ics`) and the Android update check are public; families and members come
 in the redacted public view unless signed in. Every other
 endpoint except `/api/health` and sign-in requires a session cookie, and
 `/api/users` requires the admin role. Errors are
@@ -401,6 +419,7 @@ user has proven who they are).
 | Method | Path                                   | Notes                                     |
 |--------|----------------------------------------|-------------------------------------------|
 | GET    | `/api/health`                          | `200` when MongoDB is reachable (public)  |
+| GET    | `/api/app/android`                     | `{latestVersion, downloadUrl}` for the app's update check (public; empty when not configured) |
 | GET    | `/api/auth/config`                     | `{maxFailedLogins, lockSeconds}` for the sign-in page (public) |
 | POST   | `/api/auth/login`                      | `{username, password}` (public)           |
 | POST   | `/api/auth/logout`                     |                                           |

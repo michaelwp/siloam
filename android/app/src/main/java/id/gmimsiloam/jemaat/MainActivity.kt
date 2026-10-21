@@ -4,11 +4,13 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.mutableStateOf
 import id.gmimsiloam.jemaat.notify.DailyWorker
 import id.gmimsiloam.jemaat.notify.Notifier
 import id.gmimsiloam.jemaat.ui.SiloamApp
 import id.gmimsiloam.jemaat.ui.SiloamTheme
+import id.gmimsiloam.jemaat.ui.SplashOverlay
 
 class MainActivity : ComponentActivity() {
     /** The tab a tapped notification asks for. */
@@ -21,9 +23,14 @@ class MainActivity : ComponentActivity() {
         DailyWorker.schedule(this)
         // only on a fresh start: after a rotation the user's own tab stays
         if (savedInstanceState == null) requestedTab.value = intent?.getStringExtra(Notifier.EXTRA_TAB)
+        // opened from a notification: straight to its tab, no splash
+        val fromNotification = requestedTab.value != null
         setContent {
             SiloamTheme {
-                SiloamApp(requestedTab = requestedTab.value, onTabHandled = { requestedTab.value = null })
+                Box {
+                    SiloamApp(requestedTab = requestedTab.value, onTabHandled = { requestedTab.value = null })
+                    SplashOverlay(skip = fromNotification)
+                }
             }
         }
     }

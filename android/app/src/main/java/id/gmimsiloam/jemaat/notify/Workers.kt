@@ -11,6 +11,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import id.gmimsiloam.jemaat.BuildConfig
 import id.gmimsiloam.jemaat.data.Prefs
 import id.gmimsiloam.jemaat.data.Repository
 import id.gmimsiloam.jemaat.data.Service
@@ -47,6 +48,9 @@ class DailyWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         val stale = cached == null || System.currentTimeMillis() - cached.fetchedAt > STALE_AFTER_MS ||
             !java.time.Instant.ofEpochMilli(cached.fetchedAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate().isEqual(today)
         val data = if (stale) repo.refreshOrCached() else cached
+        // the update check does not need the data: do it first
+        repo.checkRelease()
+        notifyUpdate(ctx, prefs)
         if (data == null) return Result.retry() // nothing to tell yet; try again later
 
         if (LocalTime.now().toSecondOfDay() / 60 >= prefs.dailyAtMinutes) {
@@ -128,6 +132,17 @@ internal fun showDaily(ctx: Context, prefs: Prefs, data: Snapshot, today: LocalD
             )
         }
     }
+}
+
+/**
+ * "A new version is available", once per version, and only counted as shown
+ * when it could be shown (as the daily summary).
+ */
+private fun notifyUpdate(ctx: Context, prefs: Prefs) {
+    val update = prefs.availableUpdate(BuildConfig.VERSION_NAME) ?: return
+    if (prefs.notifiedUpdate == update.latestVersion || !Notifier.canPost(ctx)) return
+    Notifier.postUpdate(ctx, update.latestVersion, update.downloadUrl)
+    prefs.notifiedUpdate = update.latestVersion
 }
 
 private fun serviceLine(s: Service) = buildString {

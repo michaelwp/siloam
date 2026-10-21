@@ -3,6 +3,7 @@ package id.gmimsiloam.jemaat
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import id.gmimsiloam.jemaat.data.AppRelease
 import id.gmimsiloam.jemaat.data.Prefs
 import id.gmimsiloam.jemaat.data.Repository
 import id.gmimsiloam.jemaat.data.Snapshot
@@ -22,12 +23,14 @@ data class UiState(
     val error: String? = null,
     /** viewed kolom; null = all */
     val kolom: Int? = null,
+    /** a newer app version to offer, if the last check found one */
+    val update: AppRelease? = null,
 )
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = Prefs(app)
     private val repo = Repository(app)
-    private val _state = MutableStateFlow(UiState(kolom = prefs.kolom))
+    private val _state = MutableStateFlow(UiState(kolom = prefs.kolom, update = prefs.availableUpdate(BuildConfig.VERSION_NAME)))
     val state: StateFlow<UiState> = _state.asStateFlow()
 
     init {
@@ -49,10 +52,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             // replaced by a newer load (runCatching also caught the cancellation):
             // leave the state to that one, never show "Job was cancelled"
             ensureActive()
+            // the update check rides along when the server answered (it never fails the load)
+            if (result.isSuccess) {
+                repo.checkRelease()
+                ensureActive()
+            }
             _state.update { s ->
                 result.fold(
-                    onSuccess = { s.copy(data = it, refreshing = false, error = null) },
-                    onFailure = { e -> s.copy(refreshing = false, error = e.message ?: "Gagal memuat data") },
+                    onSuccess = { s.copy(data = it, refreshing = false, error = null, update = prefs.availableUpdate(BuildConfig.VERSION_NAME)) },
+                    onFailure = { e ->
+                        s.copy(refreshing = false, error = e.message ?: "Gagal memuat data", update = prefs.availableUpdate(BuildConfig.VERSION_NAME))
+                    },
                 )
             }
         }

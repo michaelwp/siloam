@@ -18,12 +18,15 @@ import (
 type API struct {
 	store *store.Store
 	loc   *time.Location // local time of the services (WITA)
+	// Android is the newest Android app, for the app's update check
+	Android AndroidRelease
 }
 
 func New(s *store.Store, loc *time.Location) *API { return &API{store: s, loc: loc} }
 
 func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/health", a.health)
+	mux.HandleFunc("GET /api/app/android", a.androidRelease)
 
 	mux.HandleFunc("GET /api/koloms", a.listKoloms)
 	mux.HandleFunc("POST /api/koloms", a.createKolom)

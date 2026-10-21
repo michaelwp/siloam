@@ -218,6 +218,8 @@ func TestPublicReadOnlyData(t *testing.T) {
 		{"GET", "/api/users", false},
 		{"GET", "/api/auth/me", false},
 		{"GET", "/api/familiesX", false},
+		{"GET", "/api/app/android", true},
+		{"POST", "/api/app/android", false},
 	}
 	for _, c := range cases {
 		if got := publicRead(httptest.NewRequest(c.method, c.path, nil)); got != c.public {

@@ -169,8 +169,16 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
                 )
             }
             state.error?.let { Text("Galat terakhir: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+
+            HorizontalDivider()
+            Text("Tentang aplikasi", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Versi", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Text(BuildConfig.VERSION_NAME, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+            }
+            state.update?.let { UpdateBanner(it) }
             Text(
-                "Aplikasi ini hanya menampilkan data publik (tanpa tahun lahir, alamat, atau hubungan keluarga). Versi ${BuildConfig.VERSION_NAME}",
+                "Jemaat Siloam · GMIM Siloam. Aplikasi ini hanya menampilkan data publik (tanpa tahun lahir, alamat, atau hubungan keluarga).",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

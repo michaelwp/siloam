@@ -155,13 +155,13 @@ var publicPaths = map[string]bool{
 }
 
 // publicRead reports whether r only reads jemaat data, which the public
-// (read-only) pages show without signing in. Every write still needs a session.
+// (read-only) pages show without signing in (or the Android app's update check). Every write still needs a session.
 func publicRead(r *http.Request) bool {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		return false
 	}
 	p := r.URL.Path
-	return p == "/api/koloms" || p == "/api/worship-types" || p == "/api/calendar.ics" ||
+	return p == "/api/koloms" || p == "/api/app/android" || p == "/api/worship-types" || p == "/api/calendar.ics" ||
 		p == "/api/services" || strings.HasPrefix(p, "/api/services/") ||
 		p == "/api/families" || strings.HasPrefix(p, "/api/families/") ||
 		p == "/api/members" || strings.HasPrefix(p, "/api/members/")

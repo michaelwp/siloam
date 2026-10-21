@@ -63,6 +63,24 @@ class Prefs(context: Context) {
         get() = p.getBoolean("scheduleCalendar", false)
         set(v) = p.edit { putBoolean("scheduleCalendar", v) }
 
+    /** The newest app version and its download link, from the last update check ("" = none known). */
+    var latestVersion: String
+        get() = p.getString("latestVersion", "") ?: ""
+        set(v) = p.edit { putString("latestVersion", v) }
+
+    var downloadUrl: String
+        get() = p.getString("downloadUrl", "") ?: ""
+        set(v) = p.edit { putString("downloadUrl", v) }
+
+    /** The version the "new version" notification was shown for (once per version). */
+    var notifiedUpdate: String
+        get() = p.getString("notifiedUpdate", "") ?: ""
+        set(v) = p.edit { putString("notifiedUpdate", v) }
+
+    /** The newer release to offer, if the last check found one. */
+    fun availableUpdate(currentVersion: String): AppRelease? =
+        AppRelease(latestVersion, downloadUrl).takeIf { it.downloadUrl.isNotEmpty() && isNewer(it.latestVersion, currentVersion) }
+
     companion object {
         const val DEFAULT_SERVER = "https://siloam.fly.dev"
     }

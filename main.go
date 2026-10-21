@@ -120,7 +120,12 @@ func run() error {
 
 	mux := http.NewServeMux()
 	authSvc.Register(mux)
-	api.New(s, loc).Register(mux)
+	jemaat := api.New(s, loc)
+	jemaat.Android = api.AndroidRelease{LatestVersion: os.Getenv("ANDROID_LATEST_VERSION"), DownloadURL: os.Getenv("ANDROID_DOWNLOAD_URL")}
+	if err := jemaat.Android.Validate(); err != nil {
+		return err
+	}
+	jemaat.Register(mux)
 	mux.Handle("/", spaHandler(web.Dist()))
 
 	handler := logRequests(securityHeaders(authSvc.RateLimit(authSvc.Middleware(mux)), env("COOKIE_SECURE", "false") == "true"))
