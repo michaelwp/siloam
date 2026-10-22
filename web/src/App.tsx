@@ -238,44 +238,55 @@ function Shell() {
   )
 }
 
-/** Which kolom every page shows; "Semua Kolom" shows the whole congregation. */
+/**
+ * Which data every page shows: a kolom ("Semua Kolom": the whole congregation)
+ * and a BIPRA category ("Semua BIPRA"), picked separately so both can apply.
+ */
 function KolomPicker() {
-  const { koloms, categories, filter, setFilter } = useData()
+  const { koloms, categories, kolom, setKolom, bipraFilter, setBipra } = useData()
   const { user } = useAuth()
-  // a "kelola data kolom" user sees only their kolom: no picker
-  if (user?.role === 'kolom') {
-    return (
-      <p className="kolom-picker kolom-fixed" title="Anda mengelola data kolom ini">
-        {kolomLabel(user.kolom ?? null)}
-      </p>
-    )
-  }
+  const own = user?.role === 'bipra' ? categories.find((c) => c.id === user.bipraId) : undefined
   return (
-    <>
-      <label className="kolom-picker">
-        <span className="sr-only">Data yang ditampilkan</span>
-        <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-          <option value="">{kolomLabel(null)}</option>
-          {/* a "kelola data BIPRA" user already sees only their category */}
-          {user?.role !== 'bipra' && categories.length > 0 && (
-            <optgroup label="Kategori BIPRA">
-              {categories.map((c) => (
-                <option key={c.id} value={`b:${c.id}`}>
-                  {c.name}
-                </option>
-              ))}
-            </optgroup>
-          )}
-          <optgroup label="Kolom">
+    <div className="data-pickers">
+      {/* a "kelola data kolom" user sees only their kolom: no picker */}
+      {user?.role === 'kolom' ? (
+        <p className="kolom-picker kolom-fixed" title="Anda mengelola data kolom ini">
+          {kolomLabel(user.kolom ?? null)}
+        </p>
+      ) : (
+        <label className="kolom-picker">
+          <span className="sr-only">Kolom</span>
+          <select value={kolom ?? ''} onChange={(e) => setKolom(e.target.value ? Number(e.target.value) : null)}>
+            <option value="">{kolomLabel(null)}</option>
             {koloms.map((k) => (
-              <option key={k.id} value={`k:${k.number}`}>
+              <option key={k.id} value={k.number}>
                 {kolomLabel(k.number)}
               </option>
             ))}
-          </optgroup>
-        </select>
-      </label>
-    </>
+          </select>
+        </label>
+      )}
+      {/* a "kelola data BIPRA" user sees only their category: no picker */}
+      {own ? (
+        <p className="kolom-picker kolom-fixed" title="Anda mengelola data kategori ini">
+          {own.name}
+        </p>
+      ) : (
+        categories.length > 0 && (
+          <label className="kolom-picker">
+            <span className="sr-only">Kategori BIPRA</span>
+            <select value={bipraFilter?.id ?? ''} onChange={(e) => setBipra(e.target.value || null)}>
+              <option value="">Semua BIPRA</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )
+      )}
+    </div>
   )
 }
 

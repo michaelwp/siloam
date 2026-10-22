@@ -28,9 +28,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -191,55 +188,43 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
 }
 
 /**
- * The "filter data bawaan" (the same choice as the top bar): everything, one
- * BIPRA category, or one kolom. The screens and the notifications follow it.
+ * The "filter data bawaan" (the same choice as the top bar): a kolom or all,
+ * and a BIPRA category or all. The screens and the notifications follow it.
  */
 @Composable
 private fun DataFilterFields(state: UiState, onPick: (DataFilter) -> Unit) {
     val f = state.filter
-    val categories = state.data?.categories.orEmpty()
-    val koloms = state.data?.koloms.orEmpty().map { it.number }
+    val data = state.data
+    val categories = data?.categories.orEmpty()
+    val koloms = data?.koloms.orEmpty().map { it.number }
+    val kolom = data?.let { f.kolomOf(it) } ?: f.kolom
+    val category = data?.let { f.category(it) }
 
     Text("Filter data bawaan", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-    val modes = listOf(DataFilter.ALL to "Semua", DataFilter.BIPRA to "Per BIPRA", DataFilter.KOLOM to "Kolom")
-    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-        modes.forEachIndexed { i, (key, label) ->
-            SegmentedButton(
-                selected = f.mode == key,
-                onClick = {
-                    // a first choice: the category / kolom chosen before, else the first one
-                    onPick(
-                        when (key) {
-                            DataFilter.BIPRA -> (categories.firstOrNull { f.isCategory(it) } ?: categories.firstOrNull())
-                                ?.let { DataFilter.bipra(it) } ?: DataFilter.all
-                            DataFilter.KOLOM -> (f.kolom ?: koloms.firstOrNull())?.let { DataFilter.kolom(it) } ?: DataFilter.all
-                            else -> DataFilter.all
-                        },
-                    )
-                },
-                shape = SegmentedButtonDefaults.itemShape(i, modes.size),
-            ) { Text(label) }
+    Text("Kolom", style = MaterialTheme.typography.labelLarge)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(selected = kolom == null, onClick = { onPick(f.withKolom(null)) }, label = { Text("Semua Kolom") })
+        koloms.forEach { k ->
+            FilterChip(selected = kolom == k, onClick = { onPick(f.withKolom(k)) }, label = { Text("Kolom $k") })
         }
     }
-    when (f.mode) {
-        DataFilter.BIPRA -> {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                categories.forEach { c ->
-                    FilterChip(selected = f.isCategory(c), onClick = { onPick(DataFilter.bipra(c)) }, label = { Text(c.label) })
-                }
+    if (categories.isNotEmpty()) {
+        Text("Kategori BIPRA", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = category == null, onClick = { onPick(f.withBipra(null)) }, label = { Text("Semua BIPRA") })
+            categories.forEach { c ->
+                FilterChip(selected = category == c, onClick = { onPick(f.withBipra(c)) }, label = { Text(c.label) })
             }
-            Hint("Anggota kategori ini dan keluarganya, ibadah jenis kategori ini (di semua kolom), dan notifikasinya.")
         }
-        DataFilter.KOLOM -> {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                koloms.forEach { k ->
-                    FilterChip(selected = f.kolom == k, onClick = { onPick(DataFilter.kolom(k)) }, label = { Text("Kolom $k") })
-                }
-            }
-            Hint("Data kolom ini, ibadahnya dan ibadah untuk seluruh jemaat, dan notifikasinya.")
-        }
-        else -> Hint("Semua data jemaat, ibadah dan notifikasi (dikelompokkan per kolom).")
     }
+    Hint(
+        when {
+            kolom == null && category == null -> "Semua data jemaat, ibadah dan notifikasi (dikelompokkan per kolom)."
+            category == null -> "Data Kolom $kolom, ibadahnya dan ibadah untuk seluruh jemaat, dan notifikasinya."
+            kolom == null -> "Anggota ${category.label} dan keluarganya, ibadah jenis kategori ini (di semua kolom), dan notifikasinya."
+            else -> "Anggota ${category.label} di Kolom $kolom dan keluarganya, ibadah jenis kategori ini di kolom ini (dan untuk seluruh jemaat), dan notifikasinya."
+        },
+    )
     Hint("Dipakai saat aplikasi dibuka dan untuk notifikasi; dapat juga diubah di bagian atas layar.")
 }
 

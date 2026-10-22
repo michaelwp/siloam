@@ -33,12 +33,12 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
   }, [reload])
 
   const services = useMemo(() => {
-    // a BIPRA category: the services of the jenis linked to it, in every kolom
-    if (bipraFilter) {
-      const linked = new Set(state.types.filter((t) => t.bipraId === bipraFilter.id).map((t) => t.id))
-      return state.services.filter((s) => linked.has(s.typeId))
-    }
-    return kolom === null ? state.services : state.services.filter((s) => s.kolom === kolom || s.kolom === 0)
+    // a kolom: its services and the whole congregation's (kolom 0)
+    const inKolom = kolom === null ? state.services : state.services.filter((s) => s.kolom === kolom || s.kolom === 0)
+    if (!bipraFilter) return inKolom
+    // a BIPRA category: of those, the services of the jenis linked to it
+    const linked = new Set(state.types.filter((t) => t.bipraId === bipraFilter.id).map((t) => t.id))
+    return inKolom.filter((s) => linked.has(s.typeId))
   }, [state.services, state.types, kolom, bipraFilter])
   // a "kelola data BIPRA" user's home page: their category's jenis only
   const bipraId = user?.role === 'bipra' ? user.bipraId : undefined

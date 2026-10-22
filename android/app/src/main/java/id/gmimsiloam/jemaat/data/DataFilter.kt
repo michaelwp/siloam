@@ -2,73 +2,80 @@ package id.gmimsiloam.jemaat.data
 
 /**
  * What the app shows and notifies about — the "filter data bawaan", chosen in
- * the top bar or in Pengaturan: everything, one BIPRA category (its members,
- * their families and the services of its jenis, in every kolom), or one kolom
- * (its families and members, its services and the whole congregation's). A
- * kolom or category that no longer exists falls back to everything.
+ * the top bar or in Pengaturan: a kolom (its families and members, its services
+ * and the whole congregation's) and/or a BIPRA category (its members, their
+ * families and the services of its jenis); both together narrow to the
+ * category's members in that kolom. A kolom or category that no longer exists
+ * counts as not chosen.
  */
-data class DataFilter(val mode: String, val kolom: Int?, val bipra: String, val bipraId: String = "") {
+data class DataFilter(val kolom: Int? = null, val bipra: String = "", val bipraId: String = "") {
     companion object {
-        const val ALL = "all"
-        const val BIPRA = "bipra"
-        const val KOLOM = "kolom"
-
-        val all = DataFilter(ALL, null, "")
-        fun kolom(k: Int) = DataFilter(KOLOM, k, "")
+        val all = DataFilter()
+        fun kolom(k: Int) = DataFilter(kolom = k)
 
         /** A category, by id (stays right when an admin changes its code) and code (older servers have no ids). */
-        fun bipra(c: Category) = DataFilter(BIPRA, null, c.key, c.id)
+        fun bipra(c: Category) = DataFilter(bipra = c.key, bipraId = c.id)
     }
+
+    /** The same category, another kolom (null: every kolom). */
+    fun withKolom(k: Int?) = copy(kolom = k)
+
+    /** The same kolom, another category (null: every category). */
+    fun withBipra(c: Category?) = copy(bipra = c?.key ?: "", bipraId = c?.id ?: "")
 
     /** Whether this filter is about category [c]: by id when both have one, else by code. */
     fun isCategory(c: Category) =
-        mode == BIPRA && if (bipraId.isNotEmpty() && c.id.isNotEmpty()) c.id == bipraId else c.key == bipra
+        (bipra.isNotEmpty() || bipraId.isNotEmpty()) &&
+            if (bipraId.isNotEmpty() && c.id.isNotEmpty()) c.id == bipraId else c.key == bipra
 
-    /** The category this filter is about, if it is a BIPRA filter whose category exists. */
+    /** The category this filter is about, if one is chosen and exists. */
     fun category(data: Snapshot): Category? = data.categories.firstOrNull { isCategory(it) }
 
-    /** The kolom this filter is about, if it is a kolom filter whose kolom exists. */
-    fun kolomOf(data: Snapshot): Int? =
-        if (mode == KOLOM) data.effectiveKolom(kolom) else null
+    /** The kolom this filter is about, if one is chosen and exists. */
+    fun kolomOf(data: Snapshot): Int? = data.effectiveKolom(kolom)
 
     /**
-     * The services. Per BIPRA: those whose jenis is linked to the category (in
-     * every kolom). Per kolom: that kolom's and the whole congregation's (kolom 0).
+     * The services: of the kolom (and the whole congregation's, kolom 0), and of a
+     * category's linked jenis only.
      */
     fun services(data: Snapshot): List<Service> {
-        category(data)?.let { c ->
-            val types = data.types.filter { it.bipraId.isNotEmpty() && it.bipraId == c.id }.map { it.id }.toSet()
-            return data.services.filter { it.typeId in types }
-        }
-        return data.services.forKolom(kolomOf(data))
+        val inKolom = data.services.forKolom(kolomOf(data))
+        val c = category(data) ?: return inKolom
+        val types = data.types.filter { it.bipraId.isNotEmpty() && it.bipraId == c.id }.map { it.id }.toSet()
+        return inKolom.filter { it.typeId in types }
     }
 
     /** The members (also for birthdays). */
     fun members(data: Snapshot): List<Member> {
-        category(data)?.let { c -> return data.members.filter { inCategory(it, c) } }
-        return data.members.inKolom(kolomOf(data)) { it.kolom }
+        val inKolom = data.members.inKolom(kolomOf(data)) { it.kolom }
+        val c = category(data) ?: return inKolom
+        return inKolom.filter { inCategory(it, c) }
     }
 
-    /** The families: per BIPRA, those with a member in the category. */
+    /** The families of the kolom; with a category, those with a member in it. */
     fun families(data: Snapshot): List<Family> {
-        category(data)?.let {
-            val ids = members(data).map { m -> m.familyId }.toSet()
-            return data.families.filter { f -> f.id in ids }
-        }
-        return data.families.inKolom(kolomOf(data)) { it.kolom }
+        val inKolom = data.families.inKolom(kolomOf(data)) { it.kolom }
+        if (category(data) == null) return inKolom
+        val ids = members(data).map { m -> m.familyId }.toSet()
+        return inKolom.filter { f -> f.id in ids }
     }
 
-    /** "Semua Kolom", "Pemuda" or "Kolom 11". */
+    /** As [label], shorter with both ("K11 · Pemuda"), for the top bar. */
+    fun shortLabel(data: Snapshot?): String {
+        val k = if (data == null) kolom else kolomOf(data)
+        val c = if (data == null) bipra.ifEmpty { null } else category(data)?.label
+        return if (k != null && c != null) "K$k · $c" else label(data)
+    }
+
+    /** "Semua Kolom", "Kolom 11", "Pemuda" or "Kolom 11 · Pemuda". */
     fun label(data: Snapshot?): String {
-        if (data == null) {
-            return when (mode) {
-                BIPRA -> bipra
-                KOLOM -> kolom?.let { "Kolom $it" } ?: "Semua Kolom"
-                else -> "Semua Kolom"
-            }
+        val k = if (data == null) kolom else kolomOf(data)
+        val c = if (data == null) bipra.ifEmpty { null } else category(data)?.label
+        return when {
+            c == null -> k?.let { "Kolom $it" } ?: "Semua Kolom"
+            k == null -> c
+            else -> "Kolom $k · $c"
         }
-        category(data)?.let { return it.label }
-        return kolomOf(data)?.let { "Kolom $it" } ?: "Semua Kolom"
     }
 }
 

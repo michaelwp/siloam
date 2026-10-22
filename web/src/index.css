@@ -1336,6 +1336,18 @@ a.stat {
 }
 
 /* ---- kolom ---- */
+/* the kolom and BIPRA pickers: stacked in the sidebar, side by side on narrow screens */
+.data-pickers {
+  display: grid;
+  gap: 8px;
+  padding: 0 4px 14px;
+}
+.data-pickers .kolom-picker {
+  padding: 0;
+}
+.data-pickers .kolom-fixed {
+  margin: 0;
+}
 .kolom-picker {
   display: block;
   padding: 0 4px 14px;
@@ -1364,6 +1376,10 @@ td.actions .btn + .btn {
 }
 @media (max-width: 860px) {
   .kolom-picker {
+    padding: 0 0 10px;
+  }
+  .data-pickers {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     padding: 0 0 10px;
   }
 }

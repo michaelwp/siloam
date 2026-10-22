@@ -92,14 +92,18 @@ class Prefs(context: Context) {
      * existed ([kolom]), else everything.
      */
     var filter: DataFilter
-        get() = DataFilter(
-            mode = p.getString("notifyMode", null) ?: if (kolom != null) DataFilter.KOLOM else DataFilter.ALL,
-            kolom = p.getInt("notifyKolom", 0).takeIf { it > 0 } ?: kolom,
-            bipra = p.getString("notifyBipra", "") ?: "",
-            bipraId = p.getString("notifyBipraId", "") ?: "",
-        )
+        get() {
+            // "notifyMode" marks a filter saved before (all / kolom / bipra: one part at a time, the
+            // other was saved empty, so the parts read the same); none yet: the old kolom choice
+            if (p.getString("notifyMode", null) == null) return DataFilter(kolom = kolom)
+            return DataFilter(
+                kolom = p.getInt("notifyKolom", 0).takeIf { it > 0 },
+                bipra = p.getString("notifyBipra", "") ?: "",
+                bipraId = p.getString("notifyBipraId", "") ?: "",
+            )
+        }
         set(f) = p.edit {
-            putString("notifyMode", f.mode)
+            putString("notifyMode", "set")
             putInt("notifyKolom", f.kolom ?: 0)
             putString("notifyBipra", f.bipra)
             putString("notifyBipraId", f.bipraId)

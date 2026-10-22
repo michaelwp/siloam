@@ -9,6 +9,10 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -197,8 +201,9 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
 }
 
 /**
- * The "filter data bawaan": Semua Kolom, a BIPRA category, or a kolom. The
- * screens and the notifications follow it; it is also in Pengaturan.
+ * The "filter data bawaan": a kolom (or all) and a BIPRA category (or all), each
+ * picked on its own, so both together are possible. The screens and the
+ * notifications follow it; it is also in Pengaturan.
  */
 @Composable
 private fun FilterMenu(filter: DataFilter, data: Snapshot?, onPick: (DataFilter) -> Unit) {
@@ -206,25 +211,41 @@ private fun FilterMenu(filter: DataFilter, data: Snapshot?, onPick: (DataFilter)
     Box {
         TextButton(onClick = { open = true }, modifier = Modifier.widthIn(max = 160.dp)) {
             // a long category name must not push the title away
-            Text(filter.label(data), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Text(filter.shortLabel(data), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("Semua Kolom") }, onClick = { onPick(DataFilter.all); open = false })
+            // a pick changes its own part only; the ticks show both
+            val kolom = data?.let { filter.kolomOf(it) }
+            val category = data?.let { filter.category(it) }
+            // the few categories first; the koloms (often a dozen) after
             data?.categories?.takeIf { it.isNotEmpty() }?.let { categories ->
-                HorizontalDivider()
                 MenuHeading("Kategori BIPRA")
+                MenuChoice("Semua BIPRA", category == null) { onPick(filter.withBipra(null)); open = false }
                 categories.forEach { c ->
-                    DropdownMenuItem(text = { Text(c.label) }, onClick = { onPick(DataFilter.bipra(c)); open = false })
+                    MenuChoice(c.label, category == c) { onPick(filter.withBipra(c)); open = false }
                 }
+                HorizontalDivider()
             }
-            HorizontalDivider()
             MenuHeading("Kolom")
+            MenuChoice("Semua Kolom", kolom == null) { onPick(filter.withKolom(null)); open = false }
             data?.koloms?.forEach { k ->
-                DropdownMenuItem(text = { Text(kolomLabel(k.number)) }, onClick = { onPick(DataFilter.kolom(k.number)); open = false })
+                MenuChoice(kolomLabel(k.number), kolom == k.number) { onPick(filter.withKolom(k.number)); open = false }
             }
         }
     }
+}
+
+/** A menu item with a tick when [selected]. */
+@Composable
+private fun MenuChoice(text: String, selected: Boolean, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(text, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal) },
+        leadingIcon = {
+            if (selected) Icon(Icons.Filled.Check, contentDescription = "dipilih") else Spacer(Modifier.size(24.dp))
+        },
+        onClick = onClick,
+    )
 }
 
 @Composable
