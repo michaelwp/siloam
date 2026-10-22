@@ -53,10 +53,13 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
     }
     setChosenType(id ?? '')
   }, [])
-  // a BIPRA category: the jenis linked to it; else every jenis
+  // a "kelola data BIPRA" user's category (their Beranda shows only its jenis), or the chosen
+  // one: the jenis linked to it; else every jenis
+  const bipraId = user?.role === 'bipra' ? user.bipraId : undefined
+  const ownCategory = bipraId ?? bipraFilter?.id
   const typeChoices = useMemo(
-    () => (bipraFilter ? state.types.filter((t) => t.bipraId === bipraFilter.id) : state.types),
-    [state.types, bipraFilter],
+    () => (ownCategory ? state.types.filter((t) => t.bipraId === ownCategory) : state.types),
+    [state.types, ownCategory],
   )
   // a remembered jenis that is gone, or not of the chosen category, falls back to all
   const typeFilter = typeChoices.find((t) => t.id === chosenType) ?? null
@@ -71,7 +74,6 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
     return inKolom.filter((s) => linked.has(s.typeId))
   }, [state.services, kolom, bipraFilter, typeChoices, typeFilter])
   // a "kelola data BIPRA" user's home page: their category's jenis only
-  const bipraId = user?.role === 'bipra' ? user.bipraId : undefined
   const homeServices = useMemo(() => {
     if (!bipraId) return services
     const own = new Set(state.types.filter((t) => t.bipraId === bipraId).map((t) => t.id))

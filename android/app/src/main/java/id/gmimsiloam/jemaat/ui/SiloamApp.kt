@@ -211,7 +211,9 @@ private fun FilterMenu(filter: DataFilter, data: Snapshot?, onPick: (DataFilter)
     Box {
         TextButton(onClick = { open = true }, modifier = Modifier.widthIn(max = 180.dp)) {
             // a long category name must not push the title away
-            Text(filter.shortLabel(data), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            // a chosen jenis shows too, so a shorter Jadwal is never a surprise
+            val type = data?.let { filter.type(it) }
+            Text(filter.shortLabel(data) + (type?.let { " · ${it.name}" } ?: ""), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {

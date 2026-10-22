@@ -41,8 +41,9 @@ export default function JadwalIbadah() {
   const canEdit = useCanAddServices()
   const { user } = useAuth()
   const { services, types, typeChoices, typeFilter, loading, error, reload } = useSchedule()
-  // the jenis in view: the one chosen in the filter, or the category's (or all)
-  const shownTypes = typeFilter ? [typeFilter] : typeChoices
+  // the jenis in view: the one chosen in the filter, or the chosen category's (or all; a "kelola
+  // data BIPRA" user sees every service here, though the filter offers their category's jenis only)
+  const shownTypes = typeFilter ? [typeFilter] : bipraFilter ? typeChoices : types
   const [today] = useState(() => new Date())
   const [cursor, setCursor] = useState(() => ({ y: today.getFullYear(), m: today.getMonth() }))
   const [view, setView] = useState<View>(() => (narrow() ? 'agenda' : 'month'))

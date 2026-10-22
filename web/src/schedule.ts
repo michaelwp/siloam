@@ -9,7 +9,7 @@ export type Schedule = {
   homeServices: Service[]
   allServices: Service[]
   types: WorshipType[]
-  /** the jenis the filter offers: those linked to the chosen BIPRA category, or all */
+  /** the jenis the filter offers: those linked to the BIPRA category (a "kelola data BIPRA" user's, or the chosen one), or all */
   typeChoices: WorshipType[]
   /** the jenis being viewed (only its services, with the kolom and category), or null */
   typeFilter: WorshipType | null
