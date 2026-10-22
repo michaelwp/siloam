@@ -6,6 +6,17 @@ import { ScheduleContext } from './schedule'
 
 type State = { services: Service[]; types: WorshipType[]; loading: boolean; error: string | null }
 
+// the viewed jenis ibadah is remembered per browser (a convenience; never required)
+const TYPE_KEY = 'jenis-filter'
+
+function savedType() {
+  try {
+    return localStorage.getItem(TYPE_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
 /**
  * Loads the services and worship types once for the whole app; every page
  * and the daily notice read them from here, and a save reloads them for all.
@@ -14,6 +25,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
   const { kolom, bipraFilter } = useData()
   const { user } = useAuth()
   const [state, setState] = useState<State>({ services: [], types: [], loading: true, error: null })
+  const [chosenType, setChosenType] = useState(savedType)
   const latest = useRef(0) // ignore responses of superseded loads
 
   const reload = useCallback(() => {
@@ -32,14 +44,32 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
     void reload()
   }, [reload])
 
+  const setTypeFilter = useCallback((id: string | null) => {
+    try {
+      if (id) localStorage.setItem(TYPE_KEY, id)
+      else localStorage.removeItem(TYPE_KEY)
+    } catch {
+      // storage blocked: the choice lasts until the page is reloaded
+    }
+    setChosenType(id ?? '')
+  }, [])
+  // a BIPRA category: the jenis linked to it; else every jenis
+  const typeChoices = useMemo(
+    () => (bipraFilter ? state.types.filter((t) => t.bipraId === bipraFilter.id) : state.types),
+    [state.types, bipraFilter],
+  )
+  // a remembered jenis that is gone, or not of the chosen category, falls back to all
+  const typeFilter = typeChoices.find((t) => t.id === chosenType) ?? null
+
   const services = useMemo(() => {
     // a kolom: its services and the whole congregation's (kolom 0)
     const inKolom = kolom === null ? state.services : state.services.filter((s) => s.kolom === kolom || s.kolom === 0)
+    // a jenis, or a BIPRA category (the jenis linked to it): of those, the services of that jenis
+    if (typeFilter) return inKolom.filter((s) => s.typeId === typeFilter.id)
     if (!bipraFilter) return inKolom
-    // a BIPRA category: of those, the services of the jenis linked to it
-    const linked = new Set(state.types.filter((t) => t.bipraId === bipraFilter.id).map((t) => t.id))
+    const linked = new Set(typeChoices.map((t) => t.id))
     return inKolom.filter((s) => linked.has(s.typeId))
-  }, [state.services, state.types, kolom, bipraFilter])
+  }, [state.services, kolom, bipraFilter, typeChoices, typeFilter])
   // a "kelola data BIPRA" user's home page: their category's jenis only
   const bipraId = user?.role === 'bipra' ? user.bipraId : undefined
   const homeServices = useMemo(() => {
@@ -49,7 +79,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
   }, [services, state.types, bipraId])
 
   return (
-    <ScheduleContext.Provider value={{ ...state, services, homeServices, allServices: state.services, reload }}>
+    <ScheduleContext.Provider value={{ ...state, services, homeServices, allServices: state.services, typeChoices, typeFilter, setTypeFilter, reload }}>
       {children}
     </ScheduleContext.Provider>
   )

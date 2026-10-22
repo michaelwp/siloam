@@ -129,8 +129,10 @@ fun ScheduleScreen(data: Snapshot, filter: DataFilter) {
                 }
             }
         }
+        // the jenis in view: the one chosen in the filter, or the category's (or all)
+        val types = filter.type(data)?.let { listOf(it) } ?: filter.typeChoices(data)
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(data.types, key = { it.id }) { t ->
+            items(types, key = { it.id }) { t ->
                 FilterChip(
                     selected = t.id !in hidden,
                     onClick = { hidden = if (t.id in hidden) hidden - t.id else hidden + t.id },

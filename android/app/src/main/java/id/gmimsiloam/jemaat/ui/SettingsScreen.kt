@@ -189,7 +189,7 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
 
 /**
  * The "filter data bawaan" (the same choice as the top bar): a kolom or all,
- * and a BIPRA category or all. The screens and the notifications follow it.
+ * a BIPRA category or all, and a jenis ibadah or all. The screens and the notifications follow it.
  */
 @Composable
 private fun DataFilterFields(state: UiState, onPick: (DataFilter) -> Unit) {
@@ -216,6 +216,18 @@ private fun DataFilterFields(state: UiState, onPick: (DataFilter) -> Unit) {
                 FilterChip(selected = category == c, onClick = { onPick(f.withBipra(c)) }, label = { Text(c.label) })
             }
         }
+    }
+    val types = data?.let { f.typeChoices(it) }.orEmpty()
+    if (types.isNotEmpty()) {
+        val type = data?.let { f.type(it) }
+        Text("Jenis Ibadah", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = type == null, onClick = { onPick(f.withType(null)) }, label = { Text("Semua Jenis") })
+            types.forEach { t ->
+                FilterChip(selected = type == t, onClick = { onPick(f.withType(t)) }, label = { Text(t.name) })
+            }
+        }
+        type?.let { Hint("Jadwal dan notifikasi ibadah: Ibadah ${it.name} saja.") }
     }
     Hint(
         when {

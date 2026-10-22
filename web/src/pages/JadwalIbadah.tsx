@@ -40,7 +40,9 @@ export default function JadwalIbadah() {
   const { kolom, filterLabel, bipraFilter } = useData()
   const canEdit = useCanAddServices()
   const { user } = useAuth()
-  const { services, types, loading, error, reload } = useSchedule()
+  const { services, types, typeChoices, typeFilter, loading, error, reload } = useSchedule()
+  // the jenis in view: the one chosen in the filter, or the category's (or all)
+  const shownTypes = typeFilter ? [typeFilter] : typeChoices
   const [today] = useState(() => new Date())
   const [cursor, setCursor] = useState(() => ({ y: today.getFullYear(), m: today.getMonth() }))
   const [view, setView] = useState<View>(() => (narrow() ? 'agenda' : 'month'))
@@ -89,7 +91,7 @@ export default function JadwalIbadah() {
         <section className="cal-types" aria-labelledby="cal-types-title">
           <h3 id="cal-types-title">Jenis Ibadah</h3>
           <ul>
-            {types.map((t) => (
+            {shownTypes.map((t) => (
               <li key={t.id}>
                 <label className="cal-type">
                   <input
@@ -110,7 +112,7 @@ export default function JadwalIbadah() {
       </aside>
 
       <section className="cal-main">
-        <MonthNav cursor={cursor} today={today} subtitle={`Jadwal Ibadah · ${filterLabel}`} onChange={setCursor}>
+        <MonthNav cursor={cursor} today={today} subtitle={`Jadwal Ibadah · ${filterLabel}${typeFilter ? ` · ${typeFilter.name}` : ''}`} onChange={setCursor}>
           <fieldset className="segmented">
             <legend className="sr-only">Tampilan</legend>
             <button aria-pressed={view === 'month'} onClick={() => setView('month')}>
@@ -207,14 +209,8 @@ export default function JadwalIbadah() {
         <Subscribe
           kolom={kolom}
           label={filterLabel}
-          // a BIPRA category: the jenis linked to it; else the jenis left ticked
-          types={
-            bipraFilter
-              ? types.filter((t) => t.bipraId === bipraFilter.id && !hidden.has(t.id))
-              : hidden.size
-                ? types.filter((t) => !hidden.has(t.id))
-                : null
-          }
+          // a jenis or a BIPRA category chosen: its jenis left ticked; else the ticked ones (null: all)
+          types={typeFilter || bipraFilter || hidden.size ? shownTypes.filter((t) => !hidden.has(t.id)) : null}
           onClose={() => setDialog(null)}
         />
       )}

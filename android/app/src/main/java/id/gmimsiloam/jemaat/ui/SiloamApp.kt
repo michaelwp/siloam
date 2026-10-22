@@ -201,8 +201,8 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
 }
 
 /**
- * The "filter data bawaan": a kolom (or all) and a BIPRA category (or all), each
- * picked on its own, so both together are possible. The screens and the
+ * The "filter data bawaan": a kolom (or all), a BIPRA category (or all) and a jenis
+ * ibadah (or all), each picked on its own, so they combine. The screens and the
  * notifications follow it; it is also in Pengaturan.
  */
 @Composable
@@ -224,6 +224,16 @@ private fun FilterMenu(filter: DataFilter, data: Snapshot?, onPick: (DataFilter)
                 MenuChoice("Semua BIPRA", category == null) { onPick(filter.withBipra(null)); open = false }
                 categories.forEach { c ->
                     MenuChoice(c.label, category == c) { onPick(filter.withBipra(c)); open = false }
+                }
+                HorizontalDivider()
+            }
+            // the jenis (of the chosen category's, when one is chosen): narrows the services only
+            data?.let { d -> filter.typeChoices(d) }?.takeIf { it.isNotEmpty() }?.let { types ->
+                val type = filter.type(data)
+                MenuHeading("Jenis Ibadah")
+                MenuChoice("Semua Jenis Ibadah", type == null) { onPick(filter.withType(null)); open = false }
+                types.forEach { t ->
+                    MenuChoice(t.name, type == t) { onPick(filter.withType(t)); open = false }
                 }
                 HorizontalDivider()
             }

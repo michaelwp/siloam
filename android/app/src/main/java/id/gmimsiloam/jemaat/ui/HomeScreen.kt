@@ -81,7 +81,7 @@ fun HomeScreen(data: Snapshot, filter: DataFilter, error: String?, update: AppRe
         ).joinToString(" · ").ifEmpty { "Tidak ada ibadah atau ulang tahun" } + " hari ini"
         Accordion("🔔 Pemberitahuan", notices, open = "notices" in open, onToggle = { toggle("notices") }) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionCard("⛪", "Ibadah Hari Ini & Minggu Ini", longDate(today)) {
+                SectionCard("⛪", "Ibadah Hari Ini & Minggu Ini", longDate(today) + (filter.type(data)?.let { " · Ibadah ${it.name} saja" } ?: "")) {
                     if (up.today.isEmpty()) Text("Tidak ada ibadah hari ini.", style = MaterialTheme.typography.bodyLarge)
                     // today's and this week's together, per kolom; today's show the time only
                     KolomGroups(up.today + up.week, { it.kolom }) { s ->
