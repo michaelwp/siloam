@@ -39,9 +39,49 @@ func testAPI(t *testing.T) (*API, *store.Store, http.Handler) {
 		t.Fatal(err)
 	}
 	a := New(st, time.UTC)
+	// a fixed today, before the services the tests add (dated today or earlier is locked)
+	a.now = func() time.Time { return testToday.Add(12 * time.Hour) }
 	mux := http.NewServeMux()
 	a.Register(mux)
 	return a, st, mux
+}
+
+var testToday = time.Date(2026, 10, 22, 0, 0, 0, 0, time.UTC)
+
+func TestServicesTodayOrEarlierAreLocked(t *testing.T) {
+	_, st, h := testAPI(t)
+	ctx := context.Background()
+	types, _ := st.ListWorshipTypes(ctx)
+	admin := &model.User{ID: bson.NewObjectID(), Username: "admin", Role: model.RoleAdmin}
+	body := func(date string) string {
+		return `{"kolom":3,"typeId":"` + types[0].ID.Hex() + `","date":"` + date + `T00:00:00Z","time":"19:00"}`
+	}
+	past, _ := st.CreateService(ctx, model.Service{Kolom: 3, TypeID: types[0].ID, Date: testToday.AddDate(0, 0, -3), Time: "19:00"})
+	today, _ := st.CreateService(ctx, model.Service{Kolom: 3, TypeID: types[0].ID, Date: testToday, Time: "19:00"})
+	future, _ := st.CreateService(ctx, model.Service{Kolom: 3, TypeID: types[0].ID, Date: testToday.AddDate(0, 0, 1), Time: "19:00"})
+
+	for _, c := range []struct {
+		name, method, path, body string
+		want                     int
+	}{
+		{"add yesterday", "POST", "/api/services", body("2026-10-21"), http.StatusBadRequest},
+		{"add today", "POST", "/api/services", body("2026-10-22"), http.StatusBadRequest},
+		{"add tomorrow", "POST", "/api/services", body("2026-10-23"), http.StatusCreated},
+		{"edit a past one", "PUT", "/api/services/" + past.ID.Hex(), body("2026-11-01"), http.StatusConflict},
+		{"edit today's", "PUT", "/api/services/" + today.ID.Hex(), body("2026-11-01"), http.StatusConflict},
+		{"move a future one to today", "PUT", "/api/services/" + future.ID.Hex(), body("2026-10-22"), http.StatusBadRequest},
+		{"edit a future one", "PUT", "/api/services/" + future.ID.Hex(), body("2026-10-24"), http.StatusOK},
+		{"delete a past one", "DELETE", "/api/services/" + past.ID.Hex(), "", http.StatusConflict},
+		{"delete today's", "DELETE", "/api/services/" + today.ID.Hex(), "", http.StatusConflict},
+		{"delete a future one", "DELETE", "/api/services/" + future.ID.Hex(), "", http.StatusNoContent},
+	} {
+		if got, out := call(h, admin, c.method, c.path, c.body); got != c.want {
+			t.Errorf("%s: %d, want %d (%v)", c.name, got, c.want, out)
+		}
+	}
+	if n, _ := st.ListServices(ctx); len(n) != 3 { // past, today and the one added for tomorrow
+		t.Errorf("%d services left, want 3", len(n))
+	}
 }
 
 // call sends a request as u and returns the status and the decoded body.

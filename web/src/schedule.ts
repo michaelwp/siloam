@@ -43,6 +43,33 @@ export const TYPE_COLORS = [
 
 export const WEEKDAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
 
+// month calendars (Jadwal Ibadah, Daftar HUT Jemaat)
+
+export type Cursor = { y: number; m: number }
+
+/** "Rabu, 21 Januari 2026" from "2026-01-21" */
+export function longDay(key: string) {
+  const [y, m, d] = key.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  return `${WEEKDAYS[date.getDay()]}, ${d} ${MONTHS[m - 1]} ${y}`
+}
+
+/** The 42 days (6 weeks, Sunday first) shown for a month. */
+export function monthDays(y: number, m: number) {
+  const first = new Date(y, m, 1)
+  const start = new Date(y, m, 1 - first.getDay())
+  return Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)
+    return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate(), key: dayKey(d.getFullYear(), d.getMonth(), d.getDate()) }
+  })
+}
+
+/** The month after (delta 1) or before (-1) the cursor. */
+export function moveCursor({ y, m }: Cursor, delta: number): Cursor {
+  const d = new Date(y, m + delta, 1)
+  return { y: d.getFullYear(), m: d.getMonth() }
+}
+
 /** "2026-01-21" for a local date. */
 export function dayKey(y: number, m: number, d: number) {
   return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`

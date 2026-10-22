@@ -424,6 +424,10 @@ android-install: android-apk ## Install the debug APK on the connected phone/emu
 android-install-release: android-release ## Install the signed release APK beside the debug build ("Siloam Debug")
 	@$(ADB) get-state >/dev/null 2>&1 || (echo "no phone or emulator connected: run 'make android-emulator', or plug in a phone with USB debugging on" && exit 1)
 	@test -f android/app/build/outputs/apk/release/app-release.apk || (echo "no signed release APK: android/keystore.properties is missing" && exit 1)
-	@$(ADB) install -r android/app/build/outputs/apk/release/app-release.apk 2>&1 | tee /dev/stderr | grep -q UPDATE_INCOMPATIBLE \
-		&& echo "an app with another key (an older debug build) is installed as id.gmimsiloam.jemaat: run '$(ADB) uninstall id.gmimsiloam.jemaat' and try again" && exit 1 || true
+	@out=$$($(ADB) install -r android/app/build/outputs/apk/release/app-release.apk 2>&1); echo "$$out"; \
+	case "$$out" in \
+		*Success*) ;; \
+		*UPDATE_INCOMPATIBLE*) echo "an app with another key (an older debug build) is installed as id.gmimsiloam.jemaat: run '$(ADB) uninstall id.gmimsiloam.jemaat' and try again"; exit 1 ;; \
+		*) echo "install failed"; exit 1 ;; \
+	esac
 	$(ADB) shell am start -n id.gmimsiloam.jemaat/.MainActivity >/dev/null

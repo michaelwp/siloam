@@ -2,12 +2,17 @@ import { useMemo, useState, type CSSProperties } from 'react'
 import { scheduleApi, serviceToInput, type Member, type Service, type ServiceInput, type WorshipType } from '../api'
 import { managesAll, managesService, useAuth, useCanAddServices } from '../auth'
 import { KolomField } from '../components/forms'
+import { MonthGrid, MonthNav } from '../components/calendar'
 import { ConfirmDelete, Field, FormShell, Modal, Status } from '../components/ui'
 import { useData } from '../data'
 import { byText, fromInputDate, MONTHS, toInputDate } from '../format'
 import {
   clock,
   dayKey,
+  longDay,
+  monthDays,
+  moveCursor,
+  type Cursor,
   feedUrl,
   googleCalendarUrl,
   icsUrl,
@@ -28,7 +33,6 @@ type Dialog =
   | { kind: 'subscribe' }
   | null
 
-const MAX_PER_CELL = 3
 const narrow = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches
 
 /** Google-Calendar-like schedule: a month grid or a schedule list, per kolom. */
@@ -54,12 +58,11 @@ export default function JadwalIbadah() {
     return map
   }, [visible])
   const todayKey = dayKey(today.getFullYear(), today.getMonth(), today.getDate())
+  // services of today and before are held: nobody adds, changes or deletes them (the server agrees)
+  const tomorrowKey = dayKey(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+  const open = (key: string) => key > todayKey
 
-  const move = (delta: number) =>
-    setCursor(({ y, m }) => {
-      const d = new Date(y, m + delta, 1)
-      return { y: d.getFullYear(), m: d.getMonth() }
-    })
+  const move = (delta: number) => setCursor((c) => moveCursor(c, delta))
   const toggleType = (id: string) =>
     setHidden((h) => {
       const next = new Set(h)
@@ -107,25 +110,7 @@ export default function JadwalIbadah() {
       </aside>
 
       <section className="cal-main">
-        <header className="cal-toolbar">
-          <button
-            className="btn"
-            onClick={() => setCursor({ y: today.getFullYear(), m: today.getMonth() })}
-          >
-            Hari ini
-          </button>
-          <div className="cal-nav">
-            <button className="icon-btn" aria-label="Bulan sebelumnya" onClick={() => move(-1)}>
-              ‹
-            </button>
-            <button className="icon-btn" aria-label="Bulan berikutnya" onClick={() => move(1)}>
-              ›
-            </button>
-          </div>
-          <h1 className="cal-title">
-            {MONTHS[cursor.m]} {cursor.y}
-            <small>Jadwal Ibadah · {filterLabel}</small>
-          </h1>
+        <MonthNav cursor={cursor} today={today} subtitle={`Jadwal Ibadah · ${filterLabel}`} onChange={setCursor}>
           <fieldset className="segmented">
             <legend className="sr-only">Tampilan</legend>
             <button aria-pressed={view === 'month'} onClick={() => setView('month')}>
@@ -135,7 +120,7 @@ export default function JadwalIbadah() {
               Jadwal
             </button>
           </fieldset>
-        </header>
+        </MonthNav>
 
         <Status loading={loading} error={error} />
         {!loading &&
@@ -145,9 +130,23 @@ export default function JadwalIbadah() {
               cursor={cursor}
               todayKey={todayKey}
               byDay={byDay}
-              onShow={(s) => setDialog({ kind: 'show', service: s })}
+              itemKey={(s) => s.id}
+              renderItem={(s) => (
+                <button
+                  className="cal-event"
+                  style={{ '--type-color': s.typeColor } as CSSProperties}
+                  title={`${clock(s.time)} Ibadah ${s.typeName} · ${serviceTitle(s)}`}
+                  onClick={() => setDialog({ kind: 'show', service: s })}
+                >
+                  <span className="cal-dot" aria-hidden="true" />
+                  <span className="cal-event-time">{clock(s.time)}</span>
+                  <span className="cal-event-title">{serviceTitle(s)}</span>
+                </button>
+              )}
               onMore={(key) => setDialog({ kind: 'day', key })}
               onAdd={canEdit ? (key) => setDialog({ kind: 'add', date: key }) : undefined}
+              addable={open}
+              addLabel="Buat jadwal"
             />
           ) : (
             <Agenda
@@ -162,7 +161,8 @@ export default function JadwalIbadah() {
       {dialog?.kind === 'show' && (
         <ServiceDetails
           service={dialog.service}
-          canEdit={managesService(user, dialog.service, types)}
+          manages={managesService(user, dialog.service, types)}
+          locked={!open(serviceDayKey(dialog.service))}
           onClose={() => setDialog(null)}
           onEdit={() => setDialog({ kind: 'edit', service: dialog.service })}
           onDelete={() => setDialog({ kind: 'delete', service: dialog.service })}
@@ -180,6 +180,7 @@ export default function JadwalIbadah() {
         <ServiceForm
           service={dialog.kind === 'edit' ? dialog.service : undefined}
           date={dialog.kind === 'add' ? dialog.date : null}
+          minDate={tomorrowKey}
           types={types}
           onClose={() => setDialog(null)}
           onSaved={reload}
@@ -217,88 +218,6 @@ export default function JadwalIbadah() {
           onClose={() => setDialog(null)}
         />
       )}
-    </div>
-  )
-}
-
-/** "Rabu, 21 Januari 2026" from "2026-01-21" */
-function longDay(key: string) {
-  const [y, m, d] = key.split('-').map(Number)
-  const date = new Date(y, m - 1, d)
-  return `${WEEKDAYS[date.getDay()]}, ${d} ${MONTHS[m - 1]} ${y}`
-}
-
-/** The 42 days (6 weeks, Sunday first) shown for a month. */
-function monthDays(y: number, m: number) {
-  const first = new Date(y, m, 1)
-  const start = new Date(y, m, 1 - first.getDay())
-  return Array.from({ length: 42 }, (_, i) => {
-    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)
-    return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate(), key: dayKey(d.getFullYear(), d.getMonth(), d.getDate()) }
-  })
-}
-
-type Cursor = { y: number; m: number }
-
-function MonthGrid({
-  cursor,
-  todayKey,
-  byDay,
-  onShow,
-  onMore,
-  onAdd,
-}: {
-  cursor: Cursor
-  todayKey: string
-  byDay: Map<string, Service[]>
-  onShow: (s: Service) => void
-  onMore: (key: string) => void
-  onAdd?: (key: string) => void
-}) {
-  const days = monthDays(cursor.y, cursor.m)
-  // only the weeks that contain days of this month (4–6)
-  const weeks = Math.ceil((new Date(cursor.y, cursor.m, 1).getDay() + new Date(cursor.y, cursor.m + 1, 0).getDate()) / 7)
-  return (
-    <div className="cal-month" style={{ '--weeks': weeks } as CSSProperties}>
-      {WEEKDAYS.map((w) => (
-        <div key={w} className="cal-weekday" aria-hidden="true">
-          {w.slice(0, 3)}
-        </div>
-      ))}
-      {days.slice(0, weeks * 7).map((day) => {
-        const list = byDay.get(day.key) ?? []
-        const shown = list.length > MAX_PER_CELL ? list.slice(0, MAX_PER_CELL - 1) : list
-        const outside = day.m !== cursor.m
-        return (
-          <div key={day.key} className={`cal-cell${outside ? ' outside' : ''}`}>
-            {/* the empty part of a day creates a service there (signed in) */}
-            {onAdd && (
-              <button className="cal-cell-add" aria-label={`Buat jadwal ${longDay(day.key)}`} onClick={() => onAdd(day.key)} />
-            )}
-            <span className={`cal-date${day.key === todayKey ? ' today' : ''}`}>
-              {day.d === 1 ? `${day.d} ${MONTHS[day.m].slice(0, 3)}` : day.d}
-            </span>
-            {shown.map((s) => (
-              <button
-                key={s.id}
-                className="cal-event"
-                style={{ '--type-color': s.typeColor } as CSSProperties}
-                title={`${clock(s.time)} Ibadah ${s.typeName} · ${serviceTitle(s)}`}
-                onClick={() => onShow(s)}
-              >
-                <span className="cal-dot" aria-hidden="true" />
-                <span className="cal-event-time">{clock(s.time)}</span>
-                <span className="cal-event-title">{serviceTitle(s)}</span>
-              </button>
-            ))}
-            {list.length > shown.length && (
-              <button className="cal-more" onClick={() => onMore(day.key)}>
-                {list.length - shown.length} lainnya
-              </button>
-            )}
-          </div>
-        )
-      })}
     </div>
   )
 }
@@ -404,13 +323,16 @@ function MiniMonth({
 
 function ServiceDetails({
   service: s,
-  canEdit,
+  manages,
+  locked,
   onClose,
   onEdit,
   onDelete,
 }: {
   service: Service
-  canEdit: boolean
+  /** the user may change this service, unless it is `locked` (today or before) */
+  manages: boolean
+  locked: boolean
   onClose: () => void
   onEdit: () => void
   onDelete: () => void
@@ -455,7 +377,10 @@ function ServiceDetails({
           </a>
         </div>
       </div>
-      {canEdit && (
+      {manages && locked && (
+        <p className="muted small locked-note">Jadwal hari ini atau sebelumnya tidak dapat diubah atau dihapus.</p>
+      )}
+      {manages && !locked && (
         <footer className="modal-foot">
           <button className="btn danger" onClick={onDelete}>
             Hapus
@@ -503,12 +428,15 @@ function DayList({
 function ServiceForm({
   service,
   date,
+  minDate,
   types,
   onClose,
   onSaved,
 }: {
   service?: Service
   date: string | null
+  /** the first day a service may be on ("2026-10-23": tomorrow) */
+  minDate: string
   types: WorshipType[]
   onClose: () => void
   onSaved: () => Promise<void>
@@ -577,6 +505,7 @@ function ServiceForm({
             type="date"
             required
             disabled={off}
+            min={minDate}
             value={toInputDate(s.date)}
             onChange={(e) => set({ date: fromInputDate(e.target.value) })}
           />

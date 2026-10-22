@@ -193,9 +193,8 @@ private fun MonthList(services: List<Service>, today: LocalDate, onService: (Ser
 private const val CELL_SERVICES = 2
 
 /**
- * A month grid (like Google Calendar's month view): each day shows its
- * services as time chips in the jenis color; tapping a day lists its services
- * below the grid. Swiping sideways changes the month.
+ * A month grid: each day shows its services as time chips in the jenis color; tapping a day lists
+ * its services below the grid. Swiping sideways changes the month.
  */
 @Composable
 private fun MonthCalendar(
@@ -207,51 +206,37 @@ private fun MonthCalendar(
     onMonth: (YearMonth) -> Unit,
     onService: (Service) -> Unit,
 ) {
-    val grid = remember(month) { monthGrid(month) }
     val byDay = services.groupBy { it.date }
     val chosen = byDay[day].orEmpty()
-    var drag by remember { mutableStateOf(0f) }
 
     LazyColumn(contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 24.dp)) {
         item(key = "grid") {
-            Column(
-                Modifier.pointerInput(month) {
-                    detectHorizontalDragGestures(
-                        onDragStart = { drag = 0f },
-                        onDragEnd = {
-                            val threshold = 64.dp.toPx()
-                            if (drag > threshold) onMonth(month.minusMonths(1)) else if (drag < -threshold) onMonth(month.plusMonths(1))
-                        },
-                    ) { _, dx -> drag += dx }
-                },
-            ) {
-                Row(Modifier.fillMaxWidth()) {
-                    WEEKDAYS.forEach {
-                        Text(
-                            it.take(3),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.weight(1f).padding(vertical = 4.dp),
-                        )
-                    }
+            MonthGrid(
+                month = month,
+                today = today,
+                day = day,
+                onDay = onDay,
+                onMonth = onMonth,
+                clickLabel = "Lihat jadwal",
+                describe = { d -> byDay[d]?.let { ", ${it.size} ibadah" } ?: "" },
+            ) { d, inMonth ->
+                val list = byDay[d].orEmpty()
+                list.take(CELL_SERVICES).forEach { s ->
+                    Text(
+                        clock(s.time),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = onTypeColor(typeColor(s.typeColor)),
+                        maxLines = 1,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(typeColor(s.typeColor).copy(alpha = if (inMonth) 1f else 0.45f))
+                            .padding(vertical = 1.dp),
+                    )
                 }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                grid.chunked(7).forEach { week ->
-                    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-                        week.forEach { d ->
-                            DayCell(
-                                date = d,
-                                services = byDay[d].orEmpty(),
-                                inMonth = YearMonth.from(d) == month,
-                                isToday = d == today,
-                                isChosen = d == day,
-                                onClick = { onDay(d) },
-                                modifier = Modifier.weight(1f).fillMaxHeight(),
-                            )
-                        }
-                    }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                if (list.size > CELL_SERVICES) {
+                    Text("+${list.size - CELL_SERVICES}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -275,64 +260,6 @@ private fun MonthCalendar(
             Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
                 ServiceRow(s, withDate = false, highlight = day == today) { onService(s) }
             }
-        }
-    }
-}
-
-@Composable
-private fun DayCell(
-    date: LocalDate,
-    services: List<Service>,
-    inMonth: Boolean,
-    isToday: Boolean,
-    isChosen: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Column(
-        modifier
-            .heightIn(min = 72.dp)
-            .background(if (isChosen) scheme.primaryContainer.copy(alpha = 0.5f) else Color.Transparent)
-            .clickable(onClickLabel = "Lihat jadwal", onClick = onClick)
-            .semantics(mergeDescendants = true) {
-                contentDescription = longDate(date) + if (services.isEmpty()) "" else ", ${services.size} ibadah"
-            }
-            .padding(2.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Box(
-            Modifier.size(26.dp).clip(CircleShape).background(if (isToday) scheme.primary else Color.Transparent),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                "${date.dayOfMonth}",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                color = when {
-                    isToday -> scheme.onPrimary
-                    inMonth -> scheme.onSurface
-                    else -> scheme.onSurfaceVariant.copy(alpha = 0.5f)
-                },
-            )
-        }
-        services.take(CELL_SERVICES).forEach { s ->
-            Text(
-                clock(s.time),
-                style = MaterialTheme.typography.labelSmall,
-                color = onTypeColor(typeColor(s.typeColor)),
-                maxLines = 1,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(typeColor(s.typeColor).copy(alpha = if (inMonth) 1f else 0.45f))
-                    .padding(vertical = 1.dp),
-            )
-        }
-        if (services.size > CELL_SERVICES) {
-            Text("+${services.size - CELL_SERVICES}", style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
         }
     }
 }

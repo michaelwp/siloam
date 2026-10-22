@@ -69,18 +69,28 @@ fun upcomingServices(services: List<Service>, today: LocalDate): Upcoming {
     )
 }
 
-/**
- * Days from [today] until the next birthday on [month]/[day]; 29 February is
- * celebrated on 28 February in other years (as on the web).
- */
+/** The date of a [month]/[day] birthday in [year]; 29 February is celebrated on 28 February in other years (as on the web). */
+fun birthdayIn(year: Int, month: Int, day: Int): LocalDate {
+    val d = if (month == 2 && day == 29 && !Year.isLeap(year.toLong())) 28 else day
+    return LocalDate.of(year, month, d)
+}
+
+/** Days from [today] until the next birthday on [month]/[day]. */
 fun daysUntil(month: Int, day: Int, today: LocalDate): Long {
-    fun on(year: Int): LocalDate {
-        val d = if (month == 2 && day == 29 && !Year.isLeap(year.toLong())) 28 else day
-        return LocalDate.of(year, month, d)
-    }
-    var next = on(today.year)
-    if (next.isBefore(today)) next = on(today.year + 1)
+    var next = birthdayIn(today.year, month, day)
+    if (next.isBefore(today)) next = birthdayIn(today.year + 1, month, day)
     return java.time.temporal.ChronoUnit.DAYS.between(today, next)
+}
+
+/** Who has a birthday on each of [days] (a month calendar's grid, which spans the months around it), by name. */
+fun birthdaysOn(members: List<Member>, days: List<LocalDate>): Map<LocalDate, List<Member>> {
+    val wanted = days.toSet()
+    val years = days.map { it.year }.distinct()
+    return members.filter { it.hasBirthday() }
+        .flatMap { m -> years.map { y -> birthdayIn(y, m.birthMonth!!, m.birthDay!!) to m } }
+        .filter { (d, _) -> d in wanted }
+        .groupBy({ it.first }, { it.second })
+        .mapValues { (_, list) -> list.sortedBy { it.name.lowercase() } }
 }
 
 fun Member.hasBirthday(): Boolean {

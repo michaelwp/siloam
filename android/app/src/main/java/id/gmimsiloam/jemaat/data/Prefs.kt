@@ -63,6 +63,11 @@ class Prefs(context: Context) {
         get() = p.getBoolean("scheduleCalendar", false)
         set(v) = p.edit { putBoolean("scheduleCalendar", v) }
 
+    /** The HUT tab as a month calendar (else a list). */
+    var birthdaysCalendar: Boolean
+        get() = p.getBoolean("birthdaysCalendar", false)
+        set(v) = p.edit { putBoolean("birthdaysCalendar", v) }
+
     /** The newest app version and its download link, from the last update check ("" = none known). */
     var latestVersion: String
         get() = p.getString("latestVersion", "") ?: ""

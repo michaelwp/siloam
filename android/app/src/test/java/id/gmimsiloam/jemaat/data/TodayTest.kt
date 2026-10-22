@@ -20,6 +20,24 @@ class TodayTest {
     )
 
     @Test
+    fun birthdaysOnACalendarGrid() {
+        val members = listOf(
+            member("Budi", 2, 14), member("Ani", 2, 14), member("Leap", 2, 29),
+            member("Aug", 8, 31), member("Oct", 10, 2), member("Nov", 11, 1), member("None", null, null),
+        )
+        val feb = birthdaysOn(members, monthGrid(java.time.YearMonth.of(2026, 2))) // 1–28 Feb 2026
+        assertEquals(listOf("Ani", "Budi"), feb[LocalDate.of(2026, 2, 14)]!!.map { it.name })
+        assertEquals(listOf("Leap"), feb[LocalDate.of(2026, 2, 28)]!!.map { it.name }) // 2026 is not a leap year
+        assertEquals(2, feb.size)
+        // September 2026's grid runs from Sunday 30 August to Saturday 3 October
+        val sep = birthdaysOn(members, monthGrid(java.time.YearMonth.of(2026, 9)))
+        assertEquals(listOf("Aug"), sep[LocalDate.of(2026, 8, 31)]!!.map { it.name })
+        assertEquals(listOf("Oct"), sep[LocalDate.of(2026, 10, 2)]!!.map { it.name })
+        assertNull(sep[LocalDate.of(2026, 11, 1)])
+        assertEquals(2, sep.size)
+    }
+
+    @Test
     fun upcomingSplitsTodayWeekAndNext() {
         val today = LocalDate.of(2026, 10, 20)
         val up = upcomingServices(

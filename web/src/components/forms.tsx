@@ -117,12 +117,12 @@ export function DeleteFamily({ family, onClose }: { family: Family; onClose: () 
   )
 }
 
-function emptyMember(familyId: string): MemberInput {
+function emptyMember(familyId: string, birthDate: string): MemberInput {
   return {
     familyId,
     name: '',
     birthPlace: '',
-    birthDate: null,
+    birthDate: fromInputDate(birthDate),
     gender: '',
     maritalStatus: 'Belum Menikah',
     relationship: '',
@@ -139,18 +139,23 @@ function parseBool(v: string) {
   return v === '' ? null : v === 'true'
 }
 
-/** Create (member undefined) or edit a member. familyId preselects the family on create. */
+/**
+ * Create (member undefined) or edit a member. On create, familyId preselects the family and
+ * birthDate ("2026-10-22", a day picked in the HUT calendar) the birth date, whose year to correct.
+ */
 export function MemberForm({
   member,
   familyId = '',
+  birthDate = '',
   onClose,
 }: {
   member?: Member
   familyId?: string
+  birthDate?: string
   onClose: () => void
 }) {
   const { allFamilies, kolom: viewed, reload } = useData()
-  const [m, setM] = useState<MemberInput>(member ? memberToInput(member) : emptyMember(familyId))
+  const [m, setM] = useState<MemberInput>(member ? memberToInput(member) : emptyMember(familyId, birthDate))
   const set = (patch: Partial<MemberInput>) => setM((prev) => ({ ...prev, ...patch }))
   // the kolom is picked first; it narrows the families to choose from
   const [kolom, setKolom] = useState(
@@ -200,6 +205,10 @@ export function MemberForm({
             value={toInputDate(m.birthDate)}
             onChange={(e) => set({ birthDate: fromInputDate(e.target.value) })}
           />
+          {/* the calendar gives the day and month; its year is the calendar's, not the birth year */}
+          {birthDate && toInputDate(m.birthDate) === birthDate && (
+            <small className="field-hint">Tanggal dari kalender — sesuaikan tahun lahirnya.</small>
+          )}
         </Field>
         <Field label="Jenis Kelamin">
           <select disabled={off} value={m.gender} onChange={(e) => set({ gender: e.target.value })}>
@@ -272,11 +281,14 @@ export function DeleteMember({ member, onClose }: { member: Member; onClose: () 
 }
 
 /** State helper for pages that open add/edit/delete dialogs for members. */
-export type MemberDialog = { kind: 'add'; familyId?: string } | { kind: 'edit' | 'delete'; member: Member } | null
+export type MemberDialog =
+  | { kind: 'add'; familyId?: string; birthDate?: string }
+  | { kind: 'edit' | 'delete'; member: Member }
+  | null
 
 export function MemberDialogs({ dialog, onClose }: { dialog: MemberDialog; onClose: () => void }) {
   if (!dialog) return null
-  if (dialog.kind === 'add') return <MemberForm familyId={dialog.familyId} onClose={onClose} />
+  if (dialog.kind === 'add') return <MemberForm familyId={dialog.familyId} birthDate={dialog.birthDate} onClose={onClose} />
   if (dialog.kind === 'edit') return <MemberForm member={dialog.member} onClose={onClose} />
   return <DeleteMember member={dialog.member} onClose={onClose} />
 }

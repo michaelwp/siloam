@@ -30,6 +30,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -59,8 +60,15 @@ private fun Boolean?.label(yes: String) = when (this) {
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun MembersScreen(data: Snapshot, filter: DataFilter, memberFilter: MemberFilter, onMemberFilter: (MemberFilter) -> Unit) {
+fun MembersScreen(data: Snapshot, filter: DataFilter, memberFilter: MemberFilter, opened: Int, onMemberFilter: (MemberFilter) -> Unit) {
     var q by rememberSaveable { mutableStateOf("") }
+    // a new [opened] (the tab opened from a Beranda tile) starts with an empty search; kept with the
+    // search, as the tab's saved state comes back when it is shown again
+    var searchOf by rememberSaveable { mutableIntStateOf(opened) }
+    if (searchOf != opened) {
+        searchOf = opened
+        q = ""
+    }
     val query = q.trim().lowercase()
     // a BIPRA filter: its members only, and the families they are in
     val all = filter.members(data)
@@ -109,7 +117,8 @@ fun MembersScreen(data: Snapshot, filter: DataFilter, memberFilter: MemberFilter
                         )
                         val sub = listOfNotNull(
                             if (kolom == null) "Kolom ${f.kolom}" else null,
-                            "${ms.size} jiwa",
+                            // filtered: the matching members of the whole family
+                            if (ms.size < f.memberCount) "${ms.size} dari ${f.memberCount} jiwa" else "${ms.size} jiwa",
                             f.note.ifEmpty { null },
                             if (f.weddingDay != null && f.weddingMonth != null) "HUT Pernikahan ${f.weddingDay} ${MONTHS[f.weddingMonth - 1]}" else null,
                         )
@@ -125,7 +134,7 @@ fun MembersScreen(data: Snapshot, filter: DataFilter, memberFilter: MemberFilter
     }
 }
 
-/** Baptis, Sidi, Status and Jenis kelamin chips; each opens its choices. "Hapus filter" when any is set. */
+/** Baptis, Sidi, Status and Jenis kelamin chips; each opens its choices. "Hapus filter" (first) when any is set. */
 @Composable
 private fun FilterRow(f: MemberFilter, statuses: List<String>, onChange: (MemberFilter) -> Unit) {
     val tri = listOf(Tri.ANY to "Semua", Tri.YES to "Sudah", Tri.NO to "Belum", Tri.UNKNOWN to "Tanpa data")
@@ -134,6 +143,16 @@ private fun FilterRow(f: MemberFilter, statuses: List<String>, onChange: (Member
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.padding(bottom = 4.dp),
     ) {
+        // first, so it is in view while filters are set
+        if (f.active) {
+            item {
+                AssistChip(
+                    onClick = { onChange(MemberFilter.none) },
+                    label = { Text("Hapus filter") },
+                    leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null, Modifier.size(18.dp)) },
+                )
+            }
+        }
         item {
             ChoiceChip("Baptis", tri.first { it.first == f.baptized }.second.takeIf { f.baptized != Tri.ANY }, tri.map { it.second }) { i ->
                 onChange(f.copy(baptized = tri[i].first))
@@ -153,15 +172,6 @@ private fun FilterRow(f: MemberFilter, statuses: List<String>, onChange: (Member
             val genders = listOf(GENDER_MALE, GENDER_FEMALE)
             ChoiceChip("Jenis kelamin", f.gender.ifEmpty { null }, listOf("Semua") + genders) { i ->
                 onChange(f.copy(gender = if (i == 0) "" else genders[i - 1]))
-            }
-        }
-        if (f.active) {
-            item {
-                AssistChip(
-                    onClick = { onChange(MemberFilter.none) },
-                    label = { Text("Hapus filter") },
-                    leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null, Modifier.size(18.dp)) },
-                )
             }
         }
     }

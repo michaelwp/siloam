@@ -863,6 +863,14 @@ tr.highlight {
 .pw-rules li.ok {
   color: var(--green);
 }
+.locked-note {
+  margin: 0;
+  padding: 0 20px 20px;
+}
+.field-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
 .field-hint.error {
   margin: 0;
   font-size: 0.82rem;
@@ -1733,6 +1741,9 @@ td.actions .btn + .btn {
 }
 .cal-event-title {
   font-weight: 600;
+}
+.cal-item {
+  min-width: 0;
 }
 .cal-more {
   align-self: flex-start;

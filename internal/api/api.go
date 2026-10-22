@@ -19,6 +19,7 @@ import (
 type API struct {
 	store *store.Store
 	loc   *time.Location // local time of the services (WITA)
+	now   func() time.Time
 	// Version is the server's (and the embedded web app's) version, e.g. "v3.1.0"
 	Version string
 	// AndroidDefault is the newest Android app per the server's ANDROID_*
@@ -26,7 +27,7 @@ type API struct {
 	AndroidDefault model.AndroidRelease
 }
 
-func New(s *store.Store, loc *time.Location) *API { return &API{store: s, loc: loc} }
+func New(s *store.Store, loc *time.Location) *API { return &API{store: s, loc: loc, now: time.Now} }
 
 func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/health", a.health)

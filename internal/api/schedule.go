@@ -173,6 +173,18 @@ func (a *API) mayManageService(w http.ResponseWriter, r *http.Request, sv model.
 	return mayManage(w, r, sv.Kolom)
 }
 
+// errServiceLocked: a service dated today or earlier is held (or under way) and
+// stays as it is; nobody adds, changes or deletes one.
+const errServiceLocked = "jadwal hari ini atau sebelumnya tidak dapat ditambah, diubah atau dihapus"
+
+// locked reports whether a service date (midnight UTC of the local date) is
+// today or earlier in the services' time zone.
+func (a *API) locked(date time.Time) bool {
+	now := a.now().In(a.loc)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	return !date.After(today)
+}
+
 var timeRe = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
 
 type serviceInput struct {
@@ -344,6 +356,10 @@ func (a *API) createService(w http.ResponseWriter, r *http.Request) {
 	if !a.mayManageService(w, r, sv) {
 		return
 	}
+	if a.locked(sv.Date) {
+		writeError(w, http.StatusBadRequest, errServiceLocked)
+		return
+	}
 	sv, err = a.store.CreateService(r.Context(), sv)
 	if err != nil {
 		scheduleError(w, err)
@@ -379,6 +395,15 @@ func (a *API) updateService(w http.ResponseWriter, r *http.Request) {
 	if !a.mayManageService(w, r, old) || !a.mayManageService(w, r, sv) {
 		return
 	}
+	// neither a held service, nor moved to today or before
+	if a.locked(old.Date) {
+		writeError(w, http.StatusConflict, errServiceLocked)
+		return
+	}
+	if a.locked(sv.Date) {
+		writeError(w, http.StatusBadRequest, errServiceLocked)
+		return
+	}
 	sv, err = a.store.UpdateService(r.Context(), sv)
 	if err != nil {
 		scheduleError(w, err)
@@ -398,6 +423,10 @@ func (a *API) deleteService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !a.mayManageService(w, r, old) {
+		return
+	}
+	if a.locked(old.Date) {
+		writeError(w, http.StatusConflict, errServiceLocked)
 		return
 	}
 	if err := a.store.DeleteService(r.Context(), id); err != nil {

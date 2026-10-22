@@ -26,7 +26,8 @@ export default function AnggotaJemaat() {
   // Beranda tile can open this page filtered and the back button returns
   const [params, setParams] = useSearchParams()
   const filters: Filters = {
-    gender: params.get('gender') ?? '',
+    // a gender the select does not offer would filter everything out unseen
+    gender: GENDERS.find((g) => g === params.get('gender')) ?? '',
     status: params.get('status') ?? '',
     baptized: tri(params.get('baptized')),
     confirmed: tri(params.get('confirmed')),

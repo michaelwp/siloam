@@ -39,6 +39,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -75,6 +76,7 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
     var confirmClose by rememberSaveable { mutableStateOf(false) }
     var category by rememberSaveable { mutableStateOf<String?>(null) } // BIPRA tab's filter
     var members by rememberSaveable { mutableStateOf(MemberFilter.none.encode()) } // Jemaat tab's filters
+    var membersOpened by rememberSaveable { mutableIntStateOf(0) } // a tile opened the Jemaat tab: a fresh search
 
     // a tapped notification opens its tab
     LaunchedEffect(requestedTab) {
@@ -176,11 +178,15 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
                             Tab.Home -> HomeScreen(
                                 data, filter, state.error, state.update,
                                 onCategory = { category = it; tab = Tab.Bipra },
-                                onMembers = { members = it.encode(); tab = Tab.Members },
+                                onMembers = {
+                                    members = it.encode()
+                                    membersOpened++
+                                    tab = Tab.Members
+                                },
                             )
                             Tab.Schedule -> ScheduleScreen(data, filter)
                             Tab.Birthdays -> BirthdaysScreen(data, filter)
-                            Tab.Members -> MembersScreen(data, filter, MemberFilter.decode(members), onMemberFilter = { members = it.encode() })
+                            Tab.Members -> MembersScreen(data, filter, MemberFilter.decode(members), membersOpened, onMemberFilter = { members = it.encode() })
                             Tab.Bipra -> BipraScreen(data, filter, category, onCategory = { category = it })
                         }
                     }
