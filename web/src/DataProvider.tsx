@@ -45,7 +45,11 @@ function savedKolom(): number | null {
 
 function savedBipra(): string {
   const old = read(KOLOM_KEY)
-  return old.startsWith('b:') ? old.slice(2) : read(BIPRA_KEY)
+  if (!old.startsWith('b:')) return read(BIPRA_KEY)
+  // moved to its own key, so a later kolom choice (which rewrites 'kolom-filter') keeps it
+  save(BIPRA_KEY, old.slice(2))
+  save(KOLOM_KEY, '')
+  return old.slice(2)
 }
 
 /**

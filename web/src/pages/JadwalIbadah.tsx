@@ -577,48 +577,55 @@ function Subscribe({
       <div className="subscribe">
         <p>
           Berlangganan jadwal ibadah <b>{label}</b>
-          {types && (
+          {types && types.length > 0 && (
             <>
               {' '}
-              (hanya <b>{types.length ? types.map((t) => t.name).join(', ') : 'tidak ada jenis yang dipilih'}</b>)
+              (hanya <b>{types.map((t) => t.name).join(', ')}</b>)
             </>
           )}
           : jadwal baru dan perubahan akan muncul otomatis di kalender Anda.
         </p>
-        <div className="subscribe-actions">
-          <a className="btn primary" href={`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`} target="_blank" rel="noopener noreferrer">
-            Google Calendar
-          </a>
-          <a className="btn primary" href={webcal}>
-            Apple Calendar
-          </a>
-        </div>
-        <label className="field">
-          <span>Alamat kalender (untuk aplikasi lain)</span>
-          <div className="copy-row">
-            <input id="feed-url" readOnly value={url} onFocus={(e) => e.target.select()} />
-            <button
-              type="button"
-              className="btn"
-              onClick={async () => {
-                try {
-                  // needs HTTPS (or localhost); elsewhere fall back to a selected field
-                  await navigator.clipboard.writeText(url)
-                  setCopy('done')
-                } catch {
-                  document.querySelector<HTMLInputElement>('#feed-url')?.select()
-                  setCopy('manual')
-                }
-              }}
-            >
-              {copy === 'done' ? 'Disalin ✓' : 'Salin'}
-            </button>
-          </div>
-        </label>
-        {copy === 'manual' && (
-          <output className="form-error copy-hint">
-            Browser tidak mengizinkan menyalin otomatis. Alamat sudah dipilih, tekan Ctrl+C (⌘C di Mac) untuk menyalin.
-          </output>
+        {/* a category without linked jenis: a feed without types would carry every service */}
+        {types?.length === 0 ? (
+          <p className="form-error flush">Belum ada jenis ibadah untuk pilihan ini, jadi belum ada yang dapat ditambahkan ke kalender.</p>
+        ) : (
+          <>
+            <div className="subscribe-actions">
+              <a className="btn primary" href={`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`} target="_blank" rel="noopener noreferrer">
+                Google Calendar
+              </a>
+              <a className="btn primary" href={webcal}>
+                Apple Calendar
+              </a>
+            </div>
+            <label className="field">
+              <span>Alamat kalender (untuk aplikasi lain)</span>
+              <div className="copy-row">
+                <input id="feed-url" readOnly value={url} onFocus={(e) => e.target.select()} />
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={async () => {
+                    try {
+                      // needs HTTPS (or localhost); elsewhere fall back to a selected field
+                      await navigator.clipboard.writeText(url)
+                      setCopy('done')
+                    } catch {
+                      document.querySelector<HTMLInputElement>('#feed-url')?.select()
+                      setCopy('manual')
+                    }
+                  }}
+                >
+                  {copy === 'done' ? 'Disalin ✓' : 'Salin'}
+                </button>
+              </div>
+            </label>
+            {copy === 'manual' && (
+              <output className="form-error copy-hint">
+                Browser tidak mengizinkan menyalin otomatis. Alamat sudah dipilih, tekan Ctrl+C (⌘C di Mac) untuk menyalin.
+              </output>
+            )}
+          </>
         )}
         {local && (
           <p className="muted small">

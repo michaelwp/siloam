@@ -209,7 +209,7 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
 private fun FilterMenu(filter: DataFilter, data: Snapshot?, onPick: (DataFilter) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        TextButton(onClick = { open = true }, modifier = Modifier.widthIn(max = 160.dp)) {
+        TextButton(onClick = { open = true }, modifier = Modifier.widthIn(max = 180.dp)) {
             // a long category name must not push the title away
             Text(filter.shortLabel(data), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             Icon(Icons.Filled.ArrowDropDown, contentDescription = null)

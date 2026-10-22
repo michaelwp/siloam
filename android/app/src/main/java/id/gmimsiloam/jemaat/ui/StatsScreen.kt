@@ -59,7 +59,9 @@ import java.time.LocalDate
 fun StatsSection(data: Snapshot, filter: DataFilter, onCategory: (String) -> Unit, onMembers: (MemberFilter) -> Unit) {
     val members = filter.members(data)
     val families = filter.families(data)
-    val s = stats(members, families, data.categories)
+    // a category in the filter: its members only, so the other categories would all be 0
+    val categories = filter.category(data)?.let { listOf(it) } ?: data.categories
+    val s = stats(members, families, categories)
     val month = remember { LocalDate.now().monthValue }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -83,7 +85,7 @@ fun StatsSection(data: Snapshot, filter: DataFilter, onCategory: (String) -> Uni
 
         Text("Kategorial BIPRA", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), maxItemsInEachRow = 3) {
-            data.categories.forEach { c ->
+            categories.forEach { c ->
                 Tile(c.label, s.bipra[c.key] ?: 0, c.range, Modifier.weight(1f).clickable { onCategory(c.key) })
             }
         }
@@ -165,8 +167,10 @@ fun BipraScreen(data: Snapshot, filter: DataFilter, category: String?, onCategor
     val members = filter.members(data)
     val kolom = filter.kolomOf(data)
     val query = q.trim().lowercase()
-    val all: List<Category?> = listOf(null) + data.categories
-    val chosen = data.categories.firstOrNull { it.key == category }
+    // a category in the filter: only its chip (the others would show 0)
+    val categories = filter.category(data)?.let { listOf(it) } ?: data.categories
+    val all: List<Category?> = listOf(null) + categories
+    val chosen = categories.firstOrNull { it.key == category }
     val rows = members
         .filter { chosen == null || inCategory(it, chosen) }
         .filter { query.isEmpty() || it.name.lowercase().contains(query) || it.familyName.lowercase().contains(query) }

@@ -8,7 +8,9 @@ import { bipraRange, birthLine, byText, dayMonth, inBipra, matches, triState } f
 
 export default function KategorialBipra() {
   const full = useFullView()
-  const { members, categories, loading, error } = useData()
+  const { members, categories: allCategories, bipraFilter, loading, error } = useData()
+  // a category in the filter: its members only, so the other categories would all be 0
+  const categories = bipraFilter ? [bipraFilter] : allCategories
   const [q, setQ] = useState('')
   // the chosen category lives in the URL (?kategori=PKB), so a Beranda tile can open it
   const [params, setParams] = useSearchParams()
