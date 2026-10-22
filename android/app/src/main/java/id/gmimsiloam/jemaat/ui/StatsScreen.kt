@@ -42,6 +42,7 @@ import id.gmimsiloam.jemaat.data.DataFilter
 import id.gmimsiloam.jemaat.data.Category
 import id.gmimsiloam.jemaat.data.MONTHS
 import id.gmimsiloam.jemaat.data.Snapshot
+import id.gmimsiloam.jemaat.data.YesNo
 import id.gmimsiloam.jemaat.data.inCategory
 import id.gmimsiloam.jemaat.data.stats
 import java.time.LocalDate
@@ -60,6 +61,10 @@ fun StatsSection(data: Snapshot, filter: DataFilter, onCategory: (String) -> Uni
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         TileRow(listOf("Keluarga" to s.families, "Jiwa" to s.members))
         TileRow(listOf("Laki-laki" to s.male, "Perempuan" to s.female))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            Tile("Baptis", s.baptized.yes, s.baptized.note(), Modifier.weight(1f))
+            Tile("Sidi", s.confirmed.yes, s.confirmed.note(), Modifier.weight(1f))
+        }
 
         Text("Kategorial BIPRA", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), maxItemsInEachRow = 3) {
@@ -101,6 +106,9 @@ fun StatsSection(data: Snapshot, filter: DataFilter, onCategory: (String) -> Uni
         }
     }
 }
+
+/** "12 belum · 3 tanpa data", as on the web. */
+private fun YesNo.note() = "$no belum" + if (unknown > 0) " · $unknown tanpa data" else ""
 
 @Composable
 private fun TileRow(items: List<Pair<String, Int>>) {

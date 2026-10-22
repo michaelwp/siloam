@@ -35,11 +35,19 @@ data class GenderSplit(val male: Int, val female: Int) {
     val total get() = male + female
 }
 
+/** Baptized or confirmed (sidi): [yes], [no] (not yet), [unknown] (no data). */
+data class YesNo(val yes: Int, val no: Int, val unknown: Int)
+
+private fun yesNo(values: List<Boolean?>) = YesNo(values.count { it == true }, values.count { it == false }, values.count { it == null })
+
 data class Stats(
     val families: Int,
     val members: Int,
     val male: Int,
     val female: Int,
+    val baptized: YesNo,
+    /** sidi */
+    val confirmed: YesNo,
     /** per BIPRA category key (main categories and flags) */
     val bipra: Map<String, Int>,
     /** members without a birth date have no category */
@@ -59,6 +67,8 @@ fun stats(members: List<Member>, families: List<Family>, categories: List<Catego
         members = members.size,
         male = members.count { it.gender == GENDER_MALE },
         female = members.count { it.gender == GENDER_FEMALE },
+        baptized = yesNo(members.map { it.baptized }),
+        confirmed = yesNo(members.map { it.confirmed }),
         bipra = categories.associate { c -> c.key to members.count { inCategory(it, c) } },
         uncategorized = members.count { it.category.isEmpty() },
         bipraByGender = categories.filterNot { it.isFlag }.map { c ->

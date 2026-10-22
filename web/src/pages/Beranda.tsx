@@ -21,7 +21,17 @@ export default function Beranda() {
   const day = today.getDate()
 
   const count = (pred: (m: (typeof members)[number]) => boolean) => members.filter(pred).length
-  const tiles = [
+  // baptized / confirmed (sidi): those who are, with the not-yet and unknown below
+  const sacrament = (label: string, field: 'baptized' | 'confirmed') => {
+    const unknown = count((m) => m[field] === null)
+    return {
+      label,
+      value: count((m) => m[field] === true),
+      to: '/anggota',
+      note: `${count((m) => m[field] === false)} belum` + (unknown ? ` · ${unknown} tanpa data` : ''),
+    }
+  }
+  const tiles: { label: string; value: number; to: string; note?: string }[] = [
     { label: 'Keluarga', value: families.length, to: scope ? '/anggota' : '/keluarga' },
     { label: 'Jiwa', value: members.length, to: '/anggota' },
     {
@@ -34,6 +44,8 @@ export default function Beranda() {
       value: count((m) => m.gender === 'Perempuan'),
       to: '/anggota',
     },
+    sacrament('Baptis', 'baptized'),
+    sacrament('Sidi', 'confirmed'),
   ]
   const bipra = categories.map((c) => ({
     label: c.name,
@@ -77,6 +89,7 @@ export default function Beranda() {
               <Link key={t.label} to={t.to} className="stat">
                 <span className="stat-value">{t.value}</span>
                 <span className="stat-label">{t.label}</span>
+                {t.note && <span className="stat-range">{t.note}</span>}
               </Link>
             ))}
           </div>

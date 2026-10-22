@@ -36,6 +36,18 @@ class StatsTest {
     }
 
     @Test
+    fun countsBaptismAndSidi() {
+        val members = listOf(
+            m("a", GENDER_MALE, "Anak").copy(baptized = true, confirmed = false),
+            m("b", GENDER_FEMALE, "Remaja").copy(baptized = true, confirmed = true),
+            m("c", GENDER_FEMALE, "WKI").copy(baptized = false),
+        )
+        val s = stats(members, emptyList())
+        assertEquals(YesNo(yes = 2, no = 1, unknown = 0), s.baptized)
+        assertEquals(YesNo(yes = 1, no = 1, unknown = 1), s.confirmed)
+    }
+
+    @Test
     fun emptyData() {
         val s = stats(emptyList(), emptyList())
         assertEquals(emptyList<Int>(), s.familySizes)
