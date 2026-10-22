@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import id.gmimsiloam.jemaat.data.DataFilter
 import id.gmimsiloam.jemaat.data.AppRelease
 import id.gmimsiloam.jemaat.data.MONTHS
+import id.gmimsiloam.jemaat.data.MemberFilter
 import id.gmimsiloam.jemaat.data.Prefs
 import id.gmimsiloam.jemaat.data.Service
 import id.gmimsiloam.jemaat.data.Snapshot
@@ -40,7 +41,7 @@ import java.time.LocalDate
 import java.util.Date
 
 @Composable
-fun HomeScreen(data: Snapshot, filter: DataFilter, error: String?, update: AppRelease?, onCategory: (String) -> Unit) {
+fun HomeScreen(data: Snapshot, filter: DataFilter, error: String?, update: AppRelease?, onCategory: (String) -> Unit, onMembers: (MemberFilter) -> Unit) {
     val today = rememberToday()
     val services = filter.services(data)
     val members = filter.members(data)
@@ -148,7 +149,7 @@ fun HomeScreen(data: Snapshot, filter: DataFilter, error: String?, update: AppRe
             open = "stats" in open,
             onToggle = { toggle("stats") },
         ) {
-            StatsSection(data, filter, onCategory)
+            StatsSection(data, filter, onCategory, onMembers)
         }
     }
 

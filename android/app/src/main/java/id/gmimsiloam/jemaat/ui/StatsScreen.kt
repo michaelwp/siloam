@@ -40,7 +40,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import id.gmimsiloam.jemaat.data.DataFilter
 import id.gmimsiloam.jemaat.data.Category
+import id.gmimsiloam.jemaat.data.GENDER_FEMALE
+import id.gmimsiloam.jemaat.data.GENDER_MALE
 import id.gmimsiloam.jemaat.data.MONTHS
+import id.gmimsiloam.jemaat.data.MemberFilter
+import id.gmimsiloam.jemaat.data.Tri
 import id.gmimsiloam.jemaat.data.Snapshot
 import id.gmimsiloam.jemaat.data.YesNo
 import id.gmimsiloam.jemaat.data.inCategory
@@ -49,10 +53,10 @@ import java.time.LocalDate
 
 /**
  * The statistics shown on Beranda (in its Statistik accordion): totals, BIPRA counts (a tap opens that
- * category on the BIPRA tab) and charts. Laid out in the caller's scrolling column.
+ * category on the BIPRA tab; gender, status, Baptis and Sidi open those members on the Jemaat tab) and charts. Laid out in the caller's scrolling column.
  */
 @Composable
-fun StatsSection(data: Snapshot, filter: DataFilter, onCategory: (String) -> Unit) {
+fun StatsSection(data: Snapshot, filter: DataFilter, onCategory: (String) -> Unit, onMembers: (MemberFilter) -> Unit) {
     val members = filter.members(data)
     val families = filter.families(data)
     val s = stats(members, families, data.categories)
@@ -60,10 +64,21 @@ fun StatsSection(data: Snapshot, filter: DataFilter, onCategory: (String) -> Uni
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         TileRow(listOf("Keluarga" to s.families, "Jiwa" to s.members))
-        TileRow(listOf("Laki-laki" to s.male, "Perempuan" to s.female))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            Tile("Baptis", s.baptized.yes, s.baptized.note(), Modifier.weight(1f))
-            Tile("Sidi", s.confirmed.yes, s.confirmed.note(), Modifier.weight(1f))
+            Tile("Laki-laki", s.male, null, Modifier.weight(1f).clickable { onMembers(MemberFilter(gender = GENDER_MALE)) })
+            Tile("Perempuan", s.female, null, Modifier.weight(1f).clickable { onMembers(MemberFilter(gender = GENDER_FEMALE)) })
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            // a tap opens the Jemaat tab with those members
+            Tile("Baptis", s.baptized.yes, s.baptized.note(), Modifier.weight(1f).clickable { onMembers(MemberFilter(baptized = Tri.YES)) })
+            Tile("Sidi", s.confirmed.yes, s.confirmed.note(), Modifier.weight(1f).clickable { onMembers(MemberFilter(confirmed = Tri.YES)) })
+        }
+
+        Text("Status", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), maxItemsInEachRow = 2) {
+            s.byStatus.forEach { (status, n) ->
+                Tile(status, n, null, Modifier.weight(1f).clickable { onMembers(MemberFilter(status = status)) })
+            }
         }
 
         Text("Kategorial BIPRA", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)

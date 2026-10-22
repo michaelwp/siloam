@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { MemberDialogs, type MemberDialog } from '../components/forms'
 import { ActionsHeader, BipraBadge, EditOnly, PageHeader, RowActions, Search, Status } from '../components/ui'
 import { useFullView } from '../auth'
@@ -9,7 +10,10 @@ export default function KategorialBipra() {
   const full = useFullView()
   const { members, categories, loading, error } = useData()
   const [q, setQ] = useState('')
-  const [filter, setFilter] = useState('')
+  // the chosen category lives in the URL (?kategori=PKB), so a Beranda tile can open it
+  const [params, setParams] = useSearchParams()
+  const filter = params.get('kategori') ?? ''
+  const setFilter = (key: string) => setParams(key ? { kategori: key } : {}, { replace: true })
   const [dialog, setDialog] = useState<MemberDialog>(null)
 
   const chosen = categories.find((c) => c.key === filter)

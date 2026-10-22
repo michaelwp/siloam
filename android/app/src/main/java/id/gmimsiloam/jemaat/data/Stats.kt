@@ -45,6 +45,8 @@ data class Stats(
     val members: Int,
     val male: Int,
     val female: Int,
+    /** per marital status (the known ones, then any other the data has) */
+    val byStatus: List<Pair<String, Int>>,
     val baptized: YesNo,
     /** sidi */
     val confirmed: YesNo,
@@ -67,6 +69,7 @@ fun stats(members: List<Member>, families: List<Family>, categories: List<Catego
         members = members.size,
         male = members.count { it.gender == GENDER_MALE },
         female = members.count { it.gender == GENDER_FEMALE },
+        byStatus = maritalStatuses(members).map { st -> st to members.count { it.maritalStatus == st } },
         baptized = yesNo(members.map { it.baptized }),
         confirmed = yesNo(members.map { it.confirmed }),
         bipra = categories.associate { c -> c.key to members.count { inCategory(it, c) } },

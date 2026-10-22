@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { MemberDialogs, type MemberDialog } from '../components/forms'
 import { ActionsHeader, EditOnly, PageHeader, RowActions, Search, Status } from '../components/ui'
 import { useFullView } from '../auth'
@@ -13,14 +14,27 @@ function matchTri(v: boolean | null, f: TriFilter) {
 }
 
 const NO_FILTERS = { gender: '', status: '', baptized: '' as TriFilter, confirmed: '' as TriFilter }
+type Filters = typeof NO_FILTERS
+const TRI: readonly string[] = ['yes', 'no', 'unknown']
+const tri = (v: string | null) => (v && TRI.includes(v) ? (v as TriFilter) : '')
 
 export default function AnggotaJemaat() {
   const full = useFullView()
   const { members, kolom, filterLabel, loading, error } = useData()
   const [q, setQ] = useState('')
-  const [filters, setFilters] = useState(NO_FILTERS)
+  // the filters live in the URL (?gender=…&status=…&baptized=yes&confirmed=no), so a
+  // Beranda tile can open this page filtered and the back button returns
+  const [params, setParams] = useSearchParams()
+  const filters: Filters = {
+    gender: params.get('gender') ?? '',
+    status: params.get('status') ?? '',
+    baptized: tri(params.get('baptized')),
+    confirmed: tri(params.get('confirmed')),
+  }
+  const setFilters = (next: Filters) =>
+    setParams(Object.fromEntries(Object.entries(next).filter(([, v]) => v)), { replace: true })
   const [dialog, setDialog] = useState<MemberDialog>(null)
-  const set = (patch: Partial<typeof NO_FILTERS>) => setFilters((f) => ({ ...f, ...patch }))
+  const set = (patch: Partial<Filters>) => setFilters({ ...filters, ...patch })
 
   const f = filters
   const active = Object.values(f).some(Boolean)
@@ -59,6 +73,8 @@ export default function AnggotaJemaat() {
           {MARITAL_STATUSES.map((st) => (
             <option key={st}>{st}</option>
           ))}
+          {/* another status from the data, opened from a Beranda tile */}
+          {f.status && !MARITAL_STATUSES.includes(f.status) && <option>{f.status}</option>}
         </select>
         <select
           aria-label="Baptis"

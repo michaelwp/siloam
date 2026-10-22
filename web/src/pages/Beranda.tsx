@@ -5,7 +5,7 @@ import { ChartCard, ColumnChart, StackedBarChart } from '../components/charts'
 import { BirthdaysByKolom, ByKolom, PageHeader, Status } from '../components/ui'
 import { useBipraScope } from '../auth'
 import { useData } from '../data'
-import { bipraRange, byText, dayMonth, daysUntil, inBipra, MONTHS, parts } from '../format'
+import { bipraRange, byText, dayMonth, daysUntil, inBipra, MARITAL_STATUSES, MONTHS, parts } from '../format'
 import { clock, serviceDayKey, serviceTitle, shortDay, upcomingServices, useSchedule, WEEK_AHEAD_DAYS } from '../schedule'
 
 /** Public homepage: totals plus this month's birthdays and wedding anniversaries. */
@@ -27,7 +27,7 @@ export default function Beranda() {
     return {
       label,
       value: count((m) => m[field] === true),
-      to: '/anggota',
+      to: `/anggota?${field}=yes`,
       note: `${count((m) => m[field] === false)} belum` + (unknown ? ` · ${unknown} tanpa data` : ''),
     }
   }
@@ -37,17 +37,23 @@ export default function Beranda() {
     {
       label: 'Laki-laki',
       value: count((m) => m.gender === 'Laki Laki'),
-      to: '/anggota',
+      to: '/anggota?gender=Laki+Laki',
     },
     {
       label: 'Perempuan',
       value: count((m) => m.gender === 'Perempuan'),
-      to: '/anggota',
+      to: '/anggota?gender=Perempuan',
     },
     sacrament('Baptis', 'baptized'),
     sacrament('Sidi', 'confirmed'),
   ]
+  // marital statuses: the known ones, then any other the data has
+  const statuses = [
+    ...MARITAL_STATUSES,
+    ...new Set(members.map((m) => m.maritalStatus).filter((s) => s && !MARITAL_STATUSES.includes(s))),
+  ].map((s) => ({ label: s, value: count((m) => m.maritalStatus === s) }))
   const bipra = categories.map((c) => ({
+    key: c.key,
     label: c.name,
     range: bipraRange(c),
     value: count((m) => inBipra(m, c)),
@@ -94,10 +100,25 @@ export default function Beranda() {
             ))}
           </div>
 
+          <h2 className="section-title">Status</h2>
+          <div className="stats">
+            {statuses.map((s) => (
+              <Link key={s.label} to={`/anggota?status=${encodeURIComponent(s.label)}`} className="stat">
+                <span className="stat-value">{s.value}</span>
+                <span className="stat-label">{s.label}</span>
+              </Link>
+            ))}
+          </div>
+
           <h2 className="section-title">Kategorial BIPRA</h2>
           <div className="stats">
             {bipra.map((c) => (
-              <Link key={c.label} to="/bipra" className="stat">
+              <Link
+                key={c.label}
+                // a "kelola data BIPRA" user has no BIPRA page; Anggota is already their category
+                to={scope ? '/anggota' : `/bipra?kategori=${encodeURIComponent(c.key)}`}
+                className="stat"
+              >
                 <span className="stat-value">{c.value}</span>
                 <span className="stat-label">{c.label}</span>
                 <span className="stat-range">{c.range}</span>
@@ -142,6 +163,26 @@ export default function Beranda() {
                       ],
                     }
                   })}
+              />
+            </ChartCard>
+            <ChartCard title="Baptis & Sidi" subtitle="Jumlah jiwa yang sudah, belum, atau tanpa data">
+              <StackedBarChart
+                rowHead="Sakramen"
+                series={[
+                  { name: 'Sudah', cls: 'viz-s1' },
+                  { name: 'Belum', cls: 'viz-s2' },
+                  // unknown: recessive gray, not a third hue
+                  { name: 'Tanpa data', cls: 'viz-deemph' },
+                ]}
+                rows={(
+                  [
+                    ['Baptis', 'baptized'],
+                    ['Sidi', 'confirmed'],
+                  ] as const
+                ).map(([label, field]) => ({
+                  label,
+                  values: [true, false, null].map((v) => count((m) => m[field] === v)),
+                }))}
               />
             </ChartCard>
             <ChartCard title="Ukuran keluarga" subtitle="Jumlah keluarga menurut banyaknya anggota">

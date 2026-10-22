@@ -48,6 +48,21 @@ class StatsTest {
     }
 
     @Test
+    fun countsStatuses() {
+        val members = listOf(
+            m("a", GENDER_MALE, "PKB").copy(maritalStatus = "Menikah"),
+            m("b", GENDER_FEMALE, "WKI").copy(maritalStatus = "Menikah"),
+            m("c", GENDER_FEMALE, "Pemuda").copy(maritalStatus = "Belum Menikah"),
+            m("d", GENDER_FEMALE, "Anak"), // no status: in no tile
+        )
+        val s = stats(members, emptyList()).byStatus.toMap()
+        assertEquals(2, s["Menikah"])
+        assertEquals(1, s["Belum Menikah"])
+        assertEquals(0, s["Cerai Mati / Janda"])
+        assertEquals(MARITAL_STATUSES, stats(members, emptyList()).byStatus.map { it.first })
+    }
+
+    @Test
     fun emptyData() {
         val s = stats(emptyList(), emptyList())
         assertEquals(emptyList<Int>(), s.familySizes)

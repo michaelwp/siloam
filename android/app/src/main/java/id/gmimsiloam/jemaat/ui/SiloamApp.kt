@@ -54,6 +54,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import id.gmimsiloam.jemaat.AppViewModel
 import id.gmimsiloam.jemaat.data.Prefs
 import id.gmimsiloam.jemaat.data.DataFilter
+import id.gmimsiloam.jemaat.data.MemberFilter
 import id.gmimsiloam.jemaat.data.Snapshot
 import id.gmimsiloam.jemaat.notify.DailyWorker
 import id.gmimsiloam.jemaat.notify.Notifier
@@ -73,6 +74,7 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
     var settings by rememberSaveable { mutableStateOf(false) }
     var confirmClose by rememberSaveable { mutableStateOf(false) }
     var category by rememberSaveable { mutableStateOf<String?>(null) } // BIPRA tab's filter
+    var members by rememberSaveable { mutableStateOf(MemberFilter.none.encode()) } // Jemaat tab's filters
 
     // a tapped notification opens its tab
     LaunchedEffect(requestedTab) {
@@ -171,10 +173,14 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
                 else -> Box(Modifier.fillMaxSize()) {
                     tabState.SaveableStateProvider(tab.key) {
                         when (tab) {
-                            Tab.Home -> HomeScreen(data, filter, state.error, state.update, onCategory = { category = it; tab = Tab.Bipra })
+                            Tab.Home -> HomeScreen(
+                                data, filter, state.error, state.update,
+                                onCategory = { category = it; tab = Tab.Bipra },
+                                onMembers = { members = it.encode(); tab = Tab.Members },
+                            )
                             Tab.Schedule -> ScheduleScreen(data, filter)
                             Tab.Birthdays -> BirthdaysScreen(data, filter)
-                            Tab.Members -> MembersScreen(data, filter)
+                            Tab.Members -> MembersScreen(data, filter, MemberFilter.decode(members), onMemberFilter = { members = it.encode() })
                             Tab.Bipra -> BipraScreen(data, filter, category, onCategory = { category = it })
                         }
                     }

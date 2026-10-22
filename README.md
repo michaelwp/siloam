@@ -77,10 +77,15 @@ Needs JDK 17+ and the Android SDK (`android/local.properties` →
 ```sh
 make android-test      # unit tests (dates, birthdays, statistics, calendar grid, JSON parsing)
 make android-apk       # debug APK → android/app/build/outputs/apk/debug/app-debug.apk
-make android-install   # install it on a phone/emulator via adb
+make android-install   # install it on a phone/emulator via adb ("Siloam Debug")
 make android-release   # release APK (signed when android/keystore.properties exists)
+make android-install-release   # install the signed release APK ("Jemaat Siloam") beside the debug one
 make android-publish VERSION=1.2.0   # set the version, signed APK into downloads/android/ (see below)
 ```
+
+The debug build is its own app (`id.gmimsiloam.jemaat.debug`, "Siloam Debug",
+version `x.y.z-debug`), so it and the release build can be installed together;
+each has its own settings and sends its own notifications.
 
 **New versions.** The app asks the server for the newest version
 (`GET /api/app/android`) when it loads and in the hourly background check. If

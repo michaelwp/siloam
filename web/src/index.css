@@ -1162,6 +1162,9 @@ a.stat {
 .viz-key.viz-s2 {
   background: var(--series-2);
 }
+.viz-key.viz-deemph {
+  background: var(--viz-deemph);
+}
 .viz-legend {
   list-style: none;
   display: flex;
@@ -1184,6 +1187,9 @@ a.stat {
 }
 .viz-swatch.viz-s2 {
   background: var(--series-2);
+}
+.viz-swatch.viz-deemph {
+  background: var(--viz-deemph);
 }
 .viz-table {
   margin-top: 6px;
