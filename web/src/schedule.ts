@@ -3,17 +3,12 @@ import type { Service, WorshipType } from './api'
 import { MONTHS, parts } from './format'
 
 export type Schedule = {
-  /** services of the viewed kolom, and those of the whole congregation (kolom 0); all when no kolom is chosen; narrowed by the BIPRA category and jenis filters */
+  /** services of the viewed kolom, and those of the whole congregation (kolom 0); all when no kolom is chosen; narrowed by the BIPRA category filter */
   services: Service[]
   /** services for Beranda and the daily notice: for a "kelola data BIPRA" user only their category's */
   homeServices: Service[]
   allServices: Service[]
   types: WorshipType[]
-  /** the jenis the filter offers: those linked to the BIPRA category (a "kelola data BIPRA" user's, or the chosen one), or all */
-  typeChoices: WorshipType[]
-  /** the jenis being viewed (only its services, with the kolom and category), or null */
-  typeFilter: WorshipType | null
-  setTypeFilter: (id: string | null) => void
   loading: boolean
   error: string | null
   reload: () => Promise<void>

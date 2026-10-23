@@ -8,7 +8,6 @@ import { ThemeToggle } from './components/ThemeToggle'
 import { DataScope } from './DataProvider'
 import { ScheduleProvider } from './ScheduleProvider'
 import { kolomLabel, useData } from './data'
-import { useSchedule } from './schedule'
 import Account from './pages/Account'
 import AdminAndroid from './pages/AdminAndroid'
 import AdminBipra from './pages/AdminBipra'
@@ -245,7 +244,6 @@ function Shell() {
  */
 function KolomPicker() {
   const { koloms, categories, kolom, setKolom, bipraFilter, setBipra } = useData()
-  const { typeChoices, typeFilter, setTypeFilter } = useSchedule()
   const { user } = useAuth()
   const own = user?.role === 'bipra' ? categories.find((c) => c.id === user.bipraId) : undefined
   return (
@@ -287,20 +285,6 @@ function KolomPicker() {
             </select>
           </label>
         )
-      )}
-      {/* the services of one jenis (of the chosen category's, when one is chosen) */}
-      {typeChoices.length > 0 && (
-        <label className="kolom-picker">
-          <span className="sr-only">Jenis Ibadah</span>
-          <select value={typeFilter?.id ?? ''} onChange={(e) => setTypeFilter(e.target.value || null)}>
-            <option value="">Semua Jenis Ibadah</option>
-            {typeChoices.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </label>
       )}
     </div>
   )

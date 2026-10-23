@@ -33,6 +33,17 @@ type Dialog =
   | { kind: 'subscribe' }
   | null
 
+// the jenis chosen on this page is remembered per browser (a convenience; never required)
+const TYPE_KEY = 'jadwal-jenis'
+
+function savedType() {
+  try {
+    return localStorage.getItem(TYPE_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
 const narrow = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches
 
 /** Google-Calendar-like schedule: a month grid or a schedule list, per kolom. */
@@ -40,17 +51,29 @@ export default function JadwalIbadah() {
   const { kolom, filterLabel, bipraFilter } = useData()
   const canEdit = useCanAddServices()
   const { user } = useAuth()
-  const { services, types, typeChoices, typeFilter, loading, error, reload } = useSchedule()
-  // the jenis in view: the one chosen in the filter, or the chosen category's (or all; a "kelola
-  // data BIPRA" user sees every service here, though the filter offers their category's jenis only)
-  const shownTypes = typeFilter ? [typeFilter] : bipraFilter ? typeChoices : types
+  const { services, types, loading, error, reload } = useSchedule()
+  const [chosenType, setChosenType] = useState(savedType)
+  // a BIPRA category: the jenis linked to it; else every jenis
+  const typeChoices = bipraFilter ? types.filter((t) => t.bipraId === bipraFilter.id) : types
+  // a remembered jenis that is gone, or not of the chosen category, counts as all
+  const typeFilter = typeChoices.find((t) => t.id === chosenType) ?? null
+  const shownTypes = typeFilter ? [typeFilter] : typeChoices
+  const pickType = (id: string) => {
+    try {
+      if (id) localStorage.setItem(TYPE_KEY, id)
+      else localStorage.removeItem(TYPE_KEY)
+    } catch {
+      // storage blocked: the choice lasts until the page is reloaded
+    }
+    setChosenType(id)
+  }
   const [today] = useState(() => new Date())
   const [cursor, setCursor] = useState(() => ({ y: today.getFullYear(), m: today.getMonth() }))
   const [view, setView] = useState<View>(() => (narrow() ? 'agenda' : 'month'))
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   const [dialog, setDialog] = useState<Dialog>(null)
 
-  const visible = services.filter((s) => !hidden.has(s.typeId))
+  const visible = services.filter((s) => !hidden.has(s.typeId) && (!typeFilter || s.typeId === typeFilter.id))
   const byDay = useMemo(() => {
     const map = new Map<string, Service[]>()
     for (const s of visible) {
@@ -114,6 +137,19 @@ export default function JadwalIbadah() {
 
       <section className="cal-main">
         <MonthNav cursor={cursor} today={today} subtitle={`Jadwal Ibadah · ${filterLabel}${typeFilter ? ` · ${typeFilter.name}` : ''}`} onChange={setCursor}>
+          {typeChoices.length > 0 && (
+            <label className="cal-type-pick">
+              <span className="sr-only">Jenis Ibadah</span>
+              <select value={typeFilter?.id ?? ''} onChange={(e) => pickType(e.target.value)}>
+                <option value="">Semua Jenis Ibadah</option>
+                {typeChoices.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <fieldset className="segmented">
             <legend className="sr-only">Tampilan</legend>
             <button aria-pressed={view === 'month'} onClick={() => setView('month')}>

@@ -1593,6 +1593,9 @@ td.actions .btn + .btn {
 .cal-nav {
   display: flex;
 }
+.cal-type-pick select {
+  max-width: 220px;
+}
 .cal-nav .icon-btn,
 .mini-month .icon-btn {
   font-size: 1.4rem;

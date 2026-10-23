@@ -177,9 +177,9 @@ private fun FilterRow(f: MemberFilter, statuses: List<String>, onChange: (Member
     }
 }
 
-/** A filter chip "[name]: [value]" (selected) or "[name]" that opens [options]; [onPick] gets the index. */
+/** A filter chip "[name]: [value]" (selected) or "[name]" that opens [options]; [onPick] gets the index (also used by the Jadwal tab). */
 @Composable
-private fun ChoiceChip(name: String, value: String?, options: List<String>, onPick: (Int) -> Unit) {
+fun ChoiceChip(name: String, value: String?, options: List<String>, onPick: (Int) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         FilterChip(

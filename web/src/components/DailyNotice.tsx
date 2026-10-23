@@ -50,7 +50,7 @@ function write(storage: () => Storage, key: string, value: string) {
  */
 export function DailyNotice() {
   const { members, loading } = useData()
-  const { homeServices: services, typeFilter, loading: scheduleLoading } = useSchedule()
+  const { homeServices: services, loading: scheduleLoading } = useSchedule()
   const [today] = useState(() => new Date())
   const key = storageKey(today)
   const [hidden, setHidden] = useState(
@@ -93,10 +93,7 @@ export function DailyNotice() {
 
       {upcoming.length > 0 && (
         <section className="notice-section">
-          <h3>
-            ⛪ Ibadah Hari Ini & Minggu Ini
-            {typeFilter && <small className="muted"> · Ibadah {typeFilter.name} saja</small>}
-          </h3>
+          <h3>⛪ Ibadah Hari Ini & Minggu Ini</h3>
           <ByKolom items={upcoming} kolomOf={(s) => s.kolom}>
             {(list) => (
               <ul className="notice-services">

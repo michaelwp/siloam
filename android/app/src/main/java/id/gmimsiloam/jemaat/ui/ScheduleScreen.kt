@@ -94,8 +94,13 @@ fun ScheduleScreen(data: Snapshot, filter: DataFilter) {
     var day by rememberSaveable { mutableStateOf(today) } // the calendar's chosen day
     var hidden by rememberSaveable { mutableStateOf(setOf<String>()) }
     var selected by remember { mutableStateOf<Service?>(null) }
+    // this tab's own jenis choice (of the chosen category's jenis, or all); a remembered jenis that
+    // is gone, or not of the category, counts as all
+    var typeId by remember { mutableStateOf(prefs.scheduleTypeId) }
+    val choices = filter.typeChoices(data)
+    val type = choices.firstOrNull { it.id == typeId }
     val shown = filter.services(data)
-        .filter { it.typeId !in hidden }
+        .filter { it.typeId !in hidden && (type == null || it.typeId == type.id) }
         .sortedWith(compareBy({ it.date }, { it.time }))
     fun goTo(m: YearMonth) {
         month = m
@@ -129,9 +134,17 @@ fun ScheduleScreen(data: Snapshot, filter: DataFilter) {
                 }
             }
         }
-        // the jenis in view: the one chosen in the filter, or the category's (or all)
-        val types = filter.type(data)?.let { listOf(it) } ?: filter.typeChoices(data)
+        // the jenis in view: the one chosen, or the category's (or all)
+        val types = type?.let { listOf(it) } ?: choices
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (choices.isNotEmpty()) {
+                item(key = "jenis") {
+                    ChoiceChip("Jenis Ibadah", type?.name, listOf("Semua") + choices.map { it.name }) { i ->
+                        typeId = if (i == 0) "" else choices[i - 1].id
+                        prefs.scheduleTypeId = typeId
+                    }
+                }
+            }
             items(types, key = { it.id }) { t ->
                 FilterChip(
                     selected = t.id !in hidden,

@@ -289,7 +289,7 @@ function ServiceItem({ s, withDay }: { s: Service; withDay: boolean }) {
 
 /** Today's services and the coming week's (of the viewed kolom), per kolom, beside the birthdays. */
 function TodayServices({ today }: { today: Date }) {
-  const { homeServices: services, typeFilter, loading, error } = useSchedule()
+  const { homeServices: services, loading, error } = useSchedule()
   const { today: todays, week, next } = upcomingServices(services, today, WEEK_AHEAD_DAYS)
   const dateText = `${today.getDate()} ${MONTHS[today.getMonth()]} ${today.getFullYear()}`
 
@@ -304,10 +304,7 @@ function TodayServices({ today }: { today: Date }) {
         </span>
         <div className="grow">
           <h2 id="services-title">Ibadah Hari Ini & Minggu Ini</h2>
-          <p className="muted small">
-            {dateText}
-            {typeFilter && ` · Ibadah ${typeFilter.name} saja`}
-          </p>
+          <p className="muted small">{dateText}</p>
         </div>
         <Link to="/jadwal" className="btn small">
           Jadwal

@@ -77,25 +77,11 @@ class DataFilterTest {
     }
 
     @Test
-    fun filtersByJenis() {
-        val kolomType = data.types[0]
-        val pemudaType = data.types[1]
-        // a jenis: its services only; members and families stay
-        val jenis = DataFilter.all.withType(kolomType)
-        assertEquals(listOf("k3", "k11"), jenis.services(data).map { it.id })
-        assertEquals(3, jenis.members(data).size)
-        assertEquals(kolomType, jenis.type(data))
-        // with a kolom
-        assertEquals(listOf("k3"), DataFilter.kolom(3).withType(kolomType).services(data).map { it.id })
-        // a category offers its linked jenis only; another jenis counts as not chosen
-        val bipra = DataFilter.bipra(pemuda)
-        assertEquals(listOf(pemudaType), bipra.typeChoices(data))
-        assertEquals(null, bipra.withType(kolomType).type(data))
-        assertEquals(listOf("pem", "pem3"), bipra.withType(kolomType).services(data).map { it.id })
-        assertEquals(listOf("pem"), DataFilter.kolom(11).withBipra(pemuda).withType(pemudaType).services(data).map { it.id })
-        // a deleted jenis counts as not chosen; the other parts keep it
-        assertEquals(4, DataFilter(typeId = "gone").services(data).size)
-        assertEquals("pemuda", DataFilter.kolom(3).withType(pemudaType).withKolom(null).typeId)
+    fun jenisChoicesFollowTheCategory() {
+        // the Jadwal tab's jenis: all, or the chosen category's linked ones
+        assertEquals(data.types, DataFilter.kolom(3).typeChoices(data))
+        assertEquals(listOf(data.types[1]), DataFilter.bipra(pemuda).typeChoices(data))
+        assertEquals(emptyList<WorshipType>(), DataFilter.bipra(Category("PKB", "PKB", "", id = "cat-pkb")).typeChoices(data))
     }
 
     @Test

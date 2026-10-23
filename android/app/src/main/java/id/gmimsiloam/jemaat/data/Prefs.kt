@@ -63,6 +63,11 @@ class Prefs(context: Context) {
         get() = p.getBoolean("scheduleCalendar", false)
         set(v) = p.edit { putBoolean("scheduleCalendar", v) }
 
+    /** The jenis chosen in the Jadwal tab (its own filter); empty = all. */
+    var scheduleTypeId: String
+        get() = p.getString("scheduleTypeId", "") ?: ""
+        set(v) = p.edit { putString("scheduleTypeId", v) }
+
     /** The HUT tab as a month calendar (else a list). */
     var birthdaysCalendar: Boolean
         get() = p.getBoolean("birthdaysCalendar", false)
@@ -100,7 +105,6 @@ class Prefs(context: Context) {
                 kolom = p.getInt("notifyKolom", 0).takeIf { it > 0 },
                 bipra = p.getString("notifyBipra", "") ?: "",
                 bipraId = p.getString("notifyBipraId", "") ?: "",
-                typeId = p.getString("notifyTypeId", "") ?: "",
             )
         }
         set(f) = p.edit {
@@ -108,7 +112,6 @@ class Prefs(context: Context) {
             putInt("notifyKolom", f.kolom ?: 0)
             putString("notifyBipra", f.bipra)
             putString("notifyBipraId", f.bipraId)
-            putString("notifyTypeId", f.typeId)
         }
 
     companion object {
