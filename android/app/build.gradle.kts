@@ -17,7 +17,7 @@ android {
         // the one place for the version: `make android-publish VERSION=x.y.z`
         // sets it; versionCode follows from it (1.2.3 → 10203), so it always
         // grows with the version, as Android requires for updates
-        versionName = "1.7.0"
+        versionName = "1.8.0"
         val parts = versionName!!.split(".").mapNotNull { it.toIntOrNull() }
         require(parts.size == 3 && parts[1] < 100 && parts[2] < 100) {
             "versionName must be like 1.2.0 (major.minor.patch; minor and patch up to 99), not \"$versionName\""
