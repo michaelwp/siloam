@@ -1302,6 +1302,16 @@ a.stat {
   min-width: 0;
   gap: 2px;
 }
+.notice-day + .notice-day {
+  margin-top: 10px;
+}
+.notice-day-head {
+  margin: 0 0 2px;
+  font-size: 0.85rem;
+}
+.notice-day.today .notice-day-head {
+  color: var(--accent);
+}
 .daily-notice-foot {
   margin-top: 14px;
 }

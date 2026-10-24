@@ -58,6 +58,20 @@ class TodayTest {
     }
 
     @Test
+    fun notificationsLookAWeekAhead() {
+        val today = LocalDate.of(2026, 10, 20)
+        val services = listOf(service("h7", "2026-10-27"), service("h8", "2026-10-28"), service("h6", "2026-10-26"))
+        assertEquals(listOf("h6", "h7"), upcomingServices(services, today, NOTIFY_AHEAD_DAYS).week.map { it.id })
+        val members = listOf(member("H7", 10, 27), member("H8", 10, 28), member("Today", 10, 20))
+        assertEquals(listOf("H7"), upcomingBirthdays(members, today, NOTIFY_AHEAD_DAYS).map { it.first.name })
+        assertEquals("Hari ini", dayLabel(today, today))
+        assertEquals("Besok", dayLabel(today.plusDays(1), today))
+        assertEquals("Kam, 22 Okt", dayLabel(today.plusDays(2), today))
+        assertEquals("besok", dayPhrase(today.plusDays(1), today))
+        assertEquals("pada Kam, 22 Okt", dayPhrase(today.plusDays(2), today))
+    }
+
+    @Test
     fun birthdaysTodayAndLeapDay() {
         val members = listOf(member("Budi", 10, 20), member("Ani", 10, 20), member("Leap", 2, 29), member("None", null, null))
         assertEquals(listOf("Ani", "Budi"), birthdaysToday(members, LocalDate.of(2026, 10, 20)).map { it.name })

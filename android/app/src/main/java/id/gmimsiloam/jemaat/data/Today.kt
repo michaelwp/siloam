@@ -7,6 +7,9 @@ import java.time.Year
 /** Services shown as "this week": the days after today, up to this many (as on the web). */
 const val WEEK_AHEAD_DAYS = 6L
 
+/** The daily notifications tell about services and birthdays up to this many days ahead (a week before the day). */
+const val NOTIFY_AHEAD_DAYS = 7L
+
 val MONTHS = listOf(
     "Januari", "Februari", "Maret", "April", "Mei", "Juni",
     "Juli", "Agustus", "September", "Oktober", "November", "Desember",
@@ -21,6 +24,17 @@ fun longDate(d: LocalDate) = "${weekday(d)}, ${d.dayOfMonth} ${MONTHS[d.monthVal
 
 /** "Rab, 21 Okt" */
 fun shortDate(d: LocalDate) = "${weekday(d).take(3)}, ${d.dayOfMonth} ${MONTHS[d.monthValue - 1].take(3)}"
+
+/** "Hari ini", "Besok", else "Rab, 21 Okt" */
+fun dayLabel(d: LocalDate, today: LocalDate) = when (d) {
+    today -> "Hari ini"
+    today.plusDays(1) -> "Besok"
+    else -> shortDate(d)
+}
+
+/** [dayLabel] inside a sentence: "hari ini", "besok", else "pada Rab, 21 Okt" */
+fun dayPhrase(d: LocalDate, today: LocalDate) =
+    if (d == today || d == today.plusDays(1)) dayLabel(d, today).lowercase() else "pada ${shortDate(d)}"
 
 /** "19:00" → "19.00" (Indonesian style) */
 fun clock(t: String) = t.replace(':', '.')
@@ -58,10 +72,10 @@ data class Upcoming(val today: List<Service>, val week: List<Service>, val next:
 
 private val byStart = compareBy<Service>({ it.date }, { it.time })
 
-/** Today's services, those of the next [WEEK_AHEAD_DAYS] days, and the first one after. */
-fun upcomingServices(services: List<Service>, today: LocalDate): Upcoming {
+/** Today's services, those of the next [days] days, and the first one after. */
+fun upcomingServices(services: List<Service>, today: LocalDate, days: Long = WEEK_AHEAD_DAYS): Upcoming {
     val sorted = services.sortedWith(byStart)
-    val end = today.plusDays(WEEK_AHEAD_DAYS)
+    val end = today.plusDays(days)
     return Upcoming(
         today = sorted.filter { it.date == today },
         week = sorted.filter { it.date.isAfter(today) && !it.date.isAfter(end) },

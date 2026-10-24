@@ -4,12 +4,12 @@ import { useData } from '../data'
 import { byText, daysUntil, MONTHS } from '../format'
 import {
   clock,
+  dayKey,
   serviceDayKey,
   serviceTitle,
   shortDay,
   upcomingServices,
   useSchedule,
-  WEEK_AHEAD_DAYS,
   WEEKDAYS,
 } from '../schedule'
 import { BirthdaysByKolom, ByKolom } from './ui'
@@ -21,6 +21,9 @@ import { BirthdaysByKolom, ByKolom } from './ui'
 // (The keys date from when this showed only birthdays.)
 const HIDE_TODAY_KEY = 'birthday-toast-hidden-on'
 const SKIP_KEY = 'birthday-toast-skipped-on'
+
+/** Services and birthdays are announced every day for a week before the day (and on it). */
+const NOTICE_AHEAD_DAYS = 7
 
 function storageKey(d: Date) {
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
@@ -42,10 +45,18 @@ function write(storage: () => Storage, key: string, value: string) {
   }
 }
 
+/** "Hari ini", "Besok", else "Senin, 26 Okt": the day `days` after `today`. */
+function dayLabel(today: Date, days: number) {
+  if (days === 0) return 'Hari ini'
+  if (days === 1) return 'Besok'
+  const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + days)
+  return shortDay(dayKey(d.getFullYear(), d.getMonth(), d.getDate()))
+}
+
 /**
  * A centered modal shown once the data has loaded, on every page (visitors and
- * signed-in users), for the viewed kolom: today's services, the services of
- * the coming week and today's birthdays, per kolom ("Kolom 11:"). The page behind is blurred and inert
+ * signed-in users), for the viewed kolom: the services and birthdays of today
+ * and of the next NOTICE_AHEAD_DAYS days, per kolom ("Kolom 11:"). The page behind is blurred and inert
  * (native modal <dialog>) until it is closed. Nothing to tell → not shown.
  */
 export function DailyNotice() {
@@ -58,10 +69,17 @@ export function DailyNotice() {
   )
   const [dontShowToday, setDontShowToday] = useState(false)
 
-  const { today: servicesToday, week: servicesWeek } = upcomingServices(services, today, WEEK_AHEAD_DAYS)
+  const { today: servicesToday, week: servicesWeek } = upcomingServices(services, today, NOTICE_AHEAD_DAYS)
+  // birthdays of today and the coming week, soonest first, then by name
   const birthdays = members
-    .filter((m) => m.birthMonth && m.birthDay && daysUntil(m.birthMonth, m.birthDay, today) === 0)
-    .toSorted((a, b) => byText(a.name, b.name))
+    .flatMap((m) => {
+      if (!m.birthMonth || !m.birthDay) return []
+      const days = daysUntil(m.birthMonth, m.birthDay, today)
+      return days <= NOTICE_AHEAD_DAYS ? [{ member: m, days }] : []
+    })
+    .toSorted((a, b) => a.days - b.days || byText(a.member.name, b.member.name))
+  const birthdayDays = [...new Set(birthdays.map((b) => b.days))]
+  const birthdaysToday = birthdays.some((b) => b.days === 0)
 
   // today's and this week's together, per kolom (today's show the time only)
   const upcoming = [...servicesToday, ...servicesWeek]
@@ -135,8 +153,14 @@ export function DailyNotice() {
 
       {birthdays.length > 0 && (
         <section className="notice-section">
-          <h3>🎂 Ulang Tahun Hari Ini</h3>
-          <BirthdaysByKolom members={birthdays} />
+          <h3>🎂 Ulang Tahun Hari Ini & Minggu Ini</h3>
+          {birthdayDays.map((days) => (
+            <div key={days} className={days === 0 ? 'notice-day today' : 'notice-day'}>
+              <h4 className="notice-day-head">{dayLabel(today, days)}</h4>
+              <BirthdaysByKolom members={birthdays.filter((b) => b.days === days).map((b) => b.member)} />
+            </div>
+          ))}
+          {birthdaysToday && <p className="muted small">Selamat ulang tahun!</p>}
         </section>
       )}
 
