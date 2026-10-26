@@ -2,6 +2,9 @@
 // (POST/PUT/DELETE under /api/) and every sign-in and sign-out, with who did
 // it, what it was about, whether it worked, the client IP and the time.
 // Request bodies are never stored, so passwords cannot end up in the log.
+//
+// Entries are kept only in day files (see FileLog), written in the
+// background (fire and forget): a request never waits for the log.
 package audit
 
 import (
@@ -12,6 +15,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -77,9 +81,8 @@ var routes = map[string]route{
 	"PUT /api/admin/bipra/order":              {"bipra", "Ubah urutan kategori BIPRA"},
 }
 
-// Store is where entries go (the MongoDB store; a fake in tests).
+// Store names documents before they are deleted (the MongoDB store; a fake in tests).
 type Store interface {
-	InsertAudit(ctx context.Context, e *model.AuditEntry) error
 	// AuditLabel names a document before it is deleted ("" if unknown).
 	AuditLabel(ctx context.Context, kind string, id bson.ObjectID) string
 }
@@ -87,8 +90,80 @@ type Store interface {
 // Recorder is the audit middleware.
 type Recorder struct {
 	Store    Store
+	File     *FileLog // where entries are kept
 	ClientIP func(*http.Request) string
 	User     func(*http.Request) *model.User // the signed-in user, or nil
+
+	mu     sync.RWMutex
+	queue  chan *model.AuditEntry // nil until Start: then entries are stored in the request
+	done   chan struct{}
+	closed bool
+}
+
+// queueSize is how many entries may wait for storing; past it new ones are
+// dropped (and the drop is logged) rather than slowing requests down.
+const queueSize = 1024
+
+// Start stores entries in the background from now on; call Close at shutdown.
+func (rec *Recorder) Start() {
+	rec.queue = make(chan *model.AuditEntry, queueSize)
+	rec.done = make(chan struct{})
+	go func() {
+		defer close(rec.done)
+		for e := range rec.queue {
+			rec.store(e)
+		}
+	}()
+}
+
+// Close stops taking entries and waits until the queued ones are written (or
+// ctx ends), then closes the log file.
+func (rec *Recorder) Close(ctx context.Context) error {
+	rec.mu.Lock()
+	if rec.queue != nil && !rec.closed {
+		rec.closed = true
+		close(rec.queue)
+	}
+	rec.mu.Unlock()
+	if rec.done != nil {
+		select {
+		case <-rec.done:
+		case <-ctx.Done():
+			return fmt.Errorf("audit: %d entries not written: %w", len(rec.queue), ctx.Err())
+		}
+	}
+	if rec.File != nil {
+		return rec.File.Close()
+	}
+	return nil
+}
+
+// enqueue hands e to the background writer without waiting.
+func (rec *Recorder) enqueue(e *model.AuditEntry) {
+	rec.mu.RLock()
+	defer rec.mu.RUnlock()
+	switch {
+	case rec.queue == nil:
+		rec.store(e) // not started (tests, tools)
+	case rec.closed:
+		log.Printf("audit: shutting down, dropped %s %s", e.Method, e.Path)
+	default:
+		select {
+		case rec.queue <- e:
+		default:
+			log.Printf("audit: queue full, dropped %s %s", e.Method, e.Path)
+		}
+	}
+}
+
+// store appends e to the log file; a failure is only logged.
+func (rec *Recorder) store(e *model.AuditEntry) {
+	if e.ID.IsZero() {
+		e.ID = bson.NewObjectID() // in write order: the log page pages by it
+	}
+	if err := rec.File.Write(e); err != nil {
+		log.Printf("audit: %s %s: %v", e.Method, e.Path, err)
+	}
 }
 
 type noteKey struct{}
@@ -207,12 +282,7 @@ func (rec *Recorder) Middleware(next http.Handler) http.Handler {
 		if e.Target == "" && kind == "auth" && strings.HasSuffix(r.URL.Path, "/register/finish") {
 			e.Target = r.URL.Query().Get("name") // the passkey's name
 		}
-		// the response has been written; the entry must still be stored
-		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
-		defer cancel()
-		if err := rec.Store.InsertAudit(ctx, e); err != nil {
-			log.Printf("audit: %s %s: %v", e.Method, e.Path, err)
-		}
+		rec.enqueue(e)
 	})
 }
 

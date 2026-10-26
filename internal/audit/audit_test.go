@@ -4,8 +4,10 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
@@ -14,21 +16,21 @@ import (
 )
 
 type fakeStore struct {
-	entries []model.AuditEntry
-	labels  map[string]string // kind/id → label
-}
-
-func (f *fakeStore) InsertAudit(_ context.Context, e *model.AuditEntry) error {
-	f.entries = append(f.entries, *e)
-	return nil
+	labels map[string]string // kind/id → label
 }
 
 func (f *fakeStore) AuditLabel(_ context.Context, kind string, id bson.ObjectID) string {
 	return f.labels[kind+"/"+id.Hex()]
 }
 
-func setup(user *model.User) (*fakeStore, http.Handler) {
+// setup gives a started recorder writing to a temporary dir; entries stops
+// it and returns what it wrote, oldest first.
+func setup(t *testing.T, user *model.User) (*fakeStore, http.Handler, func() []model.AuditEntry) {
 	fs := &fakeStore{labels: map[string]string{}}
+	file, err := OpenFileLog(t.TempDir(), 90*24*time.Hour, time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/members", func(w http.ResponseWriter, _ *http.Request) {
 		httpx.WriteJSON(w, http.StatusCreated, map[string]any{"id": "x", "name": "Albert Supit"})
@@ -50,10 +52,23 @@ func setup(user *model.User) (*fakeStore, http.Handler) {
 	})
 	rec := &Recorder{
 		Store:    fs,
+		File:     file,
 		ClientIP: func(*http.Request) string { return "203.0.113.9" },
 		User:     func(*http.Request) *model.User { return user },
 	}
-	return fs, rec.Middleware(mux)
+	rec.Start()
+	return fs, rec.Middleware(mux), func() []model.AuditEntry {
+		t.Helper()
+		if err := rec.Close(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		list, err := file.List(Filter{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		slices.Reverse(list)
+		return list
+	}
 }
 
 func do(h http.Handler, method, target, body string) {
@@ -62,7 +77,7 @@ func do(h http.Handler, method, target, body string) {
 
 func TestRecordsChangesWithWhoWhatAndResult(t *testing.T) {
 	admin := &model.User{ID: bson.NewObjectID(), Username: "admin"}
-	fs, h := setup(admin)
+	fs, h, written := setup(t, admin)
 	famID := bson.NewObjectID()
 	fs.labels["families/"+famID.Hex()] = "Kel. Umboh"
 	svcID := bson.NewObjectID()
@@ -74,10 +89,11 @@ func TestRecordsChangesWithWhoWhatAndResult(t *testing.T) {
 	do(h, http.MethodPost, "/api/auth/passkeys/register/begin", "") // nor ceremony starts
 	do(h, http.MethodPost, "/api/unknown", "")                      // nor unknown paths
 
-	if len(fs.entries) != 3 {
-		t.Fatalf("entries = %+v", fs.entries)
+	entries := written()
+	if len(entries) != 3 {
+		t.Fatalf("entries = %+v", entries)
 	}
-	add, del, put := fs.entries[0], fs.entries[1], fs.entries[2]
+	add, del, put := entries[0], entries[1], entries[2]
 	if add.Action != "Tambah anggota" || add.Category != "anggota" || add.Target != "Albert Supit" || add.Status != 201 ||
 		add.Username != "admin" || *add.UserID != admin.ID || add.IP != "203.0.113.9" {
 		t.Errorf("create: %+v", add)
@@ -91,13 +107,14 @@ func TestRecordsChangesWithWhoWhatAndResult(t *testing.T) {
 }
 
 func TestSignInsNameTheUser(t *testing.T) {
-	fs, h := setup(nil) // no session during sign-in
+	_, h, written := setup(t, nil) // no session during sign-in
 	do(h, http.MethodPost, "/api/auth/login?ok", `{"username":"budi","password":"secret"}`)
 	do(h, http.MethodPost, "/api/auth/login", `{"username":"budi","password":"wrong"}`)
-	if len(fs.entries) != 2 {
-		t.Fatalf("entries = %+v", fs.entries)
+	entries := written()
+	if len(entries) != 2 {
+		t.Fatalf("entries = %+v", entries)
 	}
-	ok, failed := fs.entries[0], fs.entries[1]
+	ok, failed := entries[0], entries[1]
 	if ok.Username != "budi" || ok.UserID == nil || ok.Status != 200 || ok.Action != "Masuk dengan password" {
 		t.Errorf("sign-in: %+v", ok)
 	}

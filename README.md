@@ -190,7 +190,12 @@ after a delete), success or failure, the IP address and the time, newest first
 and filterable by user, kind, result and date. Request contents are never
 stored, so passwords cannot end up in the log; a failed sign-in records the
 username only if that account exists (what was typed may be a password).
-Entries are deleted after `AUDIT_RETENTION_DAYS` (default 365). Imports and
+The log is kept in files, not in MongoDB: one file per day in `AUDIT_LOG_DIR`
+(`audit-2026-10-25.jsonl`, one JSON object per line, by `APP_TIMEZONE`),
+written in the background so a request never waits for it. Day files older
+than `AUDIT_RETENTION_DAYS` (default 90, about 3 months) are deleted. On a
+host whose disk is wiped on restart (Fly.io without a volume) the log only
+goes back to the last start. Imports and
 copies from the command line are not in the log. Requests refused before they
 reach the app (not signed in, not an admin) are not logged either.
 
@@ -452,7 +457,8 @@ git-ignored and excluded from Docker builds — keep credentials there only.
 | `AUTH_RATE_LIMIT`                | `20` — sign-in attempts per client IP per minute |
 | `TRUSTED_PROXIES`                | none — comma-separated IPs/CIDRs of reverse proxies, e.g. `10.0.0.0/8,127.0.0.1` |
 | `CLIENT_IP_HEADER`               | none — client-IP header set by a platform edge proxy (Fly.io: `Fly-Client-IP`) |
-| `AUDIT_RETENTION_DAYS`           | `365` — how long *Log Aktivitas* keeps entries |
+| `AUDIT_RETENTION_DAYS`           | `90` — how long *Log Aktivitas* keeps entries |
+| `AUDIT_LOG_DIR`                  | `logs/audit` (image: `/home/nonroot/audit`) — where *Log Aktivitas* is kept, one file per day |
 | `ANDROID_LATEST_VERSION` / `ANDROID_DOWNLOAD_URL` | none — the Android update notice until an admin sets it on *Aplikasi Android* |
 | `-import file.xlsx [-replace]`   | import the workbook and exit              |
 | `-copy-from <uri> [-collections families,members] [-replace]` | copy data from another MongoDB and exit |
@@ -576,7 +582,7 @@ spellings and birth dates); Data Base Keluarga is treated as the source of truth
 main.go                 server, flags, SPA handler
 internal/api            REST handlers (koloms, families, members, schedule)
 internal/auth           sign-in, passkeys, sessions, user admin, middleware
-internal/audit          audit log middleware (user activities)
+internal/audit          audit log middleware and its day files (user activities)
 internal/httpx          JSON helpers
 internal/config         .env loader
 internal/store          MongoDB access

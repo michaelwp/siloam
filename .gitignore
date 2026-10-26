@@ -47,6 +47,7 @@ keystore.properties
 
 # logs
 *.log
+/logs/
 npm-debug.log*
 
 # editor / OS / tools

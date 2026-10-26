@@ -9,7 +9,6 @@ import (
 	"siloam/internal/audit"
 	"siloam/internal/auth"
 	"siloam/internal/model"
-	"siloam/internal/store"
 )
 
 // ---- Android app version ----
@@ -100,7 +99,7 @@ func (a *API) clearAndroid(w http.ResponseWriter, r *http.Request) {
 // (dates are in APP_TIMEZONE; "to" includes that day).
 func (a *API) listAudit(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	f := store.AuditFilter{Username: q.Get("username"), Category: q.Get("category"), Limit: 50}
+	f := audit.Filter{Username: q.Get("username"), Category: q.Get("category"), Limit: 50}
 	switch q.Get("result") {
 	case "ok":
 		failed := false
@@ -139,7 +138,11 @@ func (a *API) listAudit(w http.ResponseWriter, r *http.Request) {
 		}
 		f.Before = id
 	}
-	entries, err := a.store.ListAudit(r.Context(), f)
+	if a.AuditLog == nil {
+		writeJSON(w, http.StatusOK, []model.AuditEntry{})
+		return
+	}
+	entries, err := a.AuditLog.List(f)
 	if err != nil {
 		serverError(w, err)
 		return
@@ -148,11 +151,14 @@ func (a *API) listAudit(w http.ResponseWriter, r *http.Request) {
 }
 
 // auditMeta gives the log page its filter choices.
-func (a *API) auditMeta(w http.ResponseWriter, r *http.Request) {
-	names, err := a.store.AuditUsernames(r.Context())
-	if err != nil {
-		serverError(w, err)
-		return
+func (a *API) auditMeta(w http.ResponseWriter, _ *http.Request) {
+	names := []string{}
+	if a.AuditLog != nil {
+		var err error
+		if names, err = a.AuditLog.Usernames(); err != nil {
+			serverError(w, err)
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"categories": audit.Categories, "usernames": names})
 }

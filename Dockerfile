@@ -23,8 +23,10 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${APP_VERSI
 # ---- runtime ----
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/siloam /siloam
+# the audit log files go to the nonroot user's home (the image root is read-only for it)
 ENV ADDR=:8080 \
-    MONGODB_URI=mongodb://mongo:27017/siloam
+    MONGODB_URI=mongodb://mongo:27017/siloam \
+    AUDIT_LOG_DIR=/home/nonroot/audit
 EXPOSE 8080
 USER nonroot:nonroot
 ENTRYPOINT ["/siloam"]

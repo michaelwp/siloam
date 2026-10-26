@@ -158,24 +158,37 @@ func run() error {
 	jemaat.Register(mux)
 	mux.Handle("/", spaHandler(web.Dist()))
 
-	// the audit log keeps user activities for AUDIT_RETENTION_DAYS (default a year)
-	if err := s.EnsureAuditIndexes(ctx, time.Duration(envInt("AUDIT_RETENTION_DAYS", 365))*24*time.Hour); err != nil {
+	// the audit log keeps user activities for AUDIT_RETENTION_DAYS (default
+	// about 3 months) in day files in AUDIT_LOG_DIR (not in MongoDB)
+	auditDir := env("AUDIT_LOG_DIR", "logs/audit")
+	auditLog, err := audit.OpenFileLog(auditDir, time.Duration(envInt("AUDIT_RETENTION_DAYS", 90))*24*time.Hour, loc)
+	if err != nil {
 		return err
 	}
-	recorder := &audit.Recorder{Store: s, ClientIP: authSvc.ClientIP, User: auth.CurrentUser}
+	log.Printf("audit log: %s", auditDir)
+	jemaat.AuditLog = auditLog
+	recorder := &audit.Recorder{Store: s, File: auditLog, ClientIP: authSvc.ClientIP, User: auth.CurrentUser}
+	recorder.Start()
 
 	handler := logRequests(securityHeaders(authSvc.RateLimit(authSvc.Middleware(recorder.Middleware(mux))), env("COOKIE_SECURE", "false") == "true"))
 	srv := &http.Server{Addr: *addr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+	shutDown := make(chan struct{})
 	go func() {
+		defer close(shutDown)
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(shutdownCtx)
+		// the requests are done: store the audit entries still queued
+		if err := recorder.Close(shutdownCtx); err != nil {
+			log.Print(err)
+		}
 	}()
 	log.Printf("siloam %s listening on %s", jemaat.Version, *addr)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
+	<-shutDown
 	return nil
 }
 

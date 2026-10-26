@@ -10,6 +10,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"siloam/internal/audit"
 	"siloam/internal/auth"
 	"siloam/internal/httpx"
 	"siloam/internal/model"
@@ -25,6 +26,8 @@ type API struct {
 	// AndroidDefault is the newest Android app per the server's ANDROID_*
 	// settings; the admin page's setting, once saved, takes precedence
 	AndroidDefault model.AndroidRelease
+	// AuditLog is where the log page reads the audit entries (nil: none)
+	AuditLog *audit.FileLog
 }
 
 func New(s *store.Store, loc *time.Location) *API { return &API{store: s, loc: loc, now: time.Now} }
