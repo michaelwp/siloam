@@ -17,6 +17,8 @@ var (
 	ErrBipraExists = errors.New("bipra category key already exists")
 	// ErrBipraHasUsers: a scoped user or viewer is assigned to the category.
 	ErrBipraHasUsers = errors.New("bipra category has users assigned")
+	// ErrBipraHasKas: the category has a cash book (entries).
+	ErrBipraHasKas = errors.New("bipra category has kas entries")
 )
 
 const bipraSeededMarker = "bipraSeeded"
@@ -125,12 +127,19 @@ func (s *Store) UpdateBipra(ctx context.Context, c model.BipraCategory) (model.B
 // DeleteBipra removes a category no user is assigned to; jenis ibadah
 // linked to it lose the link.
 func (s *Store) DeleteBipra(ctx context.Context, id bson.ObjectID) error {
-	n, err := s.users.CountDocuments(ctx, bson.D{{Key: "role", Value: bson.D{{Key: "$in", Value: bson.A{model.RoleScoped, model.RoleViewer}}}}, {Key: "bipraIds", Value: id}})
+	n, err := s.users.CountDocuments(ctx, bson.D{{Key: "role", Value: bson.D{{Key: "$in", Value: bson.A{model.RoleScoped, model.RoleViewer, model.RoleTreasurer}}}}, {Key: "bipraIds", Value: id}})
 	if err != nil {
 		return err
 	}
 	if n > 0 {
 		return ErrBipraHasUsers
+	}
+	// its cash book is kept
+	if has, err := s.BipraHasKas(ctx, id); err != nil || has {
+		if err == nil {
+			err = ErrBipraHasKas
+		}
+		return err
 	}
 	res, err := s.bipra().DeleteOne(ctx, bson.D{{Key: "_id", Value: id}})
 	if err != nil {
@@ -141,6 +150,12 @@ func (s *Store) DeleteBipra(ctx context.Context, id bson.ObjectID) error {
 	}
 	_, err = s.worshipTypes.UpdateMany(ctx, bson.D{{Key: "bipraId", Value: id}}, bson.D{{Key: "$unset", Value: bson.D{{Key: "bipraId", Value: ""}}}})
 	return err
+}
+
+// BipraHasKas reports whether category id has a cash book (entries).
+func (s *Store) BipraHasKas(ctx context.Context, id bson.ObjectID) (bool, error) {
+	n, err := s.kas().CountDocuments(ctx, bipraBook(id), options.Count().SetLimit(1))
+	return n > 0, err
 }
 
 // BipraCategory returns one category by id.

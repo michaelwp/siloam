@@ -74,6 +74,8 @@ class Api(private val baseUrl: String, private val session: String? = null) {
         categories = runCatching { get("/api/bipra-categories") }.getOrNull(),
         // the kolom cash totals the user may read, with this month's (the phone's); none on older servers
         kas = runCatching { get("/api/kas/summary?month=" + java.time.YearMonth.now()) }.getOrNull(),
+        // the BIPRA categories' books likewise; an older server answers with the koloms' (dropped: no bipraId)
+        kasBipra = runCatching { get("/api/kas/summary?book=bipra&month=" + java.time.YearMonth.now()) }.getOrNull(),
     )
 
     companion object {
@@ -92,6 +94,8 @@ data class RawData(
     val categories: String?,
     /** the Kas Kolom summary; null: none (an older server, or it failed) */
     val kas: String? = null,
+    /** the Kas BIPRA summary; null: none */
+    val kasBipra: String? = null,
 ) {
     fun parse(fetchedAt: Long) = Snapshot(
         koloms = Parse.koloms(koloms),
@@ -102,6 +106,7 @@ data class RawData(
         categories = categories?.let(Parse::categories) ?: DEFAULT_CATEGORIES,
         // never fails the load: the kas card is left out instead
         kas = kas?.let { runCatching { parseKas(it) }.getOrNull() } ?: emptyList(),
+        kasBipra = kasBipra?.let { runCatching { parseKas(it).filter { s -> s.bipraId.isNotEmpty() } }.getOrNull() } ?: emptyList(),
         fetchedAt = fetchedAt,
     )
 }

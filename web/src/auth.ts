@@ -25,7 +25,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   user: 'Pengguna',
   scoped: 'Pengguna – kelola kolom/BIPRA',
   viewer: 'Pengguna – hanya lihat',
-  treasurer: 'Bendahara Kolom',
+  treasurer: 'Bendahara',
 }
 
 /** Roles limited to some koloms and/or BIPRA categories (a treasurer: koloms). */
@@ -41,6 +41,11 @@ export function readsOnly(u: Pick<User, 'role'> | null) {
 /** Whether u may add, change and remove the kas of kolom k: admins, and that kolom's treasurers. */
 export function managesKas(u: Pick<User, 'role' | 'koloms'> | null, k: number) {
   return u?.role === 'admin' || (u?.role === 'treasurer' && ownKoloms(u).includes(k))
+}
+
+/** Whether u may add, change and remove the kas of BIPRA category id: admins, and that category's treasurers. */
+export function managesBipraKas(u: Pick<User, 'role' | 'bipraIds'> | null, id: string) {
+  return u?.role === 'admin' || (u?.role === 'treasurer' && ownBipraIds(u).includes(id))
 }
 
 /** The koloms a scoped user manages, a viewer sees, or a treasurer keeps the kas of (others: none). */

@@ -141,6 +141,7 @@ class Repository(private val context: Context) {
                 services = o.getString("services"),
                 categories = if (o.has("categories")) o.getString("categories") else null,
                 kas = if (o.has("kas")) o.getString("kas") else null,
+                kasBipra = if (o.has("kasBipra")) o.getString("kasBipra") else null,
             ).parse(o.getLong("fetchedAt")).let(Prefs(context).scope::apply)
         }.getOrNull()
     }
@@ -174,6 +175,7 @@ class Repository(private val context: Context) {
             .put("services", raw.services)
             .apply { raw.categories?.let { put("categories", it) } }
             .apply { raw.kas?.let { put("kas", it) } }
+            .apply { raw.kasBipra?.let { put("kasBipra", it) } }
             .put("fetchedAt", now)
         cacheLock.withLock {
             if (!Prefs(context).signedIn) throw NotSignedInException("Sudah keluar")

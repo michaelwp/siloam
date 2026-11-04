@@ -22,10 +22,11 @@ const (
 	// whole congregation; with some (User.Koloms, User.BipraIDs), only of
 	// those koloms and of those categories' members.
 	RoleViewer = "viewer"
-	// RoleTreasurer ("Bendahara Kolom") keeps the cash book (kas) of some
-	// koloms (User.Koloms, at least one): adds, changes and removes its cash
-	// in and out. They see those koloms' data like a viewer and change no
-	// other jemaat data.
+	// RoleTreasurer ("Bendahara") keeps the cash books (kas) of some koloms
+	// (User.Koloms) and/or BIPRA categories (User.BipraIDs), at least one in
+	// all: adds, changes and removes their cash in and out. They see those
+	// koloms' data and those categories' members like a viewer, and change
+	// no other jemaat data.
 	RoleTreasurer = "treasurer"
 	// LegacyRoleKolom and LegacyRoleBipra were the one-kolom and
 	// one-category roles (fields "kolom" and "bipraId"); the store moves them
@@ -39,8 +40,7 @@ func ValidRole(role string) bool {
 	return role == RoleAdmin || role == RoleUser || role == RoleScoped || role == RoleViewer || role == RoleTreasurer
 }
 
-// HasScope reports whether role keeps a list of koloms (and, except a
-// treasurer, BIPRA categories).
+// HasScope reports whether role keeps a list of koloms and BIPRA categories.
 func HasScope(role string) bool {
 	return role == RoleScoped || role == RoleViewer || role == RoleTreasurer
 }
@@ -115,6 +115,23 @@ func (u *User) ManagesKas(k int) bool {
 // keeps it, and who sees all of that kolom's data (its managers and viewers).
 func (u *User) SeesKas(k int) bool { return u.ManagesKas(k) || u.SeesKolom(k) }
 
+// ManagesBipraKas reports whether the user may add, change and remove the
+// cash in and out of BIPRA category id: admins, and that category's treasurers.
+func (u *User) ManagesBipraKas(id bson.ObjectID) bool {
+	return u.IsAdmin() || (u.Role == RoleTreasurer && slices.Contains(u.BipraIDs, id))
+}
+
+// SeesBipraKas reports whether the user may read the cash book of BIPRA
+// category id: who keeps it, who sees the whole congregation's data (regular
+// users, viewers without choices), and who has the category (its scoped
+// users and viewers).
+func (u *User) SeesBipraKas(id bson.ObjectID) bool {
+	if u.ManagesBipraKas(id) || u.ManagesAll() || u.SeesBipra(id) {
+		return true
+	}
+	return u.Role == RoleViewer && len(u.Koloms) == 0 && len(u.BipraIDs) == 0
+}
+
 // SeesBipra reports whether the user sees the private data of the members of
 // BIPRA category id (in every kolom) because it is one of theirs.
 func (u *User) SeesBipra(id bson.ObjectID) bool {
@@ -151,11 +168,18 @@ func (u *User) Scope() string {
 		return "Akun Anda hanya dapat melihat data"
 	}
 	if u.Role == RoleTreasurer {
-		ks := make([]string, len(u.Koloms))
-		for i, k := range u.Koloms {
-			ks[i] = fmt.Sprint(k)
+		var parts []string
+		if len(u.Koloms) > 0 {
+			ks := make([]string, len(u.Koloms))
+			for i, k := range u.Koloms {
+				ks[i] = fmt.Sprint(k)
+			}
+			parts = append(parts, "kas Kolom "+strings.Join(ks, ", "))
 		}
-		return "Anda hanya dapat mengelola kas Kolom " + strings.Join(ks, ", ")
+		if len(u.BipraIDs) > 0 {
+			parts = append(parts, "kas kategori BIPRA Anda")
+		}
+		return "Anda hanya dapat mengelola " + strings.Join(parts, " dan ")
 	}
 	if u.Role != RoleScoped {
 		return "Anda tidak dapat mengubah data ini"

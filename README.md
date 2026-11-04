@@ -243,7 +243,7 @@ reach the app (not signed in, not an admin) are not logged either.
   Windows Hello, Android, security keys), rename or delete them, then use
   *Masuk dengan Passkey* on the sign-in page without typing a username.
 - **Admin → Pengguna:** add users (role *Admin*, *Pengguna*, *Pengguna –
-  kelola kolom/BIPRA*, *Pengguna – hanya lihat* or *Bendahara Kolom*, see below) with a generated
+  kelola kolom/BIPRA*, *Pengguna – hanya lihat* or *Bendahara*, see below) with a generated
   temporary password, edit username/role, reset a password (optionally removing
   the user's passkeys, e.g. for a lost phone) and delete users. New and reset
   accounts must change their password at the next sign-in. You cannot delete or
@@ -265,7 +265,7 @@ reach the app (not signed in, not an admin) are not logged either.
   | Pengguna | all jemaat data, koloms, jenis ibadah | every kolom |
   | Pengguna – kelola kolom/BIPRA | **their koloms** (any number): families, members and **every service** there, BIPRA ones too. **Their BIPRA categories** (any number): the services whose jenis ibadah is linked to one of them, **in every kolom** (or "Semua kolom"). Koloms and categories may be combined (they add up); at least one in all | their koloms, and their categories' members in every kolom |
   | Pengguna – hanya lihat | nothing (only their own username, password and passkeys) | with nothing chosen: every kolom; otherwise their koloms and their categories' members in every kolom (combined like above) |
-  | Bendahara Kolom | **the kas (cash book) of their koloms** (at least one): cash in and cash out; no other jemaat data | their koloms |
+  | Bendahara | **the kas (cash books) of their koloms and/or their BIPRA categories** (at least one in all): cash in and cash out; no other jemaat data | their koloms, and their categories' members in every kolom |
 
   The server enforces this (`403` otherwise, also for moving data into or out
   of their koloms). In the web app a limited user (*kelola kolom/BIPRA* or a
@@ -295,25 +295,30 @@ reach the app (not signed in, not an admin) are not logged either.
 
   Users of the former one-kolom (`kolom`) and one-category (`bipra`) roles are
   moved to this role at startup, keeping their kolom or category.
-- **Kas Kolom** (sidebar): each kolom's cash book. *Semua Kolom* lists every
-  kolom's cash in, cash out and balance; picking a kolom opens its book for a
+- **Kas** (sidebar), two tabs. **Kas Kolom**: each kolom's cash book; it
+  follows the sidebar's kolom picker. **Kas BIPRA**: each BIPRA category's
+  cash book, for the whole congregation (e.g. Pemuda's); it follows the
+  sidebar's BIPRA picker. With nothing picked, the tab lists every book's cash
+  in, cash out and balance; picking one opens its book for a
   month (or *Semua bulan*): opening balance, cash in, cash out, closing
   balance, and every entry with its running balance. *Unduh Excel* saves it as
   an .xlsx file (real dates and amounts, the opening balance and the period's
   totals; written by the page itself, no library) and *Unduh CSV* as CSV.
   An entry is **kas masuk** or **kas keluar**: date, amount (whole rupiah) and
-  either the **ibadah** of that kolom it came from (e.g. its offering) or was
-  spent for, or another source/use told in the **keterangan** (required then).
+  either the **ibadah** it came from (e.g. its offering) or was spent for — of
+  that kolom, or for a BIPRA book of a jenis linked to the category, in any
+  kolom — or another source/use told in the **keterangan** (required then).
   The entry keeps the ibadah's name, so it still shows if the schedule entry
-  is deleted. **Admins** and the kolom's **Bendahara Kolom** add, change and
-  delete entries (each change is in *Log Aktivitas*, category *Kas kolom*);
-  who sees all of a kolom's data (Pengguna, its *kelola kolom* users, viewers
-  of it) may read its kas. A kolom with kas entries cannot be deleted. BIPRA-only
-  users do not see the page.
-- **Kas on Beranda** (web) and on the Android app's Beranda (*💰 Kas Kolom*):
-  for a user who may read some kolom's kas, the balance and this month's cash
-  in and cash out (the viewer's month) of the kolom picked, or of all their
-  koloms with a line per kolom. The Android app shows these totals only
+  is deleted. **Admins** and the book's **Bendahara** add, change and delete
+  entries (each change is in *Log Aktivitas*, category *Kas*). A kolom's kas
+  is read by who sees all of that kolom's data (Pengguna, its *kelola kolom*
+  users, viewers of it); a category's by Pengguna, viewers of everything, and
+  the users who have that category. A kolom or category with kas entries
+  cannot be deleted. BIPRA-only users see only the Kas BIPRA tab.
+- **Kas on Beranda** (web: a *Kas Kolom* and a *Kas BIPRA* card) and on the
+  Android app's Beranda (*💰 Kas*): for each book the user may read, the
+  balance and this month's cash in and cash out (the viewer's month) of the
+  kolom and category picked, or of all of them with a line per book. The Android app shows these totals only
   (cached for offline use); entries are recorded and listed on the web.
 - **Account lockout:** after **3 wrong passwords in a row** an account is locked
   for **3 minutes** (`MAX_FAILED_LOGINS`, `LOCK_DURATION`; the sign-in page shows
@@ -604,11 +609,11 @@ user has proven who they are).
 | GET    | `/api/admin/audit/meta`                | admin: the categories and usernames for the filters |
 | GET    | `/api/admin/logins?from=&to=`          | admin: user statistics for a period (RFC 3339 instants, `to` exclusive, at most 48 h — the page sends the viewer's local day; or `?date=YYYY-MM-DD` in `APP_TIMEZONE`, default today): `{from, to, users, web, android, logins: [{username, role, koloms, bipraIds, source, at}], active: [who is signed in now, per source]}`; the sign-in log is kept (no expiry) |
 | GET    | `/api/bipra-categories`                | the BIPRA categories and their rules, in order (public) |
-| GET    | `/api/kas?kolom=`                      | a kolom's cash book: `{kolom, in, out, balance, entries (oldest first), canEdit}` — for who may read that kolom's kas |
-| GET    | `/api/kas/summary?month=`              | `[{kolom, in, out, count, last, month, monthIn, monthOut}]` for every kolom whose kas the user may read; `month` YYYY-MM (the viewer's; default this month in `APP_TIMEZONE`) |
-| POST   | `/api/kas`                             | admin or the kolom's treasurer: `{kolom, kind (in\|out), date, amount (rupiah > 0), serviceId ("" or an ibadah of that kolom), description (required without serviceId)}` |
-| PUT    | `/api/kas/{id}`                        | same fields (also the treasurer of the kolom it was in) |
-| DELETE | `/api/kas/{id}`                        | admin or the kolom's treasurer |
+| GET    | `/api/kas?kolom=` or `?bipra=`         | a kolom's or BIPRA category's cash book: `{kolom, bipraId, name, in, out, balance, entries (oldest first), canEdit}` — for who may read it |
+| GET    | `/api/kas/summary?month=&book=`        | `[{kolom, in, out, count, last, month, monthIn, monthOut}]` for every kolom whose kas the user may read, or with `book=bipra` every BIPRA category's (`bipraId`, `name`); `month` YYYY-MM (the viewer's; default this month in `APP_TIMEZONE`) |
+| POST   | `/api/kas`                             | admin or the book's treasurer: `{kolom` or `bipraId, kind (in\|out), date, amount (rupiah > 0), serviceId ("", an ibadah of that kolom, or of a jenis linked to the category), description (required without serviceId)}` |
+| PUT    | `/api/kas/{id}`                        | same fields (also the treasurer of the book it was in) |
+| DELETE | `/api/kas/{id}`                        | admin or the book's treasurer |
 | POST   | `/api/admin/bipra`                     | admin: `{key, name, kind (main\|flag), color, minAge, maxAge, gender, marital ("", married, unmarried), orMarried}` |
 | PUT    | `/api/admin/bipra/{id}`                | admin: same fields                        |
 | DELETE | `/api/admin/bipra/{id}`                | admin                                     |
@@ -625,7 +630,7 @@ user has proven who they are).
 | PUT    | `/api/auth/passkeys/{id}`              | rename `{name}`                           |
 | DELETE | `/api/auth/passkeys/{id}`              |                                           |
 | GET    | `/api/users`                           | admin                                     |
-| POST   | `/api/users`                           | admin: `{username, password, role, koloms, bipraIds}` — role `admin`, `user`, `scoped` (then `koloms`, kolom numbers, and/or `bipraIds`, BIPRA category ids, at least one in all), `viewer` (`koloms`/`bipraIds` optional; none: sees everything) or `treasurer` (`koloms`, at least one; no `bipraIds`) |
+| POST   | `/api/users`                           | admin: `{username, password, role, koloms, bipraIds}` — role `admin`, `user`, `scoped` (then `koloms`, kolom numbers, and/or `bipraIds`, BIPRA category ids, at least one in all), `viewer` (`koloms`/`bipraIds` optional; none: sees everything) or `treasurer` (`koloms` and/or `bipraIds`, at least one in all) |
 | PUT    | `/api/users/{id}`                      | admin: `{username, role, koloms, bipraIds}` |
 | POST   | `/api/users/{id}/reset-password`       | admin: `{password, clearPasskeys}`; also unlocks |
 | POST   | `/api/users/{id}/logout`               | admin: `{reason}` (required, 3–200 characters; kept in the activity log) — ends all of the user's sessions, web and Android |

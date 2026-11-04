@@ -185,10 +185,11 @@ export function memberToInput(m: Member): MemberInput {
 
 export type KasKind = 'in' | 'out'
 
-/** One line of a kolom's cash book; amounts are whole rupiah. */
+/** One line of a cash book (a kolom's, or a BIPRA category's: bipraId set, kolom 0); amounts are whole rupiah. */
 export type KasEntry = {
   id: string
   kolom: number
+  bipraId: string | null
   kind: KasKind
   date: string // midnight UTC of the local date
   amount: number
@@ -201,11 +202,18 @@ export type KasEntry = {
   updatedAt: string
 }
 
-export type KasInput = Pick<KasEntry, 'kolom' | 'kind' | 'date' | 'amount' | 'description'> & { serviceId: string }
+export type KasInput = Pick<KasEntry, 'kind' | 'date' | 'amount' | 'description'> & {
+  serviceId: string
+} & ({ kolom: number } | { bipraId: string })
 
-/** A kolom's cash book: its entries (oldest first), totals, and whether the user may change it. */
+/** Which cash book: a kolom's, or a BIPRA category's. */
+export type KasTarget = { kolom: number } | { bipraId: string }
+
+/** A cash book: its entries (oldest first), totals, and whether the user may change it. */
 export type KasBook = {
   kolom: number
+  bipraId?: string
+  name?: string // the category's
   in: number
   out: number
   balance: number
@@ -213,9 +221,11 @@ export type KasBook = {
   canEdit: boolean
 }
 
-/** A kolom's cash totals (every kolom whose kas the user may read). */
+/** A cash book's totals: a kolom's, or a BIPRA category's (bipraId and name set). */
 export type KasSummary = {
   kolom: number
+  bipraId?: string
+  name?: string
   in: number
   out: number
   count: number
@@ -226,9 +236,11 @@ export type KasSummary = {
 }
 
 export const kasApi = {
-  book: (kolom: number) => request<KasBook>('GET', `/api/kas?kolom=${kolom}`),
-  /** month: "2026-11", the viewer's month (its totals as monthIn/monthOut) */
-  summary: (month: string) => request<KasSummary[]>('GET', `/api/kas/summary?month=${month}`),
+  book: (t: KasTarget) =>
+    request<KasBook>('GET', 'bipraId' in t ? `/api/kas?bipra=${t.bipraId}` : `/api/kas?kolom=${t.kolom}`),
+  /** month: "2026-11", the viewer's month (its totals as monthIn/monthOut); bipra: the categories' books, else the koloms' */
+  summary: (month: string, bipra = false) =>
+    request<KasSummary[]>('GET', `/api/kas/summary?month=${month}${bipra ? '&book=bipra' : ''}`),
   create: (e: KasInput) => request<KasEntry>('POST', '/api/kas', e),
   update: (id: string, e: KasInput) => request<KasEntry>('PUT', `/api/kas/${id}`, e),
   remove: (id: string) => request<void>('DELETE', `/api/kas/${id}`),

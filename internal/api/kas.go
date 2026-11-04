@@ -15,8 +15,9 @@ import (
 	"siloam/internal/store"
 )
 
-// The kolom cash books ("Kas Kolom"). Admins and a kolom's treasurers keep
-// it; who sees all of that kolom's data may read it.
+// The cash books: each kolom's ("Kas Kolom") and each BIPRA category's
+// ("Kas BIPRA", for the whole congregation). Admins and the book's
+// treasurers keep it; see User.SeesKas and User.SeesBipraKas for who reads it.
 
 func (a *API) registerKas(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/kas", a.listKas)
@@ -33,7 +34,8 @@ const MaxKasAmount = 10_000_000_000_000
 const maxKasDescription = 300
 
 type kasInput struct {
-	Kolom       int        `json:"kolom"`
+	Kolom       int        `json:"kolom"`   // a kolom's book, or
+	BipraID     string     `json:"bipraId"` // a BIPRA category's
 	Kind        string     `json:"kind"`
 	Date        *time.Time `json:"date"`
 	Amount      int64      `json:"amount"`
@@ -41,34 +43,65 @@ type kasInput struct {
 	Description string     `json:"description"`
 }
 
-// KasBook is a kolom's cash book: its entries (oldest first) and totals.
+// KasBook is a cash book (a kolom's, or a BIPRA category's: BipraID and
+// Name): its entries (oldest first) and totals.
 type KasBook struct {
 	Kolom   int              `json:"kolom"`
+	BipraID *bson.ObjectID   `json:"bipraId,omitempty"`
+	Name    string           `json:"name,omitempty"`
 	In      int64            `json:"in"`
 	Out     int64            `json:"out"`
 	Balance int64            `json:"balance"`
 	Entries []model.KasEntry `json:"entries"`
-	// CanEdit: the user may add, change and remove entries of this kolom
+	// CanEdit: the user may add, change and remove entries of this book
 	CanEdit bool `json:"canEdit"`
 }
 
+// listKas is one book: ?kolom=N or ?bipra=<category id>.
 func (a *API) listKas(w http.ResponseWriter, r *http.Request) {
-	k, err := strconv.Atoi(r.URL.Query().Get("kolom"))
-	if err != nil || k <= 0 {
-		writeError(w, http.StatusBadRequest, "pilih kolom")
-		return
-	}
 	u := auth.CurrentUser(r)
-	if u == nil || !u.SeesKas(k) {
-		writeError(w, http.StatusForbidden, "Anda tidak dapat melihat kas kolom ini", "forbidden")
+	if u == nil {
+		writeError(w, http.StatusUnauthorized, "silakan masuk terlebih dahulu", "unauthenticated")
 		return
 	}
-	entries, err := a.store.ListKas(r.Context(), k)
+	var book KasBook
+	var entries []model.KasEntry
+	var err error
+	if v := r.URL.Query().Get("bipra"); v != "" {
+		id, perr := bson.ObjectIDFromHex(v)
+		if perr != nil {
+			writeError(w, http.StatusBadRequest, "kategori BIPRA tidak valid")
+			return
+		}
+		if !u.SeesBipraKas(id) {
+			writeError(w, http.StatusForbidden, "Anda tidak dapat melihat kas kategori ini", "forbidden")
+			return
+		}
+		c, cerr := a.store.BipraCategory(r.Context(), id)
+		if cerr != nil {
+			storeError(w, cerr)
+			return
+		}
+		book = KasBook{BipraID: &id, Name: c.Name, CanEdit: u.ManagesBipraKas(id)}
+		entries, err = a.store.ListBipraKas(r.Context(), id)
+	} else {
+		k, perr := strconv.Atoi(r.URL.Query().Get("kolom"))
+		if perr != nil || k <= 0 {
+			writeError(w, http.StatusBadRequest, "pilih kolom atau kategori BIPRA")
+			return
+		}
+		if !u.SeesKas(k) {
+			writeError(w, http.StatusForbidden, "Anda tidak dapat melihat kas kolom ini", "forbidden")
+			return
+		}
+		book = KasBook{Kolom: k, CanEdit: u.ManagesKas(k)}
+		entries, err = a.store.ListKas(r.Context(), k)
+	}
 	if err != nil {
 		serverError(w, err)
 		return
 	}
-	book := KasBook{Kolom: k, Entries: entries, CanEdit: u.ManagesKas(k)}
+	book.Entries = entries
 	for _, e := range entries {
 		if e.Kind == model.KasIn {
 			book.In += e.Amount
@@ -81,8 +114,9 @@ func (a *API) listKas(w http.ResponseWriter, r *http.Request) {
 }
 
 // kasSummary is the totals of every kolom whose kas the user may read
-// (koloms without entries included, with zeros), and of one month:
-// ?month=YYYY-MM (the client's), default this month in the app's time zone.
+// (koloms without entries included, with zeros), or with ?book=bipra of
+// every BIPRA category (in their order), and of one month: ?month=YYYY-MM
+// (the client's), default this month in the app's time zone.
 func (a *API) kasSummary(w http.ResponseWriter, r *http.Request) {
 	u := auth.CurrentUser(r)
 	if u == nil {
@@ -99,12 +133,41 @@ func (a *API) kasSummary(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bulan tidak valid (YYYY-MM)")
 		return
 	}
+	to := from.AddDate(0, 1, 0)
+	out := []model.KasSummary{}
+	if r.URL.Query().Get("book") == "bipra" {
+		cats, err := a.store.BipraRules(r.Context())
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		sums, err := a.store.KasBipraSummaries(r.Context(), from, to)
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		byID := map[bson.ObjectID]model.KasSummary{}
+		for _, s := range sums {
+			byID[*s.BipraID] = s
+		}
+		for _, c := range cats {
+			if !u.SeesBipraKas(c.ID) {
+				continue
+			}
+			s := byID[c.ID]
+			id := c.ID
+			s.BipraID, s.Name, s.Month = &id, c.Name, month
+			out = append(out, s)
+		}
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
 	ks, err := a.store.ListKoloms(r.Context())
 	if err != nil {
 		serverError(w, err)
 		return
 	}
-	sums, err := a.store.KasSummaries(r.Context(), from, from.AddDate(0, 1, 0))
+	sums, err := a.store.KasSummaries(r.Context(), from, to)
 	if err != nil {
 		serverError(w, err)
 		return
@@ -113,7 +176,6 @@ func (a *API) kasSummary(w http.ResponseWriter, r *http.Request) {
 	for _, s := range sums {
 		byKolom[s.Kolom] = s
 	}
-	out := []model.KasSummary{}
 	for _, k := range ks {
 		if !u.SeesKas(k.Number) {
 			continue
@@ -127,19 +189,37 @@ func (a *API) kasSummary(w http.ResponseWriter, r *http.Request) {
 }
 
 // kasEntry checks the input and makes the entry (with the linked ibadah's
-// name). old is the entry being changed (nil: a new one): it may keep its
-// link to an ibadah deleted since.
+// name, and the book's name in Book). old is the entry being changed (nil:
+// a new one): it may keep its link to an ibadah deleted since.
 func (a *API) kasEntry(r *http.Request, in kasInput, old *model.KasEntry) (model.KasEntry, error) {
-	e := model.KasEntry{Kolom: in.Kolom, Kind: in.Kind, Amount: in.Amount, Description: clean(in.Description)}
-	if e.Kolom <= 0 {
-		return e, bad("kolom wajib dipilih")
-	}
-	ok, err := a.store.KolomExists(r.Context(), e.Kolom)
-	if err != nil {
-		return e, err
-	}
-	if !ok {
-		return e, bad("kolom %d tidak ada", e.Kolom)
+	e := model.KasEntry{Kind: in.Kind, Amount: in.Amount, Description: clean(in.Description)}
+	switch {
+	case in.BipraID != "" && in.Kolom != 0:
+		return e, bad("pilih kolom atau kategori BIPRA, bukan keduanya")
+	case in.BipraID != "":
+		id, err := bson.ObjectIDFromHex(in.BipraID)
+		if err != nil {
+			return e, bad("kategori BIPRA tidak valid")
+		}
+		c, err := a.store.BipraCategory(r.Context(), id)
+		if errors.Is(err, store.ErrNotFound) {
+			return e, bad("kategori BIPRA tidak ada")
+		}
+		if err != nil {
+			return e, err
+		}
+		e.BipraID, e.Book = &id, model.BipraBook(c.Name)
+	case in.Kolom > 0:
+		ok, err := a.store.KolomExists(r.Context(), in.Kolom)
+		if err != nil {
+			return e, err
+		}
+		if !ok {
+			return e, bad("kolom %d tidak ada", in.Kolom)
+		}
+		e.Kolom, e.Book = in.Kolom, model.KolomBook(in.Kolom)
+	default:
+		return e, bad("kolom atau kategori BIPRA wajib dipilih")
 	}
 	if e.Kind != model.KasIn && e.Kind != model.KasOut {
 		return e, bad("pilih kas masuk atau kas keluar")
@@ -173,7 +253,7 @@ func (a *API) kasEntry(r *http.Request, in kasInput, old *model.KasEntry) (model
 	}
 	sv, err := a.store.GetService(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
-		if old != nil && old.ServiceID != nil && *old.ServiceID == id && old.Kolom == e.Kolom {
+		if old != nil && old.ServiceID != nil && *old.ServiceID == id && sameBook(*old, e) {
 			e.ServiceID, e.ServiceLabel = &id, old.ServiceLabel
 			return e, nil
 		}
@@ -182,13 +262,29 @@ func (a *API) kasEntry(r *http.Request, in kasInput, old *model.KasEntry) (model
 	if err != nil {
 		return e, err
 	}
-	if sv.Kolom != e.Kolom {
+	t, terr := a.store.GetWorshipType(r.Context(), sv.TypeID)
+	if terr != nil && !errors.Is(terr, store.ErrNoType) {
+		return e, terr
+	}
+	// a kolom's ibadah, or (any kolom) one of the jenis linked to the category
+	if e.BipraID != nil {
+		if t.BipraID == nil || *t.BipraID != *e.BipraID {
+			return e, bad("ibadah itu bukan ibadah kategori ini")
+		}
+	} else if sv.Kolom != e.Kolom {
 		return e, bad("ibadah itu bukan ibadah Kolom %d", e.Kolom)
 	}
-	t, _ := a.store.GetWorshipType(r.Context(), sv.TypeID) // a missing jenis only shortens the name
 	e.ServiceID = &id
 	e.ServiceLabel = model.NewServiceView(sv, t, a.loc).Title() + " · " + sv.Date.Format("2006-01-02")
 	return e, nil
+}
+
+// sameBook reports whether a and b are in the same cash book.
+func sameBook(a, b model.KasEntry) bool {
+	if a.BipraID != nil || b.BipraID != nil {
+		return a.BipraID != nil && b.BipraID != nil && *a.BipraID == *b.BipraID
+	}
+	return a.Kolom == b.Kolom
 }
 
 // inputError is a refused kas input (400); other errors are the server's.
@@ -208,12 +304,14 @@ func kasFail(w http.ResponseWriter, err error) {
 	serverError(w, err)
 }
 
-func (a *API) mayKeepKas(w http.ResponseWriter, r *http.Request, k int) bool {
+// mayKeepKas reports whether the user may change the book of e (its kolom
+// or category); if not, it answers 403.
+func (a *API) mayKeepKas(w http.ResponseWriter, r *http.Request, e model.KasEntry) bool {
 	u := auth.CurrentUser(r)
-	if u != nil && u.ManagesKas(k) {
+	if u != nil && ((e.BipraID != nil && u.ManagesBipraKas(*e.BipraID)) || (e.BipraID == nil && u.ManagesKas(e.Kolom))) {
 		return true
 	}
-	msg := "hanya admin dan bendahara kolom yang dapat mengubah kas"
+	msg := "hanya admin dan bendahara yang dapat mengubah kas"
 	if u != nil && u.IsTreasurer() {
 		msg = u.Scope()
 	}
@@ -221,12 +319,21 @@ func (a *API) mayKeepKas(w http.ResponseWriter, r *http.Request, k int) bool {
 	return false
 }
 
+// target is the book an input names (unchecked: kasEntry checks it).
+func target(in kasInput) model.KasEntry {
+	e := model.KasEntry{Kolom: in.Kolom}
+	if id, err := bson.ObjectIDFromHex(in.BipraID); err == nil {
+		e.BipraID = &id
+	}
+	return e
+}
+
 func (a *API) createKas(w http.ResponseWriter, r *http.Request) {
 	var in kasInput
 	if !decode(w, r, &in) {
 		return
 	}
-	if in.Kolom > 0 && !a.mayKeepKas(w, r, in.Kolom) {
+	if (in.Kolom > 0 || in.BipraID != "") && !a.mayKeepKas(w, r, target(in)) {
 		return
 	}
 	e, err := a.kasEntry(r, in, nil)
@@ -235,11 +342,13 @@ func (a *API) createKas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	e.CreatedBy = username(r)
+	book := e.Book
 	e, err = a.store.CreateKas(r.Context(), e)
 	if err != nil {
 		serverError(w, err)
 		return
 	}
+	e.Book = book
 	writeJSON(w, http.StatusCreated, e)
 }
 
@@ -257,8 +366,9 @@ func (a *API) updateKas(w http.ResponseWriter, r *http.Request) {
 		storeError(w, err)
 		return
 	}
-	// both the kolom it was in and the one it moves to
-	if !a.mayKeepKas(w, r, old.Kolom) || (in.Kolom > 0 && in.Kolom != old.Kolom && !a.mayKeepKas(w, r, in.Kolom)) {
+	// both the book it was in and the one it moves to
+	to := target(in)
+	if !a.mayKeepKas(w, r, old) || ((in.Kolom > 0 || in.BipraID != "") && !sameBook(old, to) && !a.mayKeepKas(w, r, to)) {
 		return
 	}
 	e, err := a.kasEntry(r, in, &old)
@@ -268,11 +378,13 @@ func (a *API) updateKas(w http.ResponseWriter, r *http.Request) {
 	}
 	e.ID = id
 	e.UpdatedBy = username(r)
+	book := e.Book
 	e, err = a.store.UpdateKas(r.Context(), e)
 	if err != nil {
 		storeError(w, err)
 		return
 	}
+	e.Book = book
 	writeJSON(w, http.StatusOK, e)
 }
 
@@ -286,7 +398,7 @@ func (a *API) deleteKas(w http.ResponseWriter, r *http.Request) {
 		storeError(w, err)
 		return
 	}
-	if !a.mayKeepKas(w, r, old.Kolom) {
+	if !a.mayKeepKas(w, r, old) {
 		return
 	}
 	if err := a.store.DeleteKas(r.Context(), id); err != nil {

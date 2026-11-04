@@ -348,14 +348,13 @@ function EditUser({
 function requireScope(role: Role, koloms: number[], bipraIds: string[]) {
   if (role === 'scoped' && !koloms.length && !bipraIds.length)
     throw new Error('Pilih minimal satu kolom atau kategori BIPRA yang dikelola pengguna ini')
-  if (role === 'treasurer' && !koloms.length) throw new Error('Pilih minimal satu kolom yang kasnya dikelola bendahara ini')
+  if (role === 'treasurer' && !koloms.length && !bipraIds.length)
+    throw new Error('Pilih minimal satu kolom atau kategori BIPRA yang kasnya dikelola bendahara ini')
 }
 
-/** What the role is limited to, as sent to the server (a treasurer: koloms only). */
+/** What the role is limited to, as sent to the server. */
 function scopeOf(role: Role, koloms: number[], bipraIds: string[]) {
-  if (role === 'scoped' || role === 'viewer') return { koloms, bipraIds }
-  if (role === 'treasurer') return { koloms }
-  return {}
+  return role === 'scoped' || role === 'viewer' || role === 'treasurer' ? { koloms, bipraIds } : {}
 }
 
 /** Adds or removes v from list. */
@@ -393,7 +392,7 @@ function RoleFields({
           <option value="user">Pengguna — kelola data semua kolom</option>
           <option value="scoped">Pengguna – kelola kolom/BIPRA — kolom dan/atau kategori BIPRA yang dipilih</option>
           <option value="viewer">Pengguna – hanya lihat — tidak dapat mengubah data</option>
-          <option value="treasurer">Bendahara Kolom — kelola kas masuk/keluar kolom yang dipilih</option>
+          <option value="treasurer">Bendahara — kelola kas masuk/keluar kolom dan/atau BIPRA yang dipilih</option>
           <option value="admin">Admin — juga kelola pengguna</option>
         </select>
       </Field>
@@ -412,28 +411,27 @@ function RoleFields({
               </label>
             ))}
           </fieldset>
-          {role !== 'treasurer' && (
-            <fieldset className="wide check-group" disabled={disabled}>
-              <legend>Kategori BIPRA yang {verb} (boleh lebih dari satu)</legend>
-              {categories.map((c) => (
-                <label key={c.id} className="check">
-                  <input
-                    type="checkbox"
-                    checked={bipraIds.includes(c.id)}
-                    onChange={(e) => onBipras(toggle(bipraIds, c.id, e.target.checked))}
-                  />
-                  {c.name}
-                </label>
-              ))}
-            </fieldset>
-          )}
+          <fieldset className="wide check-group" disabled={disabled}>
+            <legend>Kategori BIPRA yang {verb} (boleh lebih dari satu)</legend>
+            {categories.map((c) => (
+              <label key={c.id} className="check">
+                <input
+                  type="checkbox"
+                  checked={bipraIds.includes(c.id)}
+                  onChange={(e) => onBipras(toggle(bipraIds, c.id, e.target.checked))}
+                />
+                {c.name}
+              </label>
+            ))}
+          </fieldset>
         </>
       )}
       {role === 'treasurer' && (
         <p className="wide muted small">
-          Pilih minimal satu kolom. Dapat mencatat, mengubah dan menghapus <b>kas masuk</b> (mis. persembahan ibadah,
-          atau sumber lain) dan <b>kas keluar</b> kolom tersebut di halaman Kas Kolom, dengan keterangan sumber atau
-          penggunaannya. Data jemaat kolom tersebut hanya dapat dilihat, tidak diubah.
+          Pilih minimal satu kolom atau kategori BIPRA; keduanya boleh dipilih bersama. Dapat mencatat, mengubah dan
+          menghapus <b>kas masuk</b> (mis. persembahan ibadah, atau sumber lain) dan <b>kas keluar</b> di halaman Kas:
+          <b>Kolom:</b> kas kolom tersebut. <b>Kategori BIPRA:</b> kas kategori tersebut (seluruh jemaat). Data jemaat
+          kolom dan anggota kategori tersebut hanya dapat dilihat, tidak diubah.
         </p>
       )}
       {role === 'viewer' && (

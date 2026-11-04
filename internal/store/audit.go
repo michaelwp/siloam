@@ -39,14 +39,15 @@ func (s *Store) AuditLabel(ctx context.Context, kind string, id bson.ObjectID) s
 		return ""
 	}
 	var doc struct {
-		Number   int       `bson:"number"`
-		Name     string    `bson:"name"`
-		Username string    `bson:"username"`
-		Host     string    `bson:"host"`
-		Date     time.Time `bson:"date"`
-		Kolom    int       `bson:"kolom"`
-		Kind     string    `bson:"kind"`
-		Amount   int64     `bson:"amount"`
+		Number   int            `bson:"number"`
+		Name     string         `bson:"name"`
+		Username string         `bson:"username"`
+		Host     string         `bson:"host"`
+		Date     time.Time      `bson:"date"`
+		Kolom    int            `bson:"kolom"`
+		BipraID  *bson.ObjectID `bson:"bipraId"`
+		Kind     string         `bson:"kind"`
+		Amount   int64          `bson:"amount"`
 	}
 	if err := coll.FindOne(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&doc); err != nil {
 		return ""
@@ -59,7 +60,12 @@ func (s *Store) AuditLabel(ctx context.Context, kind string, id bson.ObjectID) s
 	case "users":
 		return doc.Username
 	case "kas":
-		return model.KasLabel(doc.Kolom, doc.Kind, doc.Amount, doc.Date.Format("2006-01-02"))
+		book := model.KolomBook(doc.Kolom)
+		if doc.BipraID != nil {
+			c, _ := s.BipraCategory(ctx, *doc.BipraID) // a deleted category: no name
+			book = model.BipraBook(c.Name)
+		}
+		return model.KasLabel(book, doc.Kind, doc.Amount, doc.Date.Format("2006-01-02"))
 	case "services":
 		label := doc.Date.Format("2006-01-02")
 		if doc.Host != "" {

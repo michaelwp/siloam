@@ -19,4 +19,10 @@ class KasTest {
         assertEquals(1_200_000, s[0].balance)
         assertEquals("November 2026", monthLabel(s[0].month))
     }
+
+    @Test
+    fun parsesABipraSummary() {
+        val s = parseKas("""[{"kolom":0,"bipraId":"p1","name":"Pemuda","in":200000,"out":50000,"count":2,"last":null,"month":"2026-11","monthIn":200000,"monthOut":0}]""")
+        assertEquals(KasSummary(0, 200_000, 50_000, "2026-11", 200_000, 0, bipraId = "p1", name = "Pemuda"), s[0])
+    }
 }

@@ -41,7 +41,7 @@ var Categories = []Category{
 	{"jadwal", "Jadwal ibadah"},
 	{"android", "Aplikasi Android"},
 	{"bipra", "Kategori BIPRA"},
-	{"kas", "Kas kolom"},
+	{"kas", "Kas (kolom & BIPRA)"},
 }
 
 type route struct{ category, action string }
@@ -324,6 +324,7 @@ func labelFromBody(kind string, body []byte) string {
 		Date          string `json:"date"`
 		LatestVersion string `json:"latestVersion"`
 		Kolom         int    `json:"kolom"`
+		Book          string `json:"book"`
 		Kind          string `json:"kind"`
 		Amount        int64  `json:"amount"`
 	}
@@ -351,8 +352,8 @@ func labelFromBody(kind string, body []byte) string {
 	case "users":
 		return v.Username
 	case "kas":
-		if v.Kolom > 0 && len(v.Date) >= 10 {
-			return model.KasLabel(v.Kolom, v.Kind, v.Amount, v.Date[:10])
+		if v.Book != "" && len(v.Date) >= 10 {
+			return model.KasLabel(v.Book, v.Kind, v.Amount, v.Date[:10])
 		}
 		return ""
 	case "android":

@@ -3,8 +3,9 @@ package id.gmimsiloam.jemaat.data
 import org.json.JSONArray
 
 /**
- * A kolom's cash (Kas Kolom) as the server sums it, for the koloms whose kas
- * the user may read: the balance, and the cash in and out of [month].
+ * A cash book's totals as the server sums them (for the books the user may
+ * read): a kolom's (Kas Kolom), or a BIPRA category's (Kas BIPRA: [bipraId]
+ * and [name] set, [kolom] 0). The balance, and the cash in and out of [month].
  */
 data class KasSummary(
     val kolom: Int,
@@ -14,6 +15,8 @@ data class KasSummary(
     val month: String,
     val monthIn: Long,
     val monthOut: Long,
+    val bipraId: String = "",
+    val name: String = "",
 ) {
     val balance: Long get() = totalIn - totalOut
 }
@@ -29,6 +32,8 @@ fun parseKas(json: String): List<KasSummary> {
             month = o.optString("month"),
             monthIn = o.optLong("monthIn"),
             monthOut = o.optLong("monthOut"),
+            bipraId = o.optString("bipraId"),
+            name = o.optString("name"),
         )
     }
 }

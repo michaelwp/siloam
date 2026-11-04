@@ -38,7 +38,8 @@ const PAGES = [
   { path: '/hut-pernikahan', label: 'Daftar HUT Pernikahan', element: <HutPernikahan />, noBipra: true },
   { path: '/anggota', label: 'Daftar Anggota Jemaat', element: <AnggotaJemaat /> },
   { path: '/bipra', label: 'Kategorial BIPRA', element: <KategorialBipra />, noBipra: true },
-  { path: '/kas', label: 'Kas Kolom', element: <Kas />, noBipra: true },
+  // a BIPRA-only user: their categories' kas only
+  { path: '/kas', label: 'Kas', element: <Kas /> },
 ]
 
 export default function App() {

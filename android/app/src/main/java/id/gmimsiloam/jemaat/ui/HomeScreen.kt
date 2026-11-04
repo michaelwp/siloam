@@ -167,17 +167,34 @@ fun HomeScreen(
         ) {
             StatsSection(data, filter, onCategory, onMembers)
         }
-        // the kas of the viewed kolom (or of all the koloms the user may read); none: no card
+        // the kas of the viewed kolom and category (or of all the books the user may read); none: no card
         val kolom = filter.kolomOf(data)
+        val category = filter.category(data)
         val kas = data.kas.filter { kolom == null || it.kolom == kolom }
-        if (kas.isNotEmpty()) {
+        val kasBipra = data.kasBipra.filter { category == null || it.bipraId == category.id }
+        if (kas.isNotEmpty() || kasBipra.isNotEmpty()) {
             Accordion(
-                "💰 Kas Kolom",
-                (if (kas.size > 1) "Total saldo " else "Saldo ") + rupiah(kas.sumOf { it.balance }),
+                "💰 Kas",
+                listOfNotNull(
+                    kas.takeIf { it.isNotEmpty() }?.let { "Kolom " + rupiah(it.sumOf { k -> k.balance }) },
+                    kasBipra.takeIf { it.isNotEmpty() }?.let { "BIPRA " + rupiah(it.sumOf { k -> k.balance }) },
+                ).joinToString(" · "),
                 open = "kas" in open,
                 onToggle = { toggle("kas") },
             ) {
-                KasSection(kas)
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    if (kas.isNotEmpty()) {
+                        KasSection(if (kas.size == 1) "Kas ${kolomHeading(kas[0].kolom)}" else "Kas Kolom", kas) { kolomHeading(it.kolom) }
+                    }
+                    if (kasBipra.isNotEmpty()) {
+                        KasSection(if (kasBipra.size == 1) "Kas BIPRA ${kasBipra[0].name}" else "Kas BIPRA", kasBipra) { it.name }
+                    }
+                    Text(
+                        "Rincian kas ada di halaman Kas versi web.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
         LogoutRow(account, onLogout)
@@ -188,11 +205,12 @@ fun HomeScreen(
 }
 
 
-/** The balance and this month's cash in and out, in total and per kolom (several koloms). */
+/** Some books' balance and this month's cash in and out, in total and per book (several). */
 @Composable
-private fun KasSection(kas: List<KasSummary>) {
+private fun KasSection(title: String, kas: List<KasSummary>, label: (KasSummary) -> String) {
     val month = monthLabel(kas.first().month)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             KasTile(if (kas.size > 1) "Total saldo" else "Saldo", kas.sumOf { it.balance }, null, Modifier.weight(1f))
         }
@@ -204,7 +222,7 @@ private fun KasSection(kas: List<KasSummary>) {
             kas.forEach { k ->
                 Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(kolomHeading(k.kolom), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Text(label(k), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                         Text(
                             "$month: +${rupiah(k.monthIn)} / −${rupiah(k.monthOut)}",
                             style = MaterialTheme.typography.bodySmall,
@@ -220,11 +238,6 @@ private fun KasSection(kas: List<KasSummary>) {
                 }
             }
         }
-        Text(
-            "Rincian kas ada di halaman Kas Kolom versi web.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 

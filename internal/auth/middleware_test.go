@@ -262,7 +262,8 @@ func TestRoleScope(t *testing.T) {
 		{"viewer of everything", model.RoleViewer, nil, nil, true},
 		{"treasurer", model.RoleTreasurer, []int{3}, nil, true},
 		{"treasurer without a kolom", model.RoleTreasurer, nil, nil, false},
-		{"treasurer with a category", model.RoleTreasurer, []int{3}, []string{cat}, false},
+		{"treasurer of a kolom and a category", model.RoleTreasurer, []int{3}, []string{cat}, true},
+		{"treasurer of a category", model.RoleTreasurer, nil, []string{cat}, true},
 	} {
 		if _, _, err := svc.roleScope(r, c.role, c.koloms, c.bipras); (err == nil) != c.ok {
 			t.Errorf("%s: %v", c.what, err)

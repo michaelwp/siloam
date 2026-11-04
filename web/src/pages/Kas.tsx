@@ -1,6 +1,17 @@
 import { useCallback, useMemo, useState } from 'react'
-import { kasApi, type KasBook, type KasEntry, type KasKind, type KasSummary, type Service } from '../api'
-import { managesKas, useAuth } from '../auth'
+import { useSearchParams } from 'react-router-dom'
+import {
+  kasApi,
+  type BipraCategory,
+  type KasBook,
+  type KasEntry,
+  type KasKind,
+  type KasSummary,
+  type KasTarget,
+  type Service,
+  type User,
+} from '../api'
+import { bipraOnly, managesBipraKas, managesKas, useAuth } from '../auth'
 import { KasTile } from '../components/KasStatus'
 import { ConfirmDelete, Field, FormShell, Modal, PageHeader, Status } from '../components/ui'
 import { kolomLabel, useData } from '../data'
@@ -10,25 +21,95 @@ import { useLoad } from '../useLoad'
 import { xlsx, type Cell } from '../xlsx'
 
 /**
- * Kas Kolom: each kolom's cash book. Admins and the kolom's treasurers
- * (Bendahara Kolom) record cash in (mostly an ibadah's offering) and cash
- * out; who sees the kolom's data may read it.
+ * Kas: the cash books. "Kas Kolom": each kolom's, following the sidebar's
+ * kolom picker; "Kas BIPRA": each BIPRA category's (for the whole
+ * congregation), following its BIPRA picker. Admins and the book's
+ * treasurers (Bendahara) record cash in (mostly an ibadah's offering) and
+ * cash out; the server decides who may read which book.
  */
 export default function Kas() {
-  const { kolom } = useData()
-  return kolom === null ? <KasOverview /> : <KasKolom kolom={kolom} />
-}
-
-const summaryOfThisMonth = () => kasApi.summary(localToday().slice(0, 7))
-
-/** "Semua kolom": every kolom's balance (the ones the user may read). */
-function KasOverview() {
-  const { setKolom } = useData()
-  const { data, error, loading } = useLoad<KasSummary[]>('summary', summaryOfThisMonth)
-  const total = (data ?? []).reduce((t, s) => ({ in: t.in + s.in, out: t.out + s.out }), { in: 0, out: 0 })
+  const { user } = useAuth()
+  const { kolom, bipraFilter } = useData()
+  const [params, setParams] = useSearchParams()
+  // a BIPRA-only user has no kolom books
+  const onlyBipra = bipraOnly(user)
+  const tab = onlyBipra || params.get('buku') === 'bipra' ? 'bipra' : 'kolom'
   return (
     <>
-      <PageHeader title="Kas Kolom" subtitle="Saldo kas setiap kolom · pilih kolom untuk melihat atau mencatat kas" />
+      {!onlyBipra && (
+        <fieldset className="segmented kas-tabs no-print" aria-label="Buku kas">
+          <button type="button" aria-pressed={tab === 'kolom'} onClick={() => setParams({}, { replace: true })}>
+            Kas Kolom
+          </button>
+          <button
+            type="button"
+            aria-pressed={tab === 'bipra'}
+            onClick={() => setParams({ buku: 'bipra' }, { replace: true })}
+          >
+            Kas BIPRA
+          </button>
+        </fieldset>
+      )}
+      {tab === 'bipra' ? (
+        bipraFilter ? (
+          <KasBookPage key={bipraFilter.id} book={{ kind: 'bipra', category: bipraFilter }} />
+        ) : (
+          <KasOverview bipra />
+        )
+      ) : kolom === null ? (
+        <KasOverview bipra={false} />
+      ) : (
+        <KasBookPage key={kolom} book={{ kind: 'kolom', kolom }} />
+      )}
+    </>
+  )
+}
+
+/** Which book a page shows: a kolom's, or a BIPRA category's. */
+type Book = { kind: 'kolom'; kolom: number } | { kind: 'bipra'; category: BipraCategory }
+
+function bookTitle(b: Book) {
+  return b.kind === 'kolom' ? `Kas ${kolomLabel(b.kolom)}` : `Kas BIPRA ${b.category.name}`
+}
+
+function bookTarget(b: Book): KasTarget {
+  return b.kind === 'kolom' ? { kolom: b.kolom } : { bipraId: b.category.id }
+}
+
+/** "kolom-3", "bipra-pemuda": for file names. */
+function bookSlug(b: Book) {
+  return b.kind === 'kolom'
+    ? `kolom-${b.kolom}`
+    : `bipra-${
+        b.category.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '') || b.category.id
+      }`
+}
+
+function managesBook(u: User | null, b: Book) {
+  return b.kind === 'kolom' ? managesKas(u, b.kolom) : managesBipraKas(u, b.category.id)
+}
+
+const kolomSummaries = () => kasApi.summary(localToday().slice(0, 7))
+const bipraSummaries = () => kasApi.summary(localToday().slice(0, 7), true)
+
+/** No book picked: every kolom's (or BIPRA category's) balance, the ones the user may read. */
+function KasOverview({ bipra }: { bipra: boolean }) {
+  const { setKolom, setBipra } = useData()
+  const { data, error, loading } = useLoad<KasSummary[]>(
+    bipra ? 'bipra' : 'kolom',
+    bipra ? bipraSummaries : kolomSummaries,
+  )
+  const total = (data ?? []).reduce((t, s) => ({ in: t.in + s.in, out: t.out + s.out }), { in: 0, out: 0 })
+  const what = bipra ? 'kategori BIPRA' : 'kolom'
+  return (
+    <>
+      <PageHeader
+        title={bipra ? 'Kas BIPRA' : 'Kas Kolom'}
+        subtitle={`Saldo kas setiap ${what} · pilih ${what} di menu samping atau di daftar untuk melihat atau mencatat kas`}
+      />
       <Status loading={loading} error={error} empty={!!data && !data.length} />
       {data && data.length > 0 && (
         <>
@@ -41,7 +122,7 @@ function KasOverview() {
             <table>
               <thead>
                 <tr>
-                  <th>Kolom</th>
+                  <th>{bipra ? 'Kategori' : 'Kolom'}</th>
                   <th className="num">Kas masuk</th>
                   <th className="num">Kas keluar</th>
                   <th className="num">Saldo</th>
@@ -54,15 +135,18 @@ function KasOverview() {
               </thead>
               <tbody>
                 {data.map((s) => (
-                  <tr key={s.kolom}>
-                    <td className="strong">{kolomLabel(s.kolom)}</td>
+                  <tr key={s.bipraId ?? s.kolom}>
+                    <td className="strong">{s.bipraId ? s.name : kolomLabel(s.kolom)}</td>
                     <td className="num">{rupiah(s.in)}</td>
                     <td className="num">{rupiah(s.out)}</td>
                     <td className={`num strong${s.in - s.out < 0 ? ' negative' : ''}`}>{rupiah(s.in - s.out)}</td>
                     <td className="num">{s.count}</td>
                     <td>{s.last ? longDate(s.last) : '–'}</td>
                     <td className="actions">
-                      <button className="btn small" onClick={() => setKolom(s.kolom)}>
+                      <button
+                        className="btn small"
+                        onClick={() => (s.bipraId ? setBipra(s.bipraId) : setKolom(s.kolom))}
+                      >
                         Buka
                       </button>
                     </td>
@@ -88,17 +172,20 @@ function periodLabel(p: Period) {
 
 type Dialog = { kind: 'add'; entryKind: KasKind } | { kind: 'edit' | 'delete'; entry: KasEntry } | null
 
-/** One kolom's cash book for a month (or all of it), with the running balance. */
-function KasKolom({ kolom }: { kolom: number }) {
+/** One cash book for a month (or all of it), with the running balance. */
+function KasBookPage({ book: which }: { book: Book }) {
   const { user } = useAuth()
   const { allServices, loading: scheduleLoading, error: scheduleError } = useSchedule()
-  const loadBook = useCallback(() => kasApi.book(kolom), [kolom])
-  const { data: book, error, status, loading, reload } = useLoad<KasBook>(String(kolom), loadBook)
+  // keyed by the book (see Kas): which never changes here
+  const [target] = useState(() => bookTarget(which))
+  const loadBook = useCallback(() => kasApi.book(target), [target])
+  const { data: book, error, status, loading, reload } = useLoad<KasBook>('book', loadBook)
   // without the schedule, a linked ibadah cannot be told from a deleted one
   const scheduleKnown = !scheduleLoading && !scheduleError
   const [period, setPeriod] = useState<Period>(() => localToday().slice(0, 7))
   const [dialog, setDialog] = useState<Dialog>(null)
-  const canEdit = !!book?.canEdit && managesKas(user, kolom)
+  const canEdit = !!book?.canEdit && managesBook(user, which)
+  const bipra = which.kind === 'bipra'
   const services = useMemo(() => new Map(allServices.map((s) => [s.id, s])), [allServices])
 
   const view = useMemo(() => (book ? bookView(book.entries, period) : null), [book, period])
@@ -110,9 +197,13 @@ function KasKolom({ kolom }: { kolom: number }) {
   return (
     <>
       <PageHeader
-        title={`Kas ${kolomLabel(kolom)}`}
+        title={bookTitle(which)}
         subtitle={
-          canEdit ? 'Catat kas masuk (mis. persembahan ibadah) dan kas keluar beserta keterangannya' : 'Buku kas kolom'
+          canEdit
+            ? 'Catat kas masuk (mis. persembahan ibadah) dan kas keluar beserta keterangannya'
+            : bipra
+              ? 'Buku kas kategori BIPRA (seluruh jemaat)'
+              : 'Buku kas kolom'
         }
       >
         {canEdit && (
@@ -147,10 +238,10 @@ function KasKolom({ kolom }: { kolom: number }) {
         </label>
         {book && view && (
           <>
-            <button type="button" className="link" onClick={() => downloadXlsx(kolom, period, view, services)}>
+            <button type="button" className="link" onClick={() => downloadXlsx(which, period, view, services)}>
               Unduh Excel
             </button>
-            <button type="button" className="link" onClick={() => downloadCsv(kolom, period, view, services)}>
+            <button type="button" className="link" onClick={() => downloadCsv(which, period, view, services)}>
               Unduh CSV
             </button>
           </>
@@ -158,7 +249,10 @@ function KasKolom({ kolom }: { kolom: number }) {
       </fieldset>
 
       {status === 403 ? (
-        <p className="status">Anda tidak dapat melihat kas {kolomLabel(kolom)}. Pilih kolom Anda di menu samping.</p>
+        <p className="status">
+          Anda tidak dapat melihat {bookTitle(which).replace('Kas', 'kas')}. Pilih {bipra ? 'kategori' : 'kolom'} Anda
+          di menu samping.
+        </p>
       ) : (
         <Status loading={loading} error={error} />
       )}
@@ -200,6 +294,7 @@ function KasKolom({ kolom }: { kolom: number }) {
                           entry={e}
                           service={e.serviceId ? services.get(e.serviceId) : undefined}
                           scheduleKnown={scheduleKnown}
+                          withKolom={bipra}
                         />
                       </td>
                       <td className="num">{e.kind === 'in' ? rupiah(e.amount) : ''}</td>
@@ -227,11 +322,11 @@ function KasKolom({ kolom }: { kolom: number }) {
       )}
 
       {dialog?.kind === 'add' && (
-        <KasForm kolom={kolom} kind={dialog.entryKind} onClose={() => setDialog(null)} onSaved={done} />
+        <KasForm book={which} kind={dialog.entryKind} onClose={() => setDialog(null)} onSaved={done} />
       )}
       {dialog?.kind === 'edit' && (
         <KasForm
-          kolom={kolom}
+          book={which}
           kind={dialog.entry.kind}
           entry={dialog.entry}
           onClose={() => setDialog(null)}
@@ -263,12 +358,14 @@ function EntryText({
   entry: e,
   service,
   scheduleKnown,
+  withKolom,
 }: {
   entry: KasEntry
   service?: Service
   scheduleKnown: boolean
+  withKolom: boolean
 }) {
-  const ibadah = service ? serviceName(service) : e.serviceLabel
+  const ibadah = service ? serviceName(service, withKolom) : e.serviceLabel
   return (
     <>
       {ibadah && (
@@ -287,9 +384,16 @@ function EntryText({
   )
 }
 
-/** "Ibadah Kolom · Kel. Umboh · 3 November 2026" */
-function serviceName(s: Service) {
-  return [`Ibadah ${s.typeName}`, s.host && `Kel. ${s.host}`, longDate(s.date)].filter(Boolean).join(' · ')
+/** "Ibadah Kolom · Kel. Umboh · 3 November 2026" (withKolom: "Ibadah Pemuda · Kolom 3 · …", for a BIPRA book) */
+function serviceName(s: Service, withKolom = false) {
+  return [
+    `Ibadah ${s.typeName}`,
+    withKolom && kolomLabel(s.kolom || null),
+    s.host && `Kel. ${s.host}`,
+    longDate(s.date),
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 type BookView = {
@@ -333,7 +437,7 @@ type ExportRow = {
 }
 
 /** The lines of the book as shown (the period, with its opening balance). */
-function exportRows(period: Period, view: BookView, services: Map<string, Service>): ExportRow[] {
+function exportRows(book: Book, period: Period, view: BookView, services: Map<string, Service>): ExportRow[] {
   const rows: ExportRow[] = []
   if (period) {
     rows.push({
@@ -352,7 +456,7 @@ function exportRows(period: Period, view: BookView, services: Map<string, Servic
     rows.push({
       date: toInputDate(e.date),
       kind: e.kind === 'in' ? 'Masuk' : 'Keluar',
-      ibadah: s ? serviceName(s) : e.serviceLabel,
+      ibadah: s ? serviceName(s, book.kind === 'bipra') : e.serviceLabel,
       description: e.description,
       in: e.kind === 'in' ? e.amount : null,
       out: e.kind === 'out' ? e.amount : null,
@@ -365,8 +469,8 @@ function exportRows(period: Period, view: BookView, services: Map<string, Servic
 
 const EXPORT_HEADER = ['Tanggal', 'Jenis', 'Ibadah', 'Keterangan', 'Masuk', 'Keluar', 'Saldo', 'Dicatat oleh']
 
-function exportName(kolom: number, period: Period) {
-  return `kas-kolom-${kolom}${period ? `-${period}` : ''}`
+function exportName(book: Book, period: Period) {
+  return `kas-${bookSlug(book)}${period ? `-${period}` : ''}`
 }
 
 /** Saves blob as a download named name. */
@@ -390,16 +494,13 @@ function cell(v: string | number | null) {
   return `"${s.replaceAll('"', '""')}"`
 }
 
-function downloadCsv(kolom: number, period: Period, view: BookView, services: Map<string, Service>) {
+function downloadCsv(book: Book, period: Period, view: BookView, services: Map<string, Service>) {
   const lines = [EXPORT_HEADER.map(cell).join(';')]
-  for (const r of exportRows(period, view, services)) {
+  for (const r of exportRows(book, period, view, services)) {
     lines.push([r.date, r.kind, r.ibadah, r.description, r.in, r.out, r.balance, r.by].map(cell).join(';'))
   }
   // a BOM so spreadsheet apps read it as UTF-8
-  save(
-    new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }),
-    `${exportName(kolom, period)}.csv`,
-  )
+  save(new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), `${exportName(book, period)}.csv`)
 }
 
 const money = (v: number | null): Cell => (v === null ? null : { v, style: 'money' })
@@ -409,12 +510,12 @@ const total = (v: number): Cell => ({ v, style: 'moneyBold' })
  * The book as an Excel file: a title, the header, the lines (real dates and
  * amounts, so they can be summed and sorted) and the period's totals.
  */
-function downloadXlsx(kolom: number, period: Period, view: BookView, services: Map<string, Service>) {
+function downloadXlsx(book: Book, period: Period, view: BookView, services: Map<string, Service>) {
   const rows: Cell[][] = [
-    [{ v: `Kas ${kolomLabel(kolom)} — ${periodLabel(period)}`, style: 'bold' }],
+    [{ v: `${bookTitle(book)} — ${periodLabel(period)}`, style: 'bold' }],
     [],
     EXPORT_HEADER.map((h) => ({ v: h, style: 'bold' })),
-    ...exportRows(period, view, services).map((r): Cell[] => [
+    ...exportRows(book, period, view, services).map((r): Cell[] => [
       r.date ? new Date(`${r.date}T00:00:00Z`) : null,
       r.kind,
       r.ibadah,
@@ -427,24 +528,24 @@ function downloadXlsx(kolom: number, period: Period, view: BookView, services: M
     [],
     [null, null, null, { v: 'Jumlah', style: 'bold' }, total(view.in), total(view.out), total(view.closing)],
   ]
-  save(xlsx(`Kas ${kolomLabel(kolom)}`, rows, [14, 10, 42, 42, 15, 15, 16, 16]), `${exportName(kolom, period)}.xlsx`)
+  save(xlsx(bookTitle(book), rows, [14, 10, 42, 42, 15, 15, 16, 16]), `${exportName(book, period)}.xlsx`)
 }
 
 /** Adds or changes an entry: cash in (from an ibadah or another source) or cash out. */
 function KasForm({
-  kolom,
+  book,
   kind: kind0,
   entry,
   onClose,
   onSaved,
 }: {
-  kolom: number
+  book: Book
   kind: KasKind
   entry?: KasEntry
   onClose: () => void
   onSaved: () => Promise<void>
 }) {
-  const { allServices, loading: scheduleLoading, error: scheduleError } = useSchedule()
+  const { allServices, types, loading: scheduleLoading, error: scheduleError } = useSchedule()
   const [kind, setKind] = useState<KasKind>(kind0)
   const [date, setDate] = useState(entry ? toInputDate(entry.date) : localToday())
   const [amount, setAmount] = useState(entry ? String(entry.amount) : '')
@@ -452,14 +553,20 @@ function KasForm({
   const [serviceId, setServiceId] = useState(entry?.serviceId ?? '')
   const [description, setDescription] = useState(entry?.description ?? '')
 
-  // the kolom's ibadah, the latest first (the ones still to come after those already held)
+  // the book's ibadah (a kolom's; for a category, those of the jenis linked
+  // to it in every kolom), the latest first (the ones still to come after
+  // those already held)
   const today = localToday()
   const choices = useMemo(() => {
-    const own = allServices.filter((s) => s.kolom === kolom)
+    const linked = new Set(
+      book.kind === 'bipra' ? types.filter((t) => t.bipraId === book.category.id).map((t) => t.id) : [],
+    )
+    const own = allServices.filter((s) => (book.kind === 'kolom' ? s.kolom === book.kolom : linked.has(s.typeId)))
     const held = own.filter((s) => toInputDate(s.date) <= today).toSorted((a, b) => b.date.localeCompare(a.date))
     const coming = own.filter((s) => toInputDate(s.date) > today).toSorted((a, b) => a.date.localeCompare(b.date))
     return { held, coming }
-  }, [allServices, kolom, today])
+  }, [allServices, types, book, today])
+  const withKolom = book.kind === 'bipra'
   // linked to an ibadah not in the schedule: deleted (or the schedule is not loaded: keep it selectable)
   const linkedMissing = !!entry?.serviceId && !allServices.some((s) => s.id === entry.serviceId)
   const missingNote = scheduleLoading || scheduleError ? '' : ' (jadwal sudah dihapus)'
@@ -476,7 +583,7 @@ function KasForm({
           if (!fromService && !description.trim())
             throw new Error(kind === 'in' ? 'Tulis keterangan sumber kas' : 'Tulis keterangan penggunaan kas')
           const input = {
-            kolom,
+            ...bookTarget(book),
             kind,
             date: fromInputDate(date) ?? '',
             amount: n,
@@ -531,7 +638,9 @@ function KasForm({
                 if (s && !entry) setDate(toInputDate(s.date))
               }}
             >
-              <option value="">— pilih ibadah {kolomLabel(kolom)} —</option>
+              <option value="">
+                — pilih ibadah {book.kind === 'kolom' ? kolomLabel(book.kolom) : book.category.name} —
+              </option>
               {linkedMissing && (
                 <option value={entry.serviceId!}>
                   {entry.serviceLabel}
@@ -542,7 +651,7 @@ function KasForm({
                 <optgroup label="Sudah berlangsung">
                   {choices.held.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {serviceName(s)}
+                      {serviceName(s, withKolom)}
                     </option>
                   ))}
                 </optgroup>
@@ -551,7 +660,7 @@ function KasForm({
                 <optgroup label="Akan datang">
                   {choices.coming.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {serviceName(s)}
+                      {serviceName(s, withKolom)}
                     </option>
                   ))}
                 </optgroup>

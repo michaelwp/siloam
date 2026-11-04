@@ -9,20 +9,23 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// What a kas entry is: money coming into a kolom's cash, or going out.
+// What a kas entry is: money coming into a cash book, or going out.
 const (
 	KasIn  = "in"
 	KasOut = "out"
 )
 
-// KasEntry is one line of a kolom's cash book ("Kas Kolom"): cash in (mostly
-// the offering of an ibadah) or cash out. Amounts are whole rupiah.
+// KasEntry is one line of a cash book: a kolom's ("Kas Kolom": Kolom > 0)
+// or a BIPRA category's ("Kas BIPRA", for the whole congregation: BipraID
+// set, Kolom 0). Cash in (mostly the offering of an ibadah) or cash out;
+// amounts are whole rupiah.
 type KasEntry struct {
-	ID     bson.ObjectID `bson:"_id,omitempty" json:"id"`
-	Kolom  int           `bson:"kolom" json:"kolom"`
-	Kind   string        `bson:"kind" json:"kind"`     // KasIn or KasOut
-	Date   time.Time     `bson:"date" json:"date"`     // midnight UTC of the local date
-	Amount int64         `bson:"amount" json:"amount"` // rupiah, more than 0
+	ID      bson.ObjectID  `bson:"_id,omitempty" json:"id"`
+	Kolom   int            `bson:"kolom" json:"kolom"`
+	BipraID *bson.ObjectID `bson:"bipraId,omitempty" json:"bipraId"`
+	Kind    string         `bson:"kind" json:"kind"`     // KasIn or KasOut
+	Date    time.Time      `bson:"date" json:"date"`     // midnight UTC of the local date
+	Amount  int64          `bson:"amount" json:"amount"` // rupiah, more than 0
 	// ServiceID links the entry to the ibadah the cash came from (or was
 	// spent for); nil: another source or use, told by Description.
 	ServiceID *bson.ObjectID `bson:"serviceId,omitempty" json:"serviceId"`
@@ -35,15 +38,21 @@ type KasEntry struct {
 	UpdatedBy    string    `bson:"updatedBy,omitempty" json:"updatedBy,omitempty"`
 	CreatedAt    time.Time `bson:"createdAt" json:"createdAt"`
 	UpdatedAt    time.Time `bson:"updatedAt" json:"updatedAt"`
+	// Book names the book in answers ("Kolom 3", "BIPRA Pemuda"; not stored)
+	Book string `bson:"-" json:"book,omitempty"`
 }
 
-// KasSummary is a kolom's cash totals.
+// KasSummary is a cash book's totals: a kolom's, or a BIPRA category's
+// (BipraID and Name set, Kolom 0).
 type KasSummary struct {
-	Kolom   int        `bson:"_id" json:"kolom"`
-	In      int64      `bson:"in" json:"in"`
-	Out     int64      `bson:"out" json:"out"`
-	Count   int        `bson:"count" json:"count"`
-	LastDay *time.Time `bson:"last" json:"last"` // date of the latest entry
+	Kolom   int            `bson:"-" json:"kolom"`
+	BipraID *bson.ObjectID `bson:"-" json:"bipraId,omitempty"`
+	Name    string         `bson:"-" json:"name,omitempty"` // the category's
+	Key     any            `bson:"_id" json:"-"`            // what the store grouped by
+	In      int64          `bson:"in" json:"in"`
+	Out     int64          `bson:"out" json:"out"`
+	Count   int            `bson:"count" json:"count"`
+	LastDay *time.Time     `bson:"last" json:"last"` // date of the latest entry
 	// MonthIn and MonthOut are the totals of the month asked for (see Month)
 	MonthIn  int64  `bson:"monthIn" json:"monthIn"`
 	MonthOut int64  `bson:"monthOut" json:"monthOut"`
@@ -51,13 +60,19 @@ type KasSummary struct {
 }
 
 // KasLabel names an entry for the activity log: "Kolom 3 · masuk Rp 1.250.000 · 2026-11-03".
-func KasLabel(kolom int, kind string, amount int64, day string) string {
+func KasLabel(book, kind string, amount int64, day string) string {
 	what := "masuk"
 	if kind == KasOut {
 		what = "keluar"
 	}
-	return fmt.Sprintf("Kolom %d · %s %s · %s", kolom, what, Rupiah(amount), day)
+	return fmt.Sprintf("%s · %s %s · %s", book, what, Rupiah(amount), day)
 }
+
+// KolomBook names a kolom's cash book: "Kolom 3".
+func KolomBook(k int) string { return fmt.Sprintf("Kolom %d", k) }
+
+// BipraBook names a BIPRA category's cash book: "BIPRA Pemuda".
+func BipraBook(name string) string { return "BIPRA " + name }
 
 // Rupiah writes an amount the Indonesian way: "Rp 1.250.000".
 func Rupiah(amount int64) string {
