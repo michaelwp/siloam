@@ -79,6 +79,19 @@ class Repository(private val context: Context) {
         true
     }
 
+    /**
+     * Debug builds: talks to [url] from now on ("" = the built-in server). The
+     * session and the data were the old server's: signed out (best effort on
+     * the old server too) and forgotten, also the cached statistics.
+     */
+    suspend fun switchServer(url: String) = withContext(Dispatchers.IO) {
+        val prefs = Prefs(context)
+        if (prefs.signedIn) runCatching { api(prefs).post("/api/auth/logout") }
+        forget(prefs)
+        statsFile.delete()
+        prefs.debugServer = url
+    }
+
     /** Signs out here (and on the server), and forgets the data on the device. */
     suspend fun logout() = withContext(Dispatchers.IO) {
         val prefs = Prefs(context)

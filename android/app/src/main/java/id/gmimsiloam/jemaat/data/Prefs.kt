@@ -9,10 +9,17 @@ class Prefs(context: Context) {
     private val p = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
     /**
-     * The server, fixed when the app is built ([BuildConfig.SERVER_URL]; a debug
-     * build may be given another, see app/build.gradle.kts). Not shown in the app.
+     * The server: fixed when the app is built ([BuildConfig.SERVER_URL]) in a
+     * release build, where it is not shown. A debug build may be pointed at
+     * another one in the app ([debugServer]).
      */
-    val serverUrl: String get() = BuildConfig.SERVER_URL.trimEnd('/')
+    val serverUrl: String
+        get() = (if (BuildConfig.DEBUG) debugServer else "").ifEmpty { BuildConfig.SERVER_URL }.trimEnd('/')
+
+    /** Debug builds only: the server picked in the app ("" = the built-in [BuildConfig.SERVER_URL]). */
+    var debugServer: String
+        get() = p.getString("debugServerUrl", "") ?: ""
+        set(v) = p.edit { putString("debugServerUrl", v.trim().trimEnd('/')) }
 
     /**
      * Older versions let the user type a server address. Forgets a saved one
@@ -22,7 +29,7 @@ class Prefs(context: Context) {
     fun dropSavedServer(): Boolean {
         val saved = p.getString("serverUrl", null) ?: return false
         p.edit { remove("serverUrl") }
-        return saved.trim().trimEnd('/') != serverUrl
+        return saved.trim().trimEnd('/') != BuildConfig.SERVER_URL.trimEnd('/')
     }
 
     /** The sign-in session (the server's cookie value); "" = not signed in (a visitor). */

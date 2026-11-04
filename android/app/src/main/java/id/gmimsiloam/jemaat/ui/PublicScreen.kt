@@ -149,6 +149,7 @@ private fun LoginScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             LoginCard(state, vm)
+            DebugServerSection(signedIn = false, onChange = vm::setDebugServer)
             AppVersion()
         }
     }

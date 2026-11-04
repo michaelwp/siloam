@@ -171,6 +171,15 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
             }
             state.error?.let { Text("Galat terakhir: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
 
+            // debug builds only: test against another (e.g. a local) server
+            if (BuildConfig.DEBUG) {
+                HorizontalDivider()
+                DebugServerSection(signedIn = true, onChange = {
+                    vm.setDebugServer(it)
+                    onBack()
+                })
+            }
+
             HorizontalDivider()
             Text("Tentang aplikasi", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Row(verticalAlignment = Alignment.CenterVertically) {

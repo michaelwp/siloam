@@ -104,10 +104,15 @@ the next birthdays ("Kolom 11: Budi Umboh (besok), …").
 A WorkManager job checks about every hour, also after a reboot, without the
 app being open. The times and
 reminders are under **Pengaturan**. The server address is not shown anywhere
-in the app: it is fixed when the app is built (`https://siloam.fly.dev`). A
-debug build can be pointed at another server with
-`./gradlew -PsiloamServer=http://10.0.2.2:8080 assembleDebug` (your computer,
-seen from the Android emulator; debug builds allow plain HTTP). A phone that
+in a release build: it is fixed when the app is built (`https://siloam.fly.dev`).
+A **debug build** talks to `http://localhost:8080` by default (the local
+server, `make run`; run `adb reverse tcp:8080 tcp:8080` so the emulator or a
+USB phone reaches your computer's port), and has a **Server (versi debug)**
+card on the sign-in page and in *Pengaturan*: pick localhost, `10.0.2.2:8080`
+(your computer from the emulator, without adb reverse), the production server,
+or type another address. Switching signs out and forgets the device's data.
+`./gradlew -PsiloamServer=http://… assembleDebug` changes the debug default
+(debug builds allow plain HTTP). A phone that
 had another address saved by an older version is signed out once after the
 update, with a message, and signs in again on the built-in server.
 

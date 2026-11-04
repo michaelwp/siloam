@@ -201,6 +201,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         DailyWorker.rescheduleReminders(getApplication())
     }
 
+    /** Debug builds: another server ([url]; "" = the built-in one); signs out and loads from there. */
+    fun setDebugServer(url: String) {
+        if (!BuildConfig.DEBUG) return
+        refreshJob?.cancel()
+        viewModelScope.launch {
+            repo.switchServer(url)
+            _state.update { it.copy(publicStats = null, mustChange = null, loginError = null) }
+            pendingSession = null
+            signedOut(null)
+        }
+    }
+
     fun logout() {
         viewModelScope.launch {
             repo.logout()
