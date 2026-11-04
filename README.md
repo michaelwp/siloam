@@ -44,7 +44,9 @@ A Kotlin (Jetpack Compose) app for the congregation. **Not signed in** it
 shows only the whole congregation's statistics summary (`/api/stats`: counts
 and charts, no names, no filters) and the sign-in form, and sends no
 notifications. **Signed in** (username + password, the same accounts as the
-web; an account that must first change its password is sent to the web) it
+web; a new or reset account first sets its own username and password on a
+*Perbarui Akun* screen, as on the web, with the same password rules shown
+live) it
 shows that user's data, with a kolom picker, an offline cache, notifications,
 and five tabs. *Pengaturan → Keluar* signs out and deletes the data from the
 phone; when the session ends (expired, or an admin used *Keluarkan*) the app

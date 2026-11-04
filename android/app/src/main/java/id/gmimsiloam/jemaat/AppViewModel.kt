@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import id.gmimsiloam.jemaat.data.AppRelease
 import id.gmimsiloam.jemaat.data.DataFilter
+import id.gmimsiloam.jemaat.data.LoginResult
 import id.gmimsiloam.jemaat.data.NotSignedInException
 import id.gmimsiloam.jemaat.data.PublicStats
 import id.gmimsiloam.jemaat.data.Prefs
@@ -36,6 +37,8 @@ data class UiState(
     val publicStats: PublicStats? = null,
     val loggingIn: Boolean = false,
     val loginError: String? = null,
+    /** signed in with a temporary password: the username to change it for (see changeCredentials) */
+    val mustChange: String? = null,
 )
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
@@ -122,14 +125,59 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val result = runCatching { repo.login(username.trim(), password) }
             result.fold(
-                onSuccess = { account ->
-                    _state.update { it.copy(loggingIn = false, signedIn = true, account = account, error = null) }
-                    refresh(restart = true)
-                    DailyWorker.rescheduleReminders(getApplication())
+                onSuccess = { r ->
+                    when (r) {
+                        is LoginResult.SignedIn -> signedIn(r.account)
+                        is LoginResult.MustChange -> {
+                            pendingSession = r.session
+                            _state.update { it.copy(loggingIn = false, mustChange = r.username) }
+                        }
+                    }
                 },
                 onFailure = { e -> _state.update { it.copy(loggingIn = false, loginError = e.message ?: "Gagal masuk") } },
             )
         }
+    }
+
+    /** The session of a sign-in that must change its temporary password first (not kept on the device). */
+    private var pendingSession: String? = null
+
+    /** Sets the own username and password (first sign-in, or after a reset), as on the web. */
+    fun changeCredentials(currentPassword: String, username: String, newPassword: String) {
+        val session = pendingSession ?: return
+        if (_state.value.loggingIn) return
+        _state.update { it.copy(loggingIn = true, loginError = null) }
+        viewModelScope.launch {
+            runCatching { repo.changeCredentials(session, currentPassword, username.trim(), newPassword) }.fold(
+                onSuccess = { account ->
+                    pendingSession = null
+                    signedIn(account)
+                },
+                onFailure = { e ->
+                    // the session ended meanwhile (e.g. locked after wrong passwords): sign in again
+                    if (e is NotSignedInException) {
+                        pendingSession = null
+                        _state.update { it.copy(loggingIn = false, mustChange = null, loginError = "Sesi berakhir, silakan masuk lagi") }
+                    } else {
+                        _state.update { it.copy(loggingIn = false, loginError = e.message ?: "Gagal menyimpan") }
+                    }
+                },
+            )
+        }
+    }
+
+    /** Leaves the password change: back to the sign-in form (the session is ended). */
+    fun cancelChange() {
+        val session = pendingSession
+        pendingSession = null
+        _state.update { it.copy(mustChange = null, loginError = null) }
+        if (session != null) viewModelScope.launch { repo.abandon(session) }
+    }
+
+    private fun signedIn(account: String) {
+        _state.update { it.copy(loggingIn = false, signedIn = true, account = account, error = null, mustChange = null, loginError = null) }
+        refresh(restart = true)
+        DailyWorker.rescheduleReminders(getApplication())
     }
 
     fun logout() {

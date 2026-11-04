@@ -26,23 +26,41 @@ class Repository(private val context: Context) {
     private fun api(prefs: Prefs = Prefs(context)) = Api(prefs.serverUrl, prefs.session.ifEmpty { null })
 
     /**
-     * Signs in with a username and password; returns the account line shown in
-     * Pengaturan. An account that must first change its password is told to
-     * do that on the web (and is not kept signed in).
+     * Signs in with a username and password. A new or reset account must first
+     * set its own username and password ([LoginResult.MustChange], as on the
+     * web): until then it is not kept signed in on the device.
      */
-    suspend fun login(username: String, password: String): String = withContext(Dispatchers.IO) {
+    suspend fun login(username: String, password: String): LoginResult = withContext(Dispatchers.IO) {
         val prefs = Prefs(context)
         val res = Api(prefs.serverUrl).post("/api/auth/login", JSONObject().put("username", username).put("password", password))
         val token = res.sessionCookie ?: throw IOException("Server tidak memberi sesi masuk")
         val user = JSONObject(res.body)
-        if (user.optBoolean("mustChangePassword")) {
-            runCatching { Api(prefs.serverUrl, token).post("/api/auth/logout") }
-            throw IOException("Akun ini wajib mengganti username/password terlebih dahulu. Masuk lewat web untuk menggantinya, lalu coba lagi.")
+        if (user.optBoolean("mustChangePassword")) return@withContext LoginResult.MustChange(token, user.optString("username"))
+        LoginResult.SignedIn(keep(prefs, token, user))
+    }
+
+    /**
+     * Sets the new username and password of an account that must change its
+     * temporary one ([session]: from [login]); then it is signed in.
+     */
+    suspend fun changeCredentials(session: String, currentPassword: String, username: String, newPassword: String): String =
+        withContext(Dispatchers.IO) {
+            val prefs = Prefs(context)
+            val body = JSONObject().put("currentPassword", currentPassword).put("username", username).put("newPassword", newPassword)
+            val res = Api(prefs.serverUrl, session).post("/api/auth/change-credentials", body)
+            keep(prefs, res.sessionCookie ?: session, JSONObject(res.body))
         }
+
+    /** Signs out a session that never got kept (the password change was cancelled). */
+    suspend fun abandon(session: String) = withContext(Dispatchers.IO) {
+        runCatching { Api(Prefs(context).serverUrl, session).post("/api/auth/logout") }
+    }
+
+    private fun keep(prefs: Prefs, token: String, user: JSONObject): String {
         val account = user.optString("username") + " · " + roleLabel(user)
         prefs.session = token
         prefs.account = account
-        account
+        return account
     }
 
     /** Signs out here (and on the server), and forgets the data on the device. */
@@ -162,4 +180,13 @@ private fun roleLabel(user: JSONObject): String {
         "viewer" -> if (parts.isEmpty()) "Hanya lihat" else "Lihat " + parts.joinToString(" · ")
         else -> "Kelola " + parts.joinToString(" · ")
     }
+}
+
+/** What a sign-in led to. */
+sealed interface LoginResult {
+    /** signed in; [account]: "budi · Kelola Kolom 11" */
+    data class SignedIn(val account: String) : LoginResult
+
+    /** the temporary password must be changed first (session [session], not kept yet) */
+    data class MustChange(val session: String, val username: String) : LoginResult
 }

@@ -11,7 +11,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import android.app.Activity
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +41,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import id.gmimsiloam.jemaat.AppViewModel
 import id.gmimsiloam.jemaat.UiState
+import id.gmimsiloam.jemaat.data.passwordRules
 
 /**
  * What a visitor (not signed in) sees: the sign-in form and the whole
@@ -42,6 +50,27 @@ import id.gmimsiloam.jemaat.UiState
  */
 @Composable
 fun PublicApp(state: UiState, vm: AppViewModel) {
+    // a new or reset account: set its own username and password first, as on the web
+    state.mustChange?.let {
+        ChangeCredentialsScreen(it, state, vm)
+        return
+    }
+    val context = LocalContext.current
+    var confirmClose by rememberSaveable { mutableStateOf(false) }
+    if (confirmClose) {
+        AlertDialog(
+            onDismissRequest = { confirmClose = false },
+            title = { Text("Tutup aplikasi?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmClose = false
+                    // closes the screens and removes the app from the recent apps
+                    (context as? Activity)?.finishAndRemoveTask()
+                }) { Text("Tutup") }
+            },
+            dismissButton = { TextButton(onClick = { confirmClose = false }) { Text("Batal") } },
+        )
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -49,6 +78,11 @@ fun PublicApp(state: UiState, vm: AppViewModel) {
                     Column {
                         Text("GMIM Siloam", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text("Statistik jemaat", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { confirmClose = true }) {
+                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Tutup aplikasi")
                     }
                 },
             )
@@ -136,4 +170,74 @@ private fun LoginCard(state: UiState, vm: AppViewModel) {
             }
         }
     }
+}
+
+/**
+ * Shown after signing in with a temporary password (a new or reset account),
+ * like the web's "Perbarui Akun": the user sets their own username and
+ * password before going on. Keluar goes back to the sign-in form.
+ */
+@Composable
+private fun ChangeCredentialsScreen(username0: String, state: UiState, vm: AppViewModel) {
+    var username by rememberSaveable { mutableStateOf(username0) }
+    var current by rememberSaveable { mutableStateOf("") }
+    var newPassword by rememberSaveable { mutableStateOf("") }
+    var confirm by rememberSaveable { mutableStateOf("") }
+    val rules = passwordRules(newPassword, username)
+    val valid = rules.all { it.ok } && username.trim().length >= 3 && current.isNotEmpty() && newPassword == confirm
+    androidx.activity.compose.BackHandler(onBack = vm::cancelChange)
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("Perbarui Akun") }) },
+    ) { padding ->
+        Column(
+            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Halo $username0, demi keamanan silakan ganti username dan password sementara sebelum melanjutkan.")
+            OutlinedTextField(
+                value = username,
+                onValueChange = { username = it },
+                label = { Text("Username") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Next),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            PasswordField("Password saat ini (sementara)", current) { current = it }
+            PasswordField("Password baru", newPassword) { newPassword = it }
+            PasswordField("Ulangi password baru", confirm) { confirm = it }
+            if (confirm.isNotEmpty() && confirm != newPassword) {
+                Text("Konfirmasi password tidak sama.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+            // the rules, ticked live (the byte limit only when broken), as on the web
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                rules.filter { it.id != "max" || !it.ok }.forEach { r ->
+                    Text(
+                        (if (r.ok) "✓ " else "✗ ") + r.label,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (r.ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            state.loginError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
+            Button(
+                onClick = { vm.changeCredentials(current, username, newPassword) },
+                enabled = valid && !state.loggingIn,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(if (state.loggingIn) "Menyimpan…" else "Simpan & Lanjutkan") }
+            TextButton(onClick = vm::cancelChange) { Text("Keluar") }
+        }
+    }
+}
+
+@Composable
+private fun PasswordField(label: String, value: String, onChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(label) },
+        singleLine = true,
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
