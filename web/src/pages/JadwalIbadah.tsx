@@ -1,6 +1,6 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import { scheduleApi, serviceToInput, type Member, type Service, type ServiceInput, type WorshipType } from '../api'
-import { managesAll, managesService, useAuth, useCanAddServices } from '../auth'
+import { bipraOnly, managesAll, managesKolom, managesService, managesType, useAuth, useCanAddServices } from '../auth'
 import { KolomField } from '../components/forms'
 import { MonthGrid, MonthNav } from '../components/calendar'
 import { ConfirmDelete, Field, FormShell, Modal, Status } from '../components/ui'
@@ -48,13 +48,18 @@ const narrow = () => typeof window !== 'undefined' && window.matchMedia('(max-wi
 
 /** Google-Calendar-like schedule: a month grid or a schedule list, per kolom. */
 export default function JadwalIbadah() {
-  const { kolom, filterLabel, bipraFilter } = useData()
+  const { kolom, filterLabel, bipraFilter, bipraLimited, bipraChoices } = useData()
   const canEdit = useCanAddServices()
   const { user } = useAuth()
   const { services, types, loading, error, reload } = useSchedule()
   const [chosenType, setChosenType] = useState(savedType)
-  // a BIPRA category: the jenis linked to it; else every jenis
-  const typeChoices = bipraFilter ? types.filter((t) => t.bipraId === bipraFilter.id) : types
+  // a BIPRA category: the jenis linked to it; a limited user outside their
+  // koloms: those linked to their categories; else every jenis
+  const typeChoices = bipraFilter
+    ? types.filter((t) => t.bipraId === bipraFilter.id)
+    : bipraLimited
+      ? types.filter((t) => !!t.bipraId && bipraChoices.some((c) => c.id === t.bipraId))
+      : types
   // a remembered jenis that is gone, or not of the chosen category, counts as all
   const typeFilter = typeChoices.find((t) => t.id === chosenType) ?? null
   const shownTypes = typeFilter ? [typeFilter] : typeChoices
@@ -476,13 +481,14 @@ function ServiceForm({
 }) {
   const { kolom, allFamilies, allMembers } = useData()
   const { user } = useAuth()
-  // a "kelola data BIPRA" user: only their category's jenis
-  const choices = user?.role === 'bipra' ? types.filter((t) => t.bipraId && t.bipraId === user.bipraId) : types
+  // with koloms: every jenis (in their koloms); a BIPRA-only user: only their
+  // categories' jenis
+  const choices = bipraOnly(user) ? types.filter((t) => managesType(user, t)) : types
   const [s, setS] = useState<ServiceInput>(
     service
       ? serviceToInput(service)
       : {
-          kolom: user?.role === 'bipra' ? 0 : (kolom ?? 0),
+          kolom: kolom !== null && managesKolom(user, kolom) ? kolom : 0,
           typeId: choices[0]?.id ?? '',
           date: date ? fromInputDate(date) : null,
           time: '19:00',
@@ -497,7 +503,11 @@ function ServiceForm({
   )
   const set = (patch: Partial<ServiceInput>) => setS((prev) => ({ ...prev, ...patch }))
   // a jenis linked to a BIPRA category may be for the whole congregation (no kolom)
-  const linked = !!types.find((t) => t.id === s.typeId)?.bipraId
+  const type = types.find((t) => t.id === s.typeId)
+  const linked = !!type?.bipraId
+  // a jenis linked to one of a scoped user's categories: in any kolom, or
+  // none (other jenis: only in their koloms)
+  const ownType = managesAll(user) || managesType(user, type)
   const off = !s.typeId || (!s.kolom && !linked)
   const hosts = allFamilies.filter((f) => !s.kolom || f.kolom === s.kolom).map((f) => f.name)
 
@@ -522,17 +532,13 @@ function ServiceForm({
             ))}
           </select>
         </Field>
-        {user?.role === 'bipra' && !choices.length && (
+        {bipraOnly(user) && !choices.length && (
           <p className="wide form-error flush">
             Belum ada jenis ibadah yang terhubung ke kategori BIPRA Anda. Minta admin menghubungkannya di Jenis Ibadah.
           </p>
         )}
-        {/* "Semua kolom": not for a kolom user (they change their kolom's services only) */}
-        <KolomField
-          value={s.kolom}
-          allowAll={linked && (managesAll(user) || user?.role === 'bipra')}
-          onChange={(k) => set({ kolom: k })}
-        />
+        {/* "Semua kolom" and other koloms: only for a jenis the user manages everywhere */}
+        <KolomField value={s.kolom} allowAll={linked && ownType} anyKolom={ownType} onChange={(k) => set({ kolom: k })} />
         <Field label="Tanggal">
           <input
             type="date"

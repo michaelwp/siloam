@@ -23,35 +23,89 @@ export function useAuth() {
 export const ROLE_LABELS: Record<Role, string> = {
   admin: 'Admin',
   user: 'Pengguna',
-  kolom: 'Pengguna – kelola data kolom',
-  bipra: 'Pengguna – kelola data BIPRA',
+  scoped: 'Pengguna – kelola kolom/BIPRA',
+  viewer: 'Pengguna – hanya lihat',
 }
 
-/** "Admin", "Pengguna", "Kelola Kolom 3", "Kelola BIPRA Pemuda" */
-export function roleLabel(u: Pick<User, 'role' | 'kolom' | 'bipraId'>, categories: BipraCategory[] = []) {
-  if (u.role === 'kolom') return `Kelola Kolom ${u.kolom}`
-  if (u.role === 'bipra') return `Kelola BIPRA ${categories.find((c) => c.id === u.bipraId)?.name ?? ''}`.trim()
-  return ROLE_LABELS[u.role]
+/** Roles limited to some koloms and/or BIPRA categories. */
+function hasScope(u: Pick<User, 'role'> | null) {
+  return u?.role === 'scoped' || u?.role === 'viewer'
+}
+
+/** A viewer only looks: they change no jemaat data. */
+export function isViewer(u: Pick<User, 'role'> | null) {
+  return u?.role === 'viewer'
+}
+
+/** The koloms a scoped user manages, or a viewer sees (others: none). */
+export function ownKoloms(u: Pick<User, 'role' | 'koloms'> | null): number[] {
+  return hasScope(u) ? (u?.koloms ?? []) : []
+}
+
+/** The ids of the BIPRA categories a scoped user manages, or a viewer sees. */
+export function ownBipraIds(u: Pick<User, 'role' | 'bipraIds'> | null): string[] {
+  return hasScope(u) ? (u?.bipraIds ?? []) : []
 }
 
 /**
- * The BIPRA category of a "kelola data BIPRA" user, else null. Their pages
- * show only its members (DataProvider) and its services (on Beranda).
+ * A scoped user or viewer limited to some koloms and/or BIPRA categories
+ * (not a viewer of everything). Their data is their koloms' plus their
+ * categories' members (in every kolom); see DataProvider.
  */
-export function useBipraScope(): BipraCategory | null {
-  const { user } = useAuth()
-  const { categories } = useData()
-  if (user?.role !== 'bipra') return null
-  return categories.find((c) => c.id === user.bipraId) ?? null
+export function limited(u: Pick<User, 'role' | 'koloms' | 'bipraIds'> | null) {
+  return hasScope(u) && (ownKoloms(u).length > 0 || ownBipraIds(u).length > 0)
 }
 
-/** Whether u may change service s (the server decides the same way). */
+/**
+ * A scoped user or viewer with BIPRA categories and no koloms: they see only
+ * their categories' members and services, no family pages, and change only
+ * those services.
+ */
+export function bipraOnly(u: Pick<User, 'role' | 'koloms' | 'bipraIds'> | null) {
+  return hasScope(u) && !ownKoloms(u).length && ownBipraIds(u).length > 0
+}
+
+/** "Admin", "Pengguna", "Kelola Kolom 3, 5", "Kelola Kolom 3 · BIPRA Pemuda, Remaja", "Lihat Kolom 3", "Hanya lihat" */
+export function roleLabel(u: Pick<User, 'role' | 'koloms' | 'bipraIds'>, categories: BipraCategory[] = []) {
+  if (!hasScope(u)) return ROLE_LABELS[u.role]
+  const parts: string[] = []
+  const ks = ownKoloms(u)
+  if (ks.length) parts.push(`Kolom ${ks.join(', ')}`)
+  const ids = ownBipraIds(u)
+  if (ids.length) {
+    const names = categories.filter((c) => ids.includes(c.id)).map((c) => c.name)
+    parts.push(`BIPRA ${names.join(', ')}`.trim())
+  }
+  if (u.role === 'viewer') return parts.length ? `Lihat ${parts.join(' · ')}` : 'Hanya lihat'
+  return parts.length ? `Kelola ${parts.join(' · ')}` : ROLE_LABELS.scoped
+}
+
+/**
+ * The BIPRA categories of a BIPRA-only user (see bipraOnly), else null. Their
+ * pages show only these categories' members and services.
+ */
+export function useBipraScope(): BipraCategory[] | null {
+  const { user } = useAuth()
+  const { categories } = useData()
+  if (!bipraOnly(user)) return null
+  const ids = ownBipraIds(user)
+  return categories.filter((c) => ids.includes(c.id))
+}
+
+/**
+ * Whether u may change service s (the server decides the same way): every
+ * service of their koloms, and their categories' services in every kolom.
+ */
 export function managesService(u: User | null, s: Pick<Service, 'kolom' | 'typeId'>, types: WorshipType[]) {
   if (!u || u.mustChangePassword) return false
+  if (s.kolom > 0 && managesKolom(u, s.kolom)) return true
   if (managesAll(u)) return true
-  if (u.role === 'kolom') return s.kolom === u.kolom
-  if (u.role === 'bipra') return !!u.bipraId && types.find((t) => t.id === s.typeId)?.bipraId === u.bipraId
-  return false
+  return managesType(u, types.find((x) => x.id === s.typeId))
+}
+
+/** Whether a scoped user may change services of jenis t in every kolom (linked to one of their categories). */
+export function managesType(u: User | null, t: Pick<WorshipType, 'bipraId'> | undefined) {
+  return u?.role === 'scoped' && !!t?.bipraId && ownBipraIds(u).includes(t.bipraId)
 }
 
 /** Admins and regular users change every kolom's data, the koloms and the jenis ibadah. */
@@ -59,41 +113,46 @@ export function managesAll(u: User | null) {
   return !!u && (u.role === 'admin' || u.role === 'user')
 }
 
-/** Whether u may change (and see the private data of) kolom k; a kolom user only their own. */
+/** Whether u may change the data of kolom k (families, members, every service there); a scoped user only their own. */
 export function managesKolom(u: User | null, k: number) {
-  return managesAll(u) || (!!u && u.role === 'kolom' && u.kolom === k)
+  return managesAll(u) || (u?.role === 'scoped' && ownKoloms(u).includes(k))
 }
 
 /**
  * Whether the loaded data is the full (signed-in) view, as reported by the
  * server — never guessed from the sign-in state, which can be stale. A
- * "kelola data kolom" user gets it only for their own kolom (the server sends
- * the other koloms redacted), so other koloms show as for visitors.
+ * limited user's data is narrowed to what the server sends them in full
+ * (their koloms and their categories' members; see DataProvider).
  */
 export function useFullView() {
-  const { view, kolom } = useData()
+  const { view } = useData()
   const { user } = useAuth()
-  // a "kelola data BIPRA" user gets only their category's members (full)
-  return view === 'full' && (user?.role !== 'kolom' || kolom === user.kolom)
+  if (view !== 'full') return false
+  return !hasScope(user) || isViewer(user) || limited(user)
 }
 
 /**
  * Data can be changed only when signed in AND the loaded data is the full
- * view, so an edit form is never filled from redacted (blank) fields.
+ * view, so an edit form is never filled from redacted (blank) fields. A
+ * scoped user changes families and members while viewing one of their koloms
+ * (or all of them, if they have no categories: then nothing else shows).
  */
 export function useCanEdit() {
   const { user } = useAuth()
+  const { kolom } = useData()
   const full = useFullView()
-  // a "kelola data BIPRA" user changes services only (see managesService)
-  return !!user && !user.mustChangePassword && full && user.role !== 'bipra'
+  if (!user || user.mustChangePassword || !full || isViewer(user)) return false
+  if (!hasScope(user)) return true
+  if (!ownKoloms(user).length) return false
+  return kolom !== null ? ownKoloms(user).includes(kolom) : !ownBipraIds(user).length
 }
 
 /** Whether the user may add services at all (each one is then checked with managesService). */
 export function useCanAddServices() {
   const { user } = useAuth()
   const full = useFullView()
-  if (!user || user.mustChangePassword) return false
-  return user.role === 'bipra' || (managesAll(user) && full) || (user.role === 'kolom' && full)
+  if (!user || user.mustChangePassword || isViewer(user)) return false
+  return ownBipraIds(user).length > 0 || full
 }
 
 /** Passkeys need WebAuthn and a secure context (HTTPS or localhost). */

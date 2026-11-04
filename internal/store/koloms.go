@@ -23,7 +23,7 @@ var (
 	ErrKolomExists = errors.New("kolom already exists")
 	ErrKolomInUse  = errors.New("kolom still has families or services")
 	ErrNoKolom     = errors.New("kolom does not exist")
-	// ErrKolomHasUsers: a "kelola data kolom" user is assigned to the kolom
+	// ErrKolomHasUsers: a scoped user or viewer is assigned to the kolom
 	ErrKolomHasUsers = errors.New("kolom has users assigned")
 )
 
@@ -126,8 +126,8 @@ func (s *Store) DeleteKolom(ctx context.Context, id bson.ObjectID) error {
 	if n > 0 {
 		return ErrKolomInUse
 	}
-	// a "kelola data kolom" user is assigned to it
-	if n, err = s.users.CountDocuments(ctx, bson.D{{Key: "role", Value: model.RoleKolom}, {Key: "kolom", Value: k.Number}}); err != nil {
+	// a scoped user manages it, or a viewer sees it
+	if n, err = s.users.CountDocuments(ctx, bson.D{{Key: "role", Value: bson.D{{Key: "$in", Value: bson.A{model.RoleScoped, model.RoleViewer}}}}, {Key: "koloms", Value: k.Number}}); err != nil {
 		return err
 	}
 	if n > 0 {

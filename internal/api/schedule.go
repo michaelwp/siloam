@@ -146,9 +146,8 @@ func (a *API) checkTypeBipra(r *http.Request, t model.WorshipType) error {
 // ---- services ----
 
 // mayManageService checks a service the user wants to save or delete: a
-// service without a kolom needs a jenis linked to a BIPRA category; a
-// "kelola data kolom" user changes their kolom's services, a "kelola data
-// BIPRA" user those of their category's jenis. It answers 400/403 itself.
+// service without a kolom needs a jenis linked to a BIPRA category; a scoped
+// user: see User.ManagesService. It answers 400/403 itself.
 func (a *API) mayManageService(w http.ResponseWriter, r *http.Request, sv model.Service) bool {
 	t, err := a.store.GetWorshipType(r.Context(), sv.TypeID)
 	if err != nil {
@@ -159,18 +158,11 @@ func (a *API) mayManageService(w http.ResponseWriter, r *http.Request, sv model.
 		writeError(w, http.StatusBadRequest, "kolom wajib dipilih untuk jenis ibadah ini")
 		return false
 	}
-	u := auth.CurrentUser(r)
-	if u == nil || u.ManagesAll() {
-		return true
-	}
-	if u.Role == model.RoleBipra {
-		if u.ManagesType(t) {
-			return true
-		}
+	if u := auth.CurrentUser(r); u != nil && !u.ManagesService(sv.Kolom, t) {
 		writeError(w, http.StatusForbidden, u.Scope(), "forbidden")
 		return false
 	}
-	return mayManage(w, r, sv.Kolom)
+	return true
 }
 
 // errServiceLocked: a service dated today or earlier is held (or under way) and

@@ -239,7 +239,13 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 			httpx.WriteError(w, http.StatusForbidden, "hanya admin yang dapat mengakses halaman ini", "forbidden")
 			return
 		}
-		// a "kelola data kolom" user changes their kolom's data, not the
+		// a viewer changes nothing but their own account (sign-in,
+		// password, passkeys)
+		if isUnsafe(r.Method) && u.IsViewer() && !strings.HasPrefix(path, "/api/auth/") {
+			httpx.WriteError(w, http.StatusForbidden, u.Scope(), "forbidden")
+			return
+		}
+		// a scoped user changes their koloms' data, not the
 		// koloms or jenis ibadah themselves (the data rules are in the API)
 		if isUnsafe(r.Method) && !u.ManagesAll() && managesAllOnly(path) {
 			httpx.WriteError(w, http.StatusForbidden, u.Scope(), "forbidden")

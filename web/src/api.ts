@@ -182,7 +182,7 @@ export function memberToInput(m: Member): MemberInput {
 
 // ---- auth & users ----
 
-export type Role = 'admin' | 'user' | 'kolom' | 'bipra'
+export type Role = 'admin' | 'user' | 'scoped' | 'viewer'
 
 export type Passkey = {
   id: string
@@ -195,8 +195,8 @@ export type User = {
   id: string
   username: string
   role: Role
-  kolom?: number // role 'kolom': the kolom they manage
-  bipraId?: string // role 'bipra': the BIPRA category they manage
+  koloms?: number[] // role 'scoped': the koloms they manage; 'viewer': see (none: all)
+  bipraIds?: string[] // role 'scoped': the BIPRA categories they manage; 'viewer': see
   mustChangePassword: boolean
   failedLogins: number
   lockedAt: string | null
@@ -283,9 +283,9 @@ export const adminApi = {
 
 export const usersApi = {
   list: () => request<User[]>('GET', '/api/users'),
-  create: (body: { username: string; password: string; role: Role; kolom?: number; bipraId?: string }) =>
+  create: (body: { username: string; password: string; role: Role; koloms?: number[]; bipraIds?: string[] }) =>
     request<User>('POST', '/api/users', body),
-  update: (id: string, body: { username: string; role: Role; kolom?: number; bipraId?: string }) =>
+  update: (id: string, body: { username: string; role: Role; koloms?: number[]; bipraIds?: string[] }) =>
     request<User>('PUT', `/api/users/${id}`, body),
   resetPassword: (id: string, body: { password: string; clearPasskeys: boolean }) =>
     request<User>('POST', `/api/users/${id}/reset-password`, body),

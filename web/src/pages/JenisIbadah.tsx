@@ -120,7 +120,7 @@ function TypeForm({ type, onClose, onSaved }: { type?: WorshipType; onClose: () 
         </Field>
         <p className="wide muted small">
           Ibadah jenis yang terhubung ke kategori BIPRA boleh tanpa kolom (untuk seluruh jemaat), dan dikelola juga oleh
-          pengguna “kelola data BIPRA” kategori itu.
+          pengguna yang mengelola kategori itu.
         </p>
         <fieldset className="color-picker wide">
           <legend>Warna di kalender</legend>

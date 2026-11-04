@@ -123,7 +123,7 @@ func TestKolomUserManagesOnlyTheirKolom(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	k3 := &model.User{ID: bson.NewObjectID(), Username: "kolom3", Role: model.RoleKolom, Kolom: 3}
+	k3 := &model.User{ID: bson.NewObjectID(), Username: "kolom3", Role: model.RoleScoped, Koloms: []int{3}}
 	family := func(kolom int) string { return `{"kolom":` + map[int]string{3: "3", 4: "4"}[kolom] + `,"name":"Baru"}` }
 	member := func(f bson.ObjectID) string { return `{"familyId":"` + f.Hex() + `","name":"Anak Baru"}` }
 	service := func(kolom string) string {
@@ -273,7 +273,7 @@ func TestBipraUserManagesOnlyTheirServices(t *testing.T) {
 	_, _ = st.CreateMember(ctx, model.Member{FamilyID: f.ID, Name: "Budi", Gender: model.GenderMale, MaritalStatus: model.StatusSingle, BirthDate: &young})
 	_, _ = st.CreateMember(ctx, model.Member{FamilyID: f.ID, Name: "Erwin", Gender: model.GenderMale, MaritalStatus: "Menikah", BirthDate: &old})
 
-	u := &model.User{ID: bson.NewObjectID(), Username: "pemuda", Role: model.RoleBipra, BipraID: &pemuda}
+	u := &model.User{ID: bson.NewObjectID(), Username: "pemuda", Role: model.RoleScoped, BipraIDs: []bson.ObjectID{pemuda}}
 	service := func(kind string, kolom string) string {
 		return `{"kolom":` + kolom + `,"typeId":"` + typeID[kind] + `","date":"2026-11-11T00:00:00Z","time":"18:00"}`
 	}
@@ -309,6 +309,210 @@ func TestBipraUserManagesOnlyTheirServices(t *testing.T) {
 	for _, m := range members {
 		if (m.BirthDate != nil) != (m.Name == "Budi") {
 			t.Errorf("%s (%s): birth date visible = %v", m.Name, m.Category, m.BirthDate != nil)
+		}
+	}
+}
+
+// Koloms and BIPRA categories add up: a scoped user with Kolom 3 and 5 and
+// Pemuda manages everything in Kolom 3 and 5 (BIPRA services too) and the
+// Pemuda services of every kolom, and sees Kolom 3 and 5 and the Pemuda of
+// every kolom.
+func TestScopedUserWithKolomsAndBipra(t *testing.T) {
+	_, st, h := testAPI(t)
+	ctx := context.Background()
+	if err := st.SeedBipra(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.LinkWorshipTypesToBipra(ctx); err != nil {
+		t.Fatal(err)
+	}
+	types, _ := st.ListWorshipTypes(ctx)
+	typeID := map[string]string{}
+	var pemuda bson.ObjectID
+	for _, ty := range types {
+		typeID[ty.Name] = ty.ID.Hex()
+		if ty.Name == "Pemuda" {
+			pemuda = *ty.BipraID
+		}
+	}
+	f5, _ := st.CreateFamily(ctx, model.Family{Kolom: 5, Name: "Umboh"})
+	f4, _ := st.CreateFamily(ctx, model.Family{Kolom: 4, Name: "Kowaas"})
+	young := time.Now().AddDate(-20, 0, -1)
+	old := time.Now().AddDate(-45, 0, -1)
+	_, _ = st.CreateMember(ctx, model.Member{FamilyID: f4.ID, Name: "Budi", Gender: model.GenderMale, MaritalStatus: model.StatusSingle, BirthDate: &young})
+	_, _ = st.CreateMember(ctx, model.Member{FamilyID: f4.ID, Name: "Erwin", Gender: model.GenderMale, MaritalStatus: "Menikah", BirthDate: &old})
+	_, _ = st.CreateMember(ctx, model.Member{FamilyID: f5.ID, Name: "Ani", Gender: model.GenderFemale, MaritalStatus: "Menikah", BirthDate: &old})
+
+	u := &model.User{ID: bson.NewObjectID(), Username: "mix", Role: model.RoleScoped, Koloms: []int{3, 5}, BipraIDs: []bson.ObjectID{pemuda}}
+	service := func(kind string, kolom string) string {
+		return `{"kolom":` + kolom + `,"typeId":"` + typeID[kind] + `","date":"2026-11-11T00:00:00Z","time":"18:00"}`
+	}
+	for _, c := range []struct {
+		what, method, path, body string
+		want                     int
+	}{
+		{"add a family to kolom 5", "POST", "/api/families", `{"kolom":5,"name":"Baru"}`, 201},
+		{"add a family to kolom 4", "POST", "/api/families", `{"kolom":4,"name":"Baru"}`, 403},
+		{"add a member in kolom 4", "POST", "/api/members", `{"familyId":"` + f4.ID.Hex() + `","name":"x"}`, 403},
+		{"a kolom service in kolom 5", "POST", "/api/services", service("Kolom", "5"), 201},
+		{"a PKB service in kolom 3", "POST", "/api/services", service("Pria Kaum Bapa (PKB)", "3"), 201},
+		{"a kolom service in kolom 4", "POST", "/api/services", service("Kolom", "4"), 403},
+		{"a PKB service in kolom 4", "POST", "/api/services", service("Pria Kaum Bapa (PKB)", "4"), 403},
+		{"a Pemuda service in kolom 4", "POST", "/api/services", service("Pemuda", "4"), 201},
+		{"a Pemuda service for the whole congregation", "POST", "/api/services", service("Pemuda", "0"), 201},
+		{"a PKB service for the whole congregation", "POST", "/api/services", service("Pria Kaum Bapa (PKB)", "0"), 403},
+	} {
+		if got, body := call(h, u, c.method, c.path, c.body); got != c.want {
+			t.Errorf("%s: %d, want %d (%v)", c.what, got, c.want, body)
+		}
+	}
+
+	// private data: their koloms' members, and their category's elsewhere
+	r := auth.WithUser(httptest.NewRequest(http.MethodGet, "/api/members", nil), u)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, r)
+	var members []model.MemberView
+	_ = json.Unmarshal(rec.Body.Bytes(), &members)
+	for _, m := range members {
+		if want := m.Name != "Erwin"; (m.BirthDate != nil) != want {
+			t.Errorf("%s (kolom %d, %s): birth date visible = %v", m.Name, m.Kolom, m.Category, m.BirthDate != nil)
+		}
+	}
+}
+
+// A scoped user with several koloms (no categories) manages each of them,
+// BIPRA services there too.
+func TestScopedUserWithSeveralKoloms(t *testing.T) {
+	_, st, h := testAPI(t)
+	ctx := context.Background()
+	if err := st.SeedBipra(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.LinkWorshipTypesToBipra(ctx); err != nil {
+		t.Fatal(err)
+	}
+	types, _ := st.ListWorshipTypes(ctx)
+	typeID := map[string]string{}
+	for _, ty := range types {
+		typeID[ty.Name] = ty.ID.Hex()
+	}
+	service := func(kind string, kolom string) string {
+		return `{"kolom":` + kolom + `,"typeId":"` + typeID[kind] + `","date":"2026-11-11T00:00:00Z","time":"18:00"}`
+	}
+	f5, _ := st.CreateFamily(ctx, model.Family{Kolom: 5, Name: "Umboh"})
+	u := &model.User{ID: bson.NewObjectID(), Username: "k35", Role: model.RoleScoped, Koloms: []int{3, 5}}
+	for _, c := range []struct {
+		what, method, path, body string
+		want                     int
+	}{
+		{"add a family to kolom 3", "POST", "/api/families", `{"kolom":3,"name":"Baru"}`, 201},
+		{"add a family to kolom 4", "POST", "/api/families", `{"kolom":4,"name":"Baru"}`, 403},
+		{"move a family between their koloms", "PUT", "/api/families/" + f5.ID.Hex(), `{"kolom":3,"name":"Umboh"}`, 200},
+		{"a kolom service in kolom 3", "POST", "/api/services", service("Kolom", "3"), 201},
+		{"a Pemuda service in kolom 3", "POST", "/api/services", service("Pemuda", "3"), 201},
+		{"a PKB service in kolom 5", "POST", "/api/services", service("Pria Kaum Bapa (PKB)", "5"), 201},
+		{"a Pemuda service in kolom 4", "POST", "/api/services", service("Pemuda", "4"), 403},
+		{"a Pemuda service for the whole congregation", "POST", "/api/services", service("Pemuda", "0"), 403},
+	} {
+		if got, body := call(h, u, c.method, c.path, c.body); got != c.want {
+			t.Errorf("%s: %d, want %d (%v)", c.what, got, c.want, body)
+		}
+	}
+}
+
+// A viewer changes nothing; they see the private data of everyone, or only of
+// their koloms and their categories' members.
+func TestViewerSeesOnlyTheirScope(t *testing.T) {
+	_, st, h := testAPI(t)
+	ctx := context.Background()
+	if err := st.SeedBipra(ctx); err != nil {
+		t.Fatal(err)
+	}
+	rules, _ := st.BipraRules(ctx)
+	var pemuda bson.ObjectID
+	for _, c := range rules {
+		if c.Name == "Pemuda" {
+			pemuda = c.ID
+		}
+	}
+	f3, _ := st.CreateFamily(ctx, model.Family{Kolom: 3, Name: "Umboh"})
+	f4, _ := st.CreateFamily(ctx, model.Family{Kolom: 4, Name: "Kowaas"})
+	young := time.Now().AddDate(-20, 0, -1)
+	old := time.Now().AddDate(-45, 0, -1)
+	_, _ = st.CreateMember(ctx, model.Member{FamilyID: f3.ID, Name: "Ani", Gender: model.GenderFemale, MaritalStatus: "Menikah", BirthDate: &old})
+	_, _ = st.CreateMember(ctx, model.Member{FamilyID: f4.ID, Name: "Budi", Gender: model.GenderMale, MaritalStatus: model.StatusSingle, BirthDate: &young})
+	_, _ = st.CreateMember(ctx, model.Member{FamilyID: f4.ID, Name: "Erwin", Gender: model.GenderMale, MaritalStatus: "Menikah", BirthDate: &old})
+	_, _ = st.CreateMember(ctx, model.Member{FamilyID: f3.ID, Name: "Dodi", Gender: model.GenderMale, MaritalStatus: model.StatusSingle, BirthDate: &young})
+
+	visible := func(u *model.User) map[string]bool {
+		r := auth.WithUser(httptest.NewRequest(http.MethodGet, "/api/members", nil), u)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, r)
+		var members []model.MemberView
+		_ = json.Unmarshal(rec.Body.Bytes(), &members)
+		out := map[string]bool{}
+		for _, m := range members {
+			out[m.Name] = m.BirthDate != nil
+		}
+		return out
+	}
+	all := &model.User{ID: bson.NewObjectID(), Username: "lihat", Role: model.RoleViewer}
+	if got := visible(all); !got["Ani"] || !got["Budi"] || !got["Erwin"] || !got["Dodi"] {
+		t.Errorf("viewer of everything: %v", got)
+	}
+	k3 := &model.User{ID: bson.NewObjectID(), Username: "lihatk3", Role: model.RoleViewer, Koloms: []int{3}}
+	if got := visible(k3); !got["Ani"] || got["Budi"] || got["Erwin"] || !got["Dodi"] {
+		t.Errorf("viewer of kolom 3: %v", got)
+	}
+	py := &model.User{ID: bson.NewObjectID(), Username: "lihatp", Role: model.RoleViewer, BipraIDs: []bson.ObjectID{pemuda}}
+	if got := visible(py); got["Ani"] || !got["Budi"] || got["Erwin"] || !got["Dodi"] {
+		t.Errorf("viewer of Pemuda: %v", got)
+	}
+	some := &model.User{ID: bson.NewObjectID(), Username: "lihat3", Role: model.RoleViewer, Koloms: []int{3}, BipraIDs: []bson.ObjectID{pemuda}}
+	if got := visible(some); !got["Ani"] || !got["Budi"] || got["Erwin"] || !got["Dodi"] {
+		t.Errorf("viewer of kolom 3 and Pemuda: %v", got)
+	}
+	// the API refuses changes too (the middleware already does)
+	if got, body := call(h, some, "POST", "/api/families", `{"kolom":3,"name":"Baru"}`); got != 403 {
+		t.Errorf("viewer adds a family: %d %v", got, body)
+	}
+}
+
+// A BIPRA user may have several categories: the services of each, in any kolom.
+func TestBipraUserWithSeveralCategories(t *testing.T) {
+	_, st, h := testAPI(t)
+	ctx := context.Background()
+	if err := st.SeedBipra(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.LinkWorshipTypesToBipra(ctx); err != nil {
+		t.Fatal(err)
+	}
+	types, _ := st.ListWorshipTypes(ctx)
+	typeID := map[string]string{}
+	var cats []bson.ObjectID
+	for _, ty := range types {
+		typeID[ty.Name] = ty.ID.Hex()
+		if ty.Name == "Pemuda" || ty.Name == "Pria Kaum Bapa (PKB)" {
+			cats = append(cats, *ty.BipraID)
+		}
+	}
+	u := &model.User{ID: bson.NewObjectID(), Username: "pp", Role: model.RoleScoped, BipraIDs: cats}
+	service := func(kind string, kolom string) string {
+		return `{"kolom":` + kolom + `,"typeId":"` + typeID[kind] + `","date":"2026-11-11T00:00:00Z","time":"18:00"}`
+	}
+	for _, c := range []struct {
+		what, body string
+		want       int
+	}{
+		{"a Pemuda service in kolom 3", service("Pemuda", "3"), 201},
+		{"a PKB service in kolom 4", service("Pria Kaum Bapa (PKB)", "4"), 201},
+		{"a PKB service for the whole congregation", service("Pria Kaum Bapa (PKB)", "0"), 201},
+		{"a Remaja service", service("Remaja", "3"), 403},
+		{"a kolom service", service("Kolom", "3"), 403},
+	} {
+		if got, body := call(h, u, "POST", "/api/services", c.body); got != c.want {
+			t.Errorf("%s: %d, want %d (%v)", c.what, got, c.want, body)
 		}
 	}
 }

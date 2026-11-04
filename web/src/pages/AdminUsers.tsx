@@ -80,7 +80,7 @@ export default function AdminUsers() {
                       {u.username} {self && <span className="muted">(Anda)</span>}
                     </td>
                     <td>
-                      <Badge tone={u.role === 'admin' ? 'pkb' : u.role === 'kolom' || u.role === 'bipra' ? 'pemuda' : undefined}>
+                      <Badge tone={u.role === 'admin' ? 'pkb' : u.role === 'scoped' ? 'pemuda' : u.role === 'viewer' ? 'amber' : undefined}>
                         {roleLabel(u, categories)}
                       </Badge>
                     </td>
@@ -227,8 +227,8 @@ function TempPassword({ username, password }: { username: string; password: stri
 function AddUser({ onClose, onCreated }: { onClose: () => void; onCreated: (u: User, password: string) => void }) {
   const [username, setUsername] = useState('')
   const [role, setRole] = useState<Role>('user')
-  const [kolom, setKolom] = useState(0)
-  const [bipraId, setBipraId] = useState('')
+  const [koloms, setKoloms] = useState<number[]>([])
+  const [bipraIds, setBipraIds] = useState<string[]>([])
   const [password, setPassword] = useState(generatePassword)
   return (
     <Modal title="Tambah Pengguna" onClose={onClose}>
@@ -237,13 +237,13 @@ function AddUser({ onClose, onCreated }: { onClose: () => void; onCreated: (u: U
         submitLabel="Tambah"
         onSubmit={async () => {
           requireValid(password, username)
+          requireScope(role, koloms, bipraIds)
           onCreated(
             await usersApi.create({
               username,
               password,
               role,
-              kolom: role === 'kolom' ? kolom : undefined,
-              bipraId: role === 'bipra' ? bipraId : undefined,
+              ...(role === 'scoped' || role === 'viewer' ? { koloms, bipraIds } : {}),
             }),
             password,
           )
@@ -252,7 +252,14 @@ function AddUser({ onClose, onCreated }: { onClose: () => void; onCreated: (u: U
         <Field label="Username">
           <input autoCapitalize="none" required minLength={3} maxLength={32} value={username} onChange={(e) => setUsername(e.target.value)} />
         </Field>
-        <RoleFields role={role} kolom={kolom} bipraId={bipraId} onRole={setRole} onKolom={setKolom} onBipra={setBipraId} />
+        <RoleFields
+          role={role}
+          koloms={koloms}
+          bipraIds={bipraIds}
+          onRole={setRole}
+          onKoloms={setKoloms}
+          onBipras={setBipraIds}
+        />
         <Field label="Password sementara" wide>
           <PasswordInput value={password} username={username} onChange={setPassword} />
         </Field>
@@ -275,18 +282,18 @@ function EditUser({
 }) {
   const [username, setUsername] = useState(user.username)
   const [role, setRole] = useState<Role>(user.role)
-  const [kolom, setKolom] = useState(user.kolom ?? 0)
-  const [bipraId, setBipraId] = useState(user.bipraId ?? '')
+  const [koloms, setKoloms] = useState<number[]>(user.koloms ?? [])
+  const [bipraIds, setBipraIds] = useState<string[]>(user.bipraIds ?? [])
   return (
     <Modal title="Ubah Pengguna" onClose={onClose}>
       <FormShell
         onCancel={onClose}
         onSubmit={async () => {
+          requireScope(role, koloms, bipraIds)
           await usersApi.update(user.id, {
             username,
             role,
-            kolom: role === 'kolom' ? kolom : undefined,
-            bipraId: role === 'bipra' ? bipraId : undefined,
+            ...(role === 'scoped' || role === 'viewer' ? { koloms, bipraIds } : {}),
           })
           await onSaved()
           onClose()
@@ -297,12 +304,12 @@ function EditUser({
         </Field>
         <RoleFields
           role={role}
-          kolom={kolom}
-          bipraId={bipraId}
+          koloms={koloms}
+          bipraIds={bipraIds}
           disabled={self}
           onRole={setRole}
-          onKolom={setKolom}
-          onBipra={setBipraId}
+          onKoloms={setKoloms}
+          onBipras={setBipraIds}
         />
         {self && <p className="wide muted small">Role akun sendiri tidak dapat diubah.</p>}
       </FormShell>
@@ -310,70 +317,95 @@ function EditUser({
   )
 }
 
-/** Role, and what a limited role manages (required): a kolom, or a BIPRA category. */
+function requireScope(role: Role, koloms: number[], bipraIds: string[]) {
+  if (role === 'scoped' && !koloms.length && !bipraIds.length)
+    throw new Error('Pilih minimal satu kolom atau kategori BIPRA yang dikelola pengguna ini')
+}
+
+/** Adds or removes v from list. */
+function toggle<T>(list: T[], v: T, on: boolean) {
+  return on ? (list.includes(v) ? list : [...list, v]) : list.filter((x) => x !== v)
+}
+
+/**
+ * Role, and the koloms and/or BIPRA categories a scoped user manages
+ * (at least one) or a viewer sees (none: everything).
+ */
 function RoleFields({
   role,
-  kolom,
-  bipraId,
+  koloms: chosenKoloms,
+  bipraIds,
   disabled,
   onRole,
-  onKolom,
-  onBipra,
+  onKoloms,
+  onBipras,
 }: {
   role: Role
-  kolom: number
-  bipraId: string
+  koloms: number[]
+  bipraIds: string[]
   disabled?: boolean
   onRole: (r: Role) => void
-  onKolom: (k: number) => void
-  onBipra: (id: string) => void
+  onKoloms: (k: number[]) => void
+  onBipras: (ids: string[]) => void
 }) {
   const { koloms, categories } = useData()
+  const verb = role === 'viewer' ? 'dilihat' : 'dikelola'
   return (
     <>
       <Field label="Role" wide>
         <select value={role} disabled={disabled} onChange={(e) => onRole(e.target.value as Role)}>
           <option value="user">Pengguna — kelola data semua kolom</option>
-          <option value="kolom">Pengguna – kelola data kolom — hanya satu kolom</option>
-          <option value="bipra">Pengguna – kelola data BIPRA — jadwal ibadah satu kategori</option>
+          <option value="scoped">Pengguna – kelola kolom/BIPRA — kolom dan/atau kategori BIPRA yang dipilih</option>
+          <option value="viewer">Pengguna – hanya lihat — tidak dapat mengubah data</option>
           <option value="admin">Admin — juga kelola pengguna</option>
         </select>
       </Field>
-      {role === 'kolom' && (
-        <Field label="Kolom yang dikelola" wide>
-          <select required disabled={disabled} value={kolom || ''} onChange={(e) => onKolom(Number(e.target.value))}>
-            <option value="">— pilih kolom —</option>
+      {(role === 'scoped' || role === 'viewer') && (
+        <>
+          <fieldset className="wide check-group" disabled={disabled}>
+            <legend>Kolom yang {verb} (boleh lebih dari satu)</legend>
             {koloms.map((k) => (
-              <option key={k.id} value={k.number}>
+              <label key={k.id} className="check">
+                <input
+                  type="checkbox"
+                  checked={chosenKoloms.includes(k.number)}
+                  onChange={(e) => onKoloms(toggle(chosenKoloms, k.number, e.target.checked).toSorted((a, b) => a - b))}
+                />
                 Kolom {k.number}
-              </option>
+              </label>
             ))}
-          </select>
-        </Field>
-      )}
-      {role === 'bipra' && (
-        <Field label="Kategori BIPRA yang dikelola" wide>
-          <select required disabled={disabled} value={bipraId} onChange={(e) => onBipra(e.target.value)}>
-            <option value="">— pilih kategori —</option>
+          </fieldset>
+          <fieldset className="wide check-group" disabled={disabled}>
+            <legend>Kategori BIPRA yang {verb} (boleh lebih dari satu)</legend>
             {categories.map((c) => (
-              <option key={c.id} value={c.id}>
+              <label key={c.id} className="check">
+                <input
+                  type="checkbox"
+                  checked={bipraIds.includes(c.id)}
+                  onChange={(e) => onBipras(toggle(bipraIds, c.id, e.target.checked))}
+                />
                 {c.name}
-              </option>
+              </label>
             ))}
-          </select>
-        </Field>
+          </fieldset>
+        </>
       )}
-      {role === 'bipra' && (
+      {role === 'viewer' && (
         <p className="wide muted small">
-          Hanya dapat menambah, mengubah dan menghapus jadwal ibadah jenis yang terhubung ke kategori ini (lihat Jenis
-          Ibadah); kolom boleh dikosongkan. Beranda, Daftar HUT Jemaat dan Daftar Anggota Jemaat hanya menampilkan
-          anggota kategori ini; halaman keluarga, HUT pernikahan dan Kategorial BIPRA disembunyikan.
+          Hanya dapat melihat data, tidak dapat menambah, mengubah atau menghapus apa pun (kecuali username, password dan
+          passkey akunnya sendiri). <b>Tanpa pilihan:</b> melihat data seluruh jemaat. <b>Kolom:</b> semua data kolom
+          tersebut, termasuk BIPRA-nya. <b>Kategori BIPRA:</b> anggota dan jadwal ibadah kategori tersebut di semua
+          kolom. Keduanya boleh dipilih bersama; pemberitahuan mengikuti pilihan ini.
         </p>
       )}
-      {role === 'kolom' && (
+      {role === 'scoped' && (
         <p className="wide muted small">
-          Hanya dapat menambah, mengubah dan menghapus keluarga, anggota dan jadwal ibadah kolom ini, dan hanya melihat
-          data pribadi kolom ini. Kolom lain tampil seperti untuk pengunjung.
+          Pilih minimal satu kolom atau kategori BIPRA; keduanya boleh dipilih bersama. <b>Kolom:</b> dapat menambah,
+          mengubah dan menghapus keluarga, anggota dan semua jadwal ibadah kolom tersebut (termasuk jadwal BIPRA), dan
+          melihat data pribadinya. <b>Kategori BIPRA:</b> dapat mengelola jadwal ibadah jenis yang terhubung ke kategori
+          tersebut di semua kolom (atau untuk semua kolom), dan melihat data pribadi anggotanya di semua kolom.
+          Pemberitahuan (jadwal dan ulang tahun) mengikuti pilihan ini. Tanpa kolom, halaman keluarga, HUT pernikahan
+          dan Kategorial BIPRA disembunyikan.
         </p>
       )}
     </>

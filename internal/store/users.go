@@ -30,6 +30,40 @@ func (s *Store) ensureAuthIndexes(ctx context.Context) error {
 
 // ---- users ----
 
+// MigrateUserScopes moves the old one-kolom ("kolom") and one-category
+// ("bipra") users to the scoped role with a list of one. Idempotent.
+func (s *Store) MigrateUserScopes(ctx context.Context) error {
+	var old []struct {
+		ID      bson.ObjectID  `bson:"_id"`
+		Role    string         `bson:"role"`
+		Kolom   int            `bson:"kolom"`
+		BipraID *bson.ObjectID `bson:"bipraId"`
+	}
+	cur, err := s.users.Find(ctx, bson.D{{Key: "role", Value: bson.D{{Key: "$in", Value: bson.A{model.LegacyRoleKolom, model.LegacyRoleBipra}}}}})
+	if err != nil {
+		return err
+	}
+	if err := cur.All(ctx, &old); err != nil {
+		return err
+	}
+	for _, u := range old {
+		var koloms []int
+		var bipras []bson.ObjectID
+		if u.Role == model.LegacyRoleKolom && u.Kolom > 0 {
+			koloms = []int{u.Kolom}
+		}
+		if u.Role == model.LegacyRoleBipra && u.BipraID != nil {
+			bipras = []bson.ObjectID{*u.BipraID}
+		}
+		// without either the account could change nothing: a regular user's
+		// rights would be more than it had, so it keeps an empty scope
+		if _, err := s.SetRole(ctx, u.ID, model.RoleScoped, koloms, bipras); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Store) CountUsers(ctx context.Context, filter bson.D) (int64, error) {
 	if filter == nil {
 		filter = bson.D{}
@@ -173,24 +207,22 @@ func (s *Store) SetUsername(ctx context.Context, id bson.ObjectID, username stri
 // SetRole changes a role. Demoting an admin is undone (ErrLastAdmin) if it
 // would leave no admin — checked after the write, so two admins demoting each
 // other at the same moment cannot both succeed.
-func (s *Store) SetRole(ctx context.Context, id bson.ObjectID, role string, kolom int, bipra *bson.ObjectID) (*model.User, error) {
-	// only kolom users have a kolom, only "kelola data BIPRA" users a category
+func (s *Store) SetRole(ctx context.Context, id bson.ObjectID, role string, koloms []int, bipras []bson.ObjectID) (*model.User, error) {
+	// only scoped users and viewers have koloms and categories (the old
+	// one-kolom and one-category fields go too)
 	fields := bson.D{{Key: "role", Value: role}, {Key: "updatedAt", Value: time.Now().UTC()}}
-	unset := bson.D{}
-	if role == model.RoleKolom {
-		fields = append(fields, bson.E{Key: "kolom", Value: kolom})
+	unset := bson.D{{Key: "kolom", Value: ""}, {Key: "bipraId", Value: ""}}
+	if model.HasScope(role) && len(koloms) > 0 {
+		fields = append(fields, bson.E{Key: "koloms", Value: koloms})
 	} else {
-		unset = append(unset, bson.E{Key: "kolom", Value: ""})
+		unset = append(unset, bson.E{Key: "koloms", Value: ""})
 	}
-	if role == model.RoleBipra && bipra != nil {
-		fields = append(fields, bson.E{Key: "bipraId", Value: *bipra})
+	if model.HasScope(role) && len(bipras) > 0 {
+		fields = append(fields, bson.E{Key: "bipraIds", Value: bipras})
 	} else {
-		unset = append(unset, bson.E{Key: "bipraId", Value: ""})
+		unset = append(unset, bson.E{Key: "bipraIds", Value: ""})
 	}
-	update := bson.D{{Key: "$set", Value: fields}}
-	if len(unset) > 0 {
-		update = append(update, bson.E{Key: "$unset", Value: unset})
-	}
+	update := bson.D{{Key: "$set", Value: fields}, {Key: "$unset", Value: unset}}
 	u, err := s.modifyUser(ctx, byID(id), update)
 	if err != nil || role == model.RoleAdmin {
 		return u, err

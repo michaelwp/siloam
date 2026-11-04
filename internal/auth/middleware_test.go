@@ -120,7 +120,7 @@ func TestAdminPagesNeedTheAdminRole(t *testing.T) {
 func TestKolomUserCannotChangeKolomsOrJenisIbadah(t *testing.T) {
 	svc, st := testService(t)
 	h := svc.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
-	u := &model.User{Username: "kolom3", Role: model.RoleKolom, Kolom: 3, WebAuthnID: []byte("kolom3")}
+	u := &model.User{Username: "kolom3", Role: model.RoleScoped, Koloms: []int{3}, WebAuthnID: []byte("kolom3")}
 	if err := st.CreateUser(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
@@ -148,6 +148,75 @@ func TestKolomUserCannotChangeKolomsOrJenisIbadah(t *testing.T) {
 		h.ServeHTTP(rec, r)
 		if rec.Code != c.want {
 			t.Errorf("%s %s: %d, want %d", c.method, c.path, rec.Code, c.want)
+		}
+	}
+}
+
+func TestViewerChangesOnlyTheirAccount(t *testing.T) {
+	svc, st := testService(t)
+	h := svc.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	u := &model.User{Username: "lihat", Role: model.RoleViewer, WebAuthnID: []byte("lihat")}
+	if err := st.CreateUser(context.Background(), u); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if err := st.CreateSession(context.Background(), model.Session{ID: hashToken("v"), UserID: u.ID, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		method, path string
+		want         int
+	}{
+		{http.MethodGet, "/api/families", http.StatusNoContent},
+		{http.MethodPost, "/api/families", http.StatusForbidden},
+		{http.MethodPut, "/api/members/abc", http.StatusForbidden},
+		{http.MethodDelete, "/api/services/abc", http.StatusForbidden},
+		{http.MethodPost, "/api/koloms", http.StatusForbidden},
+		{http.MethodPut, "/api/auth/passkeys/abc", http.StatusNoContent},
+		{http.MethodPost, "/api/auth/change-credentials", http.StatusNoContent},
+	} {
+		r := httptest.NewRequest(c.method, c.path, nil)
+		r.Header.Set("Origin", "http://example.com")
+		r.Host = "example.com"
+		r.AddCookie(&http.Cookie{Name: sessionCookie, Value: "v"})
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, r)
+		if rec.Code != c.want {
+			t.Errorf("%s %s: %d, want %d", c.method, c.path, rec.Code, c.want)
+		}
+	}
+}
+
+// A user manages (or sees) koloms and/or BIPRA categories.
+func TestRoleScope(t *testing.T) {
+	svc, st := testService(t)
+	ctx := context.Background()
+	if err := st.SeedBipra(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.CreateKolomIfMissing(ctx, 3); err != nil {
+		t.Fatal(err)
+	}
+	rules, _ := st.BipraRules(ctx)
+	cat := rules[0].ID.Hex()
+	r := httptest.NewRequest(http.MethodPost, "/api/users", nil)
+	for _, c := range []struct {
+		what   string
+		role   string
+		koloms []int
+		bipras []string
+		ok     bool
+	}{
+		{"kolom user", model.RoleScoped, []int{3}, nil, true},
+		{"BIPRA user", model.RoleScoped, nil, []string{cat}, true},
+		{"both", model.RoleScoped, []int{3}, []string{cat}, true},
+		{"neither", model.RoleScoped, nil, nil, false},
+		{"viewer of both", model.RoleViewer, []int{3}, []string{cat}, true},
+		{"a kolom that does not exist", model.RoleScoped, []int{99}, nil, false},
+		{"viewer of everything", model.RoleViewer, nil, nil, true},
+	} {
+		if _, _, err := svc.roleScope(r, c.role, c.koloms, c.bipras); (err == nil) != c.ok {
+			t.Errorf("%s: %v", c.what, err)
 		}
 	}
 }

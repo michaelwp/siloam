@@ -7,22 +7,24 @@ import { ConfirmDelete, Field, FormShell, Modal } from './ui'
 
 /**
  * Kolom picker; forms ask for it first and keep the other fields off until
- * chosen. It offers only the koloms the user may change (a "kelola data
- * kolom" user: their own).
+ * chosen. It offers only the koloms the user may change (a scoped user: their
+ * own), or every kolom with anyKolom.
  */
 export function KolomField({
   value,
   onChange,
   allowAll,
+  anyKolom,
 }: {
   value: number
   onChange: (k: number) => void
   /** offer "Semua kolom" (0): a service of a jenis linked to a BIPRA category */
   allowAll?: boolean
+  /** offer every kolom: a service of a jenis linked to one of a scoped user's categories */
+  anyKolom?: boolean
 }) {
   const { user } = useAuth()
-  // a "kelola data BIPRA" user's services may be in any kolom
-  const koloms = useData().koloms.filter((k) => user?.role === 'bipra' || managesKolom(user, k.number))
+  const koloms = useData().koloms.filter((k) => anyKolom || managesKolom(user, k.number))
   return (
     <Field label="Kolom" wide>
       <select required value={allowAll ? String(value) : value || ''} onChange={(e) => onChange(Number(e.target.value))}>

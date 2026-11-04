@@ -8,10 +8,18 @@ export type Data = {
   /** the kolom being viewed; null = all koloms */
   kolom: number | null
   setKolom: (k: number | null) => void
+  /** the koloms the kolom picker offers (a limited user: see DataProvider) */
+  kolomChoices: Kolom[]
+  /** whether "Semua Kolom" may be chosen */
+  allKolomsAllowed: boolean
   /** the BIPRA category being viewed (its members, their families and its services), or null; with a kolom, both apply */
   bipraFilter: BipraCategory | null
   /** choose a category by id (null: all) */
   setBipra: (id: string | null) => void
+  /** the categories the BIPRA picker offers (a limited user outside their koloms: theirs) */
+  bipraChoices: BipraCategory[]
+  /** whether bipraChoices are only the user's own categories */
+  bipraLimited: boolean
   /** "Semua Kolom", "Kolom 11", "Pemuda" or "Kolom 11 · Pemuda" */
   filterLabel: string
   /** families and members of the viewed kolom (all when kolom is null) */

@@ -5,7 +5,7 @@ import { MONTHS, parts } from './format'
 export type Schedule = {
   /** services of the viewed kolom, and those of the whole congregation (kolom 0); all when no kolom is chosen; narrowed by the BIPRA category filter */
   services: Service[]
-  /** services for Beranda and the daily notice: for a "kelola data BIPRA" user only their category's */
+  /** services for Beranda and the daily notice: for a BIPRA-only user only their categories' */
   homeServices: Service[]
   allServices: Service[]
   types: WorshipType[]

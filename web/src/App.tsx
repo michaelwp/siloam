@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { BrowserRouter, Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { versionApi } from './api'
-import { managesAll, roleLabel, useAuth } from './auth'
+import { bipraOnly, limited, managesAll, roleLabel, useAuth } from './auth'
 import { AuthProvider } from './AuthProvider'
 import { DailyNotice } from './components/DailyNotice'
 import { ThemeToggle } from './components/ThemeToggle'
@@ -81,7 +81,7 @@ function RequireUser({ children, admin, all }: { children: ReactNode; admin?: bo
   const location = useLocation()
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
   if (admin && user.role !== 'admin') return <Navigate to="/" replace />
-  // koloms and jenis ibadah: not for a "kelola data kolom" user
+  // koloms and jenis ibadah: not for a scoped user
   if (all && !managesAll(user)) return <Navigate to="/" replace />
   return <>{children}</>
 }
@@ -105,8 +105,8 @@ function Shell() {
         </Link>
         <KolomPicker />
         <nav>
-          {/* a "kelola data BIPRA" user sees only their category's members: no family pages */}
-          {PAGES.filter((p) => !(p.noBipra && user?.role === 'bipra')).map((p) => (
+          {/* a BIPRA-only user sees only their categories' members: no family pages */}
+          {PAGES.filter((p) => !(p.noBipra && bipraOnly(user))).map((p) => (
             <NavLink key={p.path} to={p.path} end={p.path === '/'}>
               {p.label}
             </NavLink>
@@ -172,7 +172,7 @@ function Shell() {
             <Route
               key={p.path}
               path={p.path}
-              element={p.noBipra && user?.role === 'bipra' ? <Navigate to="/" replace /> : p.element}
+              element={p.noBipra && bipraOnly(user) ? <Navigate to="/" replace /> : p.element}
             />
           ))}
           <Route
@@ -243,22 +243,22 @@ function Shell() {
  * and a BIPRA category ("Semua BIPRA"), picked separately so both can apply.
  */
 function KolomPicker() {
-  const { koloms, categories, kolom, setKolom, bipraFilter, setBipra } = useData()
+  const { kolomChoices, allKolomsAllowed, bipraChoices, bipraLimited, kolom, setKolom, bipraFilter, setBipra } = useData()
   const { user } = useAuth()
-  const own = user?.role === 'bipra' ? categories.find((c) => c.id === user.bipraId) : undefined
+  // a limited user's "all": their koloms plus their categories' members everywhere
+  const allLabel = limited(user) ? 'Semua Data Saya' : kolomLabel(null)
   return (
     <div className="data-pickers">
-      {/* a "kelola data kolom" user sees only their kolom: no picker */}
-      {user?.role === 'kolom' ? (
-        <p className="kolom-picker kolom-fixed" title="Anda mengelola data kolom ini">
-          {kolomLabel(user.kolom ?? null)}
+      {kolomChoices.length === 1 && !allKolomsAllowed ? (
+        <p className="kolom-picker kolom-fixed" title="Kolom Anda">
+          {kolomLabel(kolomChoices[0].number)}
         </p>
       ) : (
         <label className="kolom-picker">
           <span className="sr-only">Kolom</span>
           <select value={kolom ?? ''} onChange={(e) => setKolom(e.target.value ? Number(e.target.value) : null)}>
-            <option value="">{kolomLabel(null)}</option>
-            {koloms.map((k) => (
+            {allKolomsAllowed && <option value="">{allLabel}</option>}
+            {kolomChoices.map((k) => (
               <option key={k.id} value={k.number}>
                 {kolomLabel(k.number)}
               </option>
@@ -266,18 +266,17 @@ function KolomPicker() {
           </select>
         </label>
       )}
-      {/* a "kelola data BIPRA" user sees only their category: no picker */}
-      {own ? (
-        <p className="kolom-picker kolom-fixed" title="Anda mengelola data kategori ini">
-          {own.name}
+      {bipraLimited && bipraChoices.length === 1 ? (
+        <p className="kolom-picker kolom-fixed" title="Kategori BIPRA Anda">
+          {bipraChoices[0].name}
         </p>
       ) : (
-        categories.length > 0 && (
+        bipraChoices.length > 0 && (
           <label className="kolom-picker">
             <span className="sr-only">Kategori BIPRA</span>
             <select value={bipraFilter?.id ?? ''} onChange={(e) => setBipra(e.target.value || null)}>
-              <option value="">Semua BIPRA</option>
-              {categories.map((c) => (
+              <option value="">{bipraLimited ? 'Semua BIPRA Saya' : 'Semua BIPRA'}</option>
+              {bipraChoices.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>

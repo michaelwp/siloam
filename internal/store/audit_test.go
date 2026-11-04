@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -47,8 +48,8 @@ func TestKolomUsersRole(t *testing.T) {
 	ctx := context.Background()
 	newUser(t, s, "admin", model.RoleAdmin)
 	u := newUser(t, s, "budi", model.RoleUser)
-	got, err := s.SetRole(ctx, u.ID, model.RoleKolom, 3, nil)
-	if err != nil || got.Role != model.RoleKolom || got.Kolom != 3 {
+	got, err := s.SetRole(ctx, u.ID, model.RoleScoped, []int{3, 5}, nil)
+	if err != nil || got.Role != model.RoleScoped || !slices.Equal(got.Koloms, []int{3, 5}) {
 		t.Fatalf("to kolom user: %+v %v", got, err)
 	}
 	ks, err := s.ListKoloms(ctx)
@@ -64,10 +65,42 @@ func TestKolomUsersRole(t *testing.T) {
 	if err := s.DeleteKolom(ctx, k3.ID); !errors.Is(err, ErrKolomHasUsers) {
 		t.Fatalf("delete an assigned kolom: %v", err)
 	}
-	if got, err = s.SetRole(ctx, u.ID, model.RoleUser, 0, nil); err != nil || got.Kolom != 0 {
+	if got, err = s.SetRole(ctx, u.ID, model.RoleUser, nil, nil); err != nil || got.Koloms != nil {
 		t.Fatalf("back to regular user keeps the kolom: %+v %v", got, err)
 	}
 	if err := s.DeleteKolom(ctx, k3.ID); err != nil {
 		t.Fatalf("delete once unassigned: %v", err)
+	}
+}
+
+func TestMigrateUserScopes(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	newUser(t, s, "admin", model.RoleAdmin)
+	k := newUser(t, s, "kolom3", model.LegacyRoleKolom)
+	b := newUser(t, s, "pemuda", model.LegacyRoleBipra)
+	cat := bson.NewObjectID()
+	if _, err := s.users.UpdateByID(ctx, k.ID, bson.D{{Key: "$set", Value: bson.D{{Key: "kolom", Value: 3}}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.users.UpdateByID(ctx, b.ID, bson.D{{Key: "$set", Value: bson.D{{Key: "bipraId", Value: cat}}}}); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 { // idempotent
+		if err := s.MigrateUserScopes(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, _ := s.GetUser(ctx, k.ID); got.Role != model.RoleScoped || !slices.Equal(got.Koloms, []int{3}) || got.BipraIDs != nil {
+		t.Errorf("kolom user: %+v", got)
+	}
+	if got, _ := s.GetUser(ctx, b.ID); got.Role != model.RoleScoped || !slices.Equal(got.BipraIDs, []bson.ObjectID{cat}) || got.Koloms != nil {
+		t.Errorf("bipra user: %+v", got)
+	}
+	if n, _ := s.users.CountDocuments(ctx, bson.D{{Key: "$or", Value: bson.A{
+		bson.D{{Key: "kolom", Value: bson.D{{Key: "$exists", Value: true}}}},
+		bson.D{{Key: "bipraId", Value: bson.D{{Key: "$exists", Value: true}}}},
+	}}}); n != 0 {
+		t.Errorf("%d users keep the old fields", n)
 	}
 }

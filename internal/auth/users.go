@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
@@ -15,42 +16,51 @@ import (
 
 // Admin-only user management. The middleware has already checked the role.
 
-// roleScope checks a role and what it is limited to: a "kelola data kolom"
-// user needs an existing kolom, a "kelola data BIPRA" user an existing BIPRA
-// category; other roles have neither.
-func (s *Service) roleScope(r *http.Request, role string, kolom int, bipra string) (int, *bson.ObjectID, error) {
+// roleScope checks a role and what it is limited to: koloms and/or BIPRA
+// categories; a scoped user needs at least one, a viewer any number (none:
+// everything), each existing; other roles have neither.
+// The koloms come back sorted and both lists without duplicates.
+func (s *Service) roleScope(r *http.Request, role string, koloms []int, bipras []string) ([]int, []bson.ObjectID, error) {
 	if !model.ValidRole(role) {
-		return 0, nil, errors.New("role tidak valid")
+		return nil, nil, errors.New("role tidak valid")
 	}
-	switch role {
-	case model.RoleKolom:
-		k, err := s.checkKolom(r, kolom)
-		return k, nil, err
-	case model.RoleBipra:
-		id, err := bson.ObjectIDFromHex(bipra)
+	if !model.HasScope(role) {
+		return nil, nil, nil
+	}
+	// a viewer without any sees everything
+	if role == model.RoleScoped && len(koloms) == 0 && len(bipras) == 0 {
+		return nil, nil, errors.New("pilih minimal satu kolom atau kategori BIPRA yang dikelola pengguna ini")
+	}
+	var ks []int
+	for _, k := range koloms {
+		if k <= 0 {
+			return nil, nil, errors.New("kolom tidak valid")
+		}
+		ok, err := s.store.KolomExists(r.Context(), k)
 		if err != nil {
-			return 0, nil, errors.New("pilih kategori BIPRA yang dikelola pengguna ini")
+			return nil, nil, err
+		}
+		if !ok {
+			return nil, nil, fmt.Errorf("kolom %d tidak ada", k)
+		}
+		ks = append(ks, k)
+	}
+	slices.Sort(ks)
+	ks = slices.Compact(ks)
+	var ids []bson.ObjectID
+	for _, v := range bipras {
+		id, err := bson.ObjectIDFromHex(v)
+		if err != nil {
+			return nil, nil, errors.New("kategori BIPRA tidak valid")
 		}
 		if _, err := s.store.BipraCategory(r.Context(), id); err != nil {
-			return 0, nil, errors.New("kategori BIPRA tidak ada")
+			return nil, nil, errors.New("kategori BIPRA tidak ada")
 		}
-		return 0, &id, nil
+		if !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
 	}
-	return 0, nil, nil
-}
-
-func (s *Service) checkKolom(r *http.Request, kolom int) (int, error) {
-	if kolom <= 0 {
-		return 0, errors.New("pilih kolom yang dikelola pengguna ini")
-	}
-	ok, err := s.store.KolomExists(r.Context(), kolom)
-	if err != nil {
-		return 0, err
-	}
-	if !ok {
-		return 0, fmt.Errorf("kolom %d tidak ada", kolom)
-	}
-	return kolom, nil
+	return ks, ids, nil
 }
 
 func (s *Service) listUsers(w http.ResponseWriter, r *http.Request) {
@@ -66,11 +76,11 @@ func (s *Service) listUsers(w http.ResponseWriter, r *http.Request) {
 // on first sign-in.
 func (s *Service) createUser(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-		Role     string `json:"role"`
-		Kolom    int    `json:"kolom"`   // for the "kolom" role
-		BipraID  string `json:"bipraId"` // for the "bipra" role
+		Username string   `json:"username"`
+		Password string   `json:"password"`
+		Role     string   `json:"role"`
+		Koloms   []int    `json:"koloms"`   // for the "scoped" and "viewer" roles
+		BipraIDs []string `json:"bipraIds"` // for the "scoped" and "viewer" roles
 	}
 	if !httpx.Decode(w, r, &in) {
 		return
@@ -87,7 +97,7 @@ func (s *Service) createUser(w http.ResponseWriter, r *http.Request) {
 	if in.Role == "" {
 		in.Role = model.RoleUser
 	}
-	kolom, bipra, err := s.roleScope(r, in.Role, in.Kolom, in.BipraID)
+	koloms, bipras, err := s.roleScope(r, in.Role, in.Koloms, in.BipraIDs)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
@@ -101,8 +111,8 @@ func (s *Service) createUser(w http.ResponseWriter, r *http.Request) {
 		Username:           username,
 		PasswordHash:       hash,
 		Role:               in.Role,
-		Kolom:              kolom,
-		BipraID:            bipra,
+		Koloms:             koloms,
+		BipraIDs:           bipras,
 		MustChangePassword: true,
 		WebAuthnID:         randomBytes(32),
 	}
@@ -127,13 +137,14 @@ func (s *Service) targetUser(w http.ResponseWriter, r *http.Request) (*model.Use
 	return u, true
 }
 
-// updateUser changes username and/or role (and a kolom user's kolom).
+// updateUser changes username and/or role (and a scoped user's koloms and
+// categories).
 func (s *Service) updateUser(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Username string `json:"username"`
-		Role     string `json:"role"`
-		Kolom    int    `json:"kolom"`
-		BipraID  string `json:"bipraId"`
+		Username string   `json:"username"`
+		Role     string   `json:"role"`
+		Koloms   []int    `json:"koloms"`
+		BipraIDs []string `json:"bipraIds"`
 	}
 	if !httpx.Decode(w, r, &in) {
 		return
@@ -156,18 +167,17 @@ func (s *Service) updateUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if in.Role != "" {
-		kolom, bipra, err := s.roleScope(r, in.Role, in.Kolom, in.BipraID)
+		koloms, bipras, err := s.roleScope(r, in.Role, in.Koloms, in.BipraIDs)
 		if err != nil {
 			httpx.WriteError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		sameBipra := (bipra == nil) == (u.BipraID == nil) && (bipra == nil || *bipra == *u.BipraID)
-		if in.Role != u.Role || kolom != u.Kolom || !sameBipra {
+		if in.Role != u.Role || !slices.Equal(koloms, u.Koloms) || !slices.Equal(bipras, u.BipraIDs) {
 			if u.ID == current(r).user.ID {
 				httpx.WriteError(w, http.StatusBadRequest, "tidak dapat mengubah role akun sendiri")
 				return
 			}
-			if u, err = s.store.SetRole(r.Context(), u.ID, in.Role, kolom, bipra); err != nil {
+			if u, err = s.store.SetRole(r.Context(), u.ID, in.Role, koloms, bipras); err != nil {
 				writeUserError(w, err)
 				return
 			}

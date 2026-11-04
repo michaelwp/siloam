@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -111,14 +112,14 @@ func TestBipraLinksAndUsers(t *testing.T) {
 	newUser(t, s, "admin", model.RoleAdmin)
 	u := newUser(t, s, "pemuda", model.RoleUser)
 	pemuda := *pemudaType.BipraID
-	got, err := s.SetRole(ctx, u.ID, model.RoleBipra, 0, &pemuda)
-	if err != nil || got.BipraID == nil || *got.BipraID != pemuda || got.Kolom != 0 {
+	got, err := s.SetRole(ctx, u.ID, model.RoleScoped, nil, []bson.ObjectID{pemuda})
+	if err != nil || !slices.Equal(got.BipraIDs, []bson.ObjectID{pemuda}) || got.Koloms != nil {
 		t.Fatalf("to bipra user: %+v %v", got, err)
 	}
 	if err := s.DeleteBipra(ctx, pemuda); !errors.Is(err, ErrBipraHasUsers) {
 		t.Fatalf("delete an assigned category: %v", err)
 	}
-	if got, err = s.SetRole(ctx, u.ID, model.RoleUser, 0, nil); err != nil || got.BipraID != nil {
+	if got, err = s.SetRole(ctx, u.ID, model.RoleUser, nil, nil); err != nil || got.BipraIDs != nil {
 		t.Fatalf("back to regular user keeps the category: %+v %v", got, err)
 	}
 	if err := s.DeleteBipra(ctx, pemuda); err != nil {

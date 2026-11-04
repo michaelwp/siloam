@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api, type BipraCategory, type DataView, type Family, type Kolom, type Member } from './api'
-import { useAuth } from './auth'
+import { limited, ownBipraIds, ownKoloms, useAuth } from './auth'
 import { DataContext, filterLabel } from './data'
 import { inBipra } from './format'
 
@@ -61,14 +61,17 @@ function DataProvider({
   children,
   expectFull,
   onStale,
-  lockedKolom,
-  bipraId,
+  limit,
 }: {
   children: ReactNode
   expectFull: boolean
   onStale: () => void
-  lockedKolom: number | null // a "kelola data kolom" user sees only their kolom
-  bipraId: string | null // a "kelola data BIPRA" user sees only this category's members
+  /**
+   * a scoped user or viewer limited to some koloms and/or BIPRA categories:
+   * they see their koloms' data plus their categories' members in every kolom
+   * (null: everything)
+   */
+  limit: { koloms: number[]; bipras: string[] } | null
 }) {
   const [state, setState] = useState<State>({ koloms: [], categories: [], families: [], members: [], view: null, loading: true, error: null })
   const [chosenKolom, setChosenKolom] = useState(savedKolom)
@@ -94,37 +97,69 @@ function DataProvider({
     void load()
   }, [load])
 
+  // What a limited user may pick: with categories, every kolom (their
+  // members are everywhere), else their own koloms; "Semua Kolom" (all of
+  // their data) unless that is a single kolom. In one of their koloms every
+  // category may be picked; elsewhere (and in "Semua Data Saya") only their
+  // own categories.
+  const kolomChoices = useMemo(
+    () => (!limit || limit.bipras.length ? state.koloms : state.koloms.filter((k) => limit.koloms.includes(k.number))),
+    [limit, state.koloms],
+  )
+  const allKolomsAllowed = !limit || limit.bipras.length > 0 || limit.koloms.length !== 1
+  const ownCats = useMemo(
+    () => (limit ? state.categories.filter((c) => limit.bipras.includes(c.id)) : []),
+    [limit, state.categories],
+  )
   // the kolom and the category are picked separately, so both can narrow the data
   const setKolom = useCallback(
     (k: number | null) => {
-      if (lockedKolom !== null) return // a kolom user cannot switch
+      if (k === null ? !allKolomsAllowed : !kolomChoices.some((c) => c.number === k)) return
       save(KOLOM_KEY, k === null ? '' : `k:${k}`)
       setChosenKolom(k)
     },
-    [lockedKolom],
+    [allKolomsAllowed, kolomChoices],
   )
+
+  // a remembered kolom or category that no longer exists (or is not offered)
+  // falls back to all, or to a user's single kolom
+  const kolom =
+    chosenKolom !== null && kolomChoices.some((k) => k.number === chosenKolom)
+      ? chosenKolom
+      : allKolomsAllowed
+        ? null
+        : (kolomChoices[0]?.number ?? null)
+  const bipraLimited = !!limit && limit.bipras.length > 0 && !(kolom !== null && limit.koloms.includes(kolom))
+  const bipraChoices = bipraLimited ? ownCats : state.categories
   const setBipra = useCallback(
     (id: string | null) => {
-      if (bipraId) return // a BIPRA user has their own
+      if (id && !bipraChoices.some((c) => c.id === id)) return
       save(BIPRA_KEY, id ?? '')
       setChosenBipra(id ?? '')
     },
-    [bipraId],
+    [bipraChoices],
   )
+  // a category not offered for this kolom is set aside (it applies again in a kolom that offers it)
+  const bipraFilter = chosenBipra ? (bipraChoices.find((c) => c.id === chosenBipra) ?? null) : null
 
-  // a remembered kolom or category that no longer exists falls back to all
-  const kolom = lockedKolom ?? (chosenKolom !== null && state.koloms.some((k) => k.number === chosenKolom) ? chosenKolom : null)
-  // a BIPRA category chosen in the filter (a BIPRA user has their own: see scope)
-  const bipraFilter = !bipraId && chosenBipra ? (state.categories.find((c) => c.id === chosenBipra) ?? null) : null
-  // only one category's members, and the families they are in: a "kelola data
-  // BIPRA" user's own, or the category chosen in the filter
-  const scope = state.categories.find((c) => c.id === bipraId) ?? bipraFilter ?? undefined
+  // a limited user's data: their koloms' families and members, plus their
+  // categories' members (and the families they are in) in every kolom; then
+  // the category chosen in the filter narrows it
   const scoped = useMemo(() => {
-    if (!bipraId && !scope) return { families: state.families, members: state.members }
-    const members = scope ? state.members.filter((m) => inBipra(m, scope)) : []
-    const ids = new Set(members.map((m) => m.familyId))
-    return { families: state.families.filter((f) => ids.has(f.id)), members }
-  }, [state.families, state.members, bipraId, scope])
+    let members = state.members
+    let families = state.families
+    if (limit) {
+      members = members.filter((m) => limit.koloms.includes(m.kolom) || ownCats.some((c) => inBipra(m, c)))
+      const ids = new Set(members.map((m) => m.familyId))
+      families = families.filter((f) => limit.koloms.includes(f.kolom) || ids.has(f.id))
+    }
+    if (bipraFilter) {
+      members = members.filter((m) => inBipra(m, bipraFilter))
+      const ids = new Set(members.map((m) => m.familyId))
+      families = families.filter((f) => ids.has(f.id))
+    }
+    return { families, members }
+  }, [state.families, state.members, limit, ownCats, bipraFilter])
   const families = useMemo(
     () => (kolom === null ? scoped.families : scoped.families.filter((f) => f.kolom === kolom)),
     [scoped.families, kolom],
@@ -141,8 +176,12 @@ function DataProvider({
         categories: state.categories,
         kolom,
         setKolom,
+        kolomChoices,
+        allKolomsAllowed,
         bipraFilter,
         setBipra,
+        bipraChoices,
+        bipraLimited,
         filterLabel: filterLabel(kolom, bipraFilter),
         families,
         members,
@@ -162,17 +201,19 @@ function DataProvider({
 /** Provides data for the current user; waits until the sign-in state is known. */
 export function DataScope({ children }: { children: ReactNode }) {
   const { user, loading, refresh } = useAuth()
+  const ks = ownKoloms(user).join(',')
+  const bs = ownBipraIds(user).join(',')
+  const isLimited = limited(user)
+  // stable while the user's koloms and categories stay the same
+  const limit = useMemo(
+    () => (isLimited ? { koloms: ks ? ks.split(',').map(Number) : [], bipras: bs ? bs.split(',') : [] } : null),
+    [isLimited, ks, bs],
+  )
   if (loading) return <p className="status splash">Memuat…</p>
   const full = !!user && !user.mustChangePassword
   const key = user ? `${user.id}:${full ? 'full' : 'limited'}` : 'visitor'
   return (
-    <DataProvider
-      key={key}
-      expectFull={full}
-      onStale={refresh}
-      lockedKolom={user?.role === 'kolom' ? (user.kolom ?? null) : null}
-      bipraId={user?.role === 'bipra' ? (user.bipraId ?? null) : null}
-    >
+    <DataProvider key={key} expectFull={full} onStale={refresh} limit={limit}>
       {children}
     </DataProvider>
   )

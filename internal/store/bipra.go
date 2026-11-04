@@ -15,7 +15,7 @@ import (
 var (
 	// ErrBipraExists: another category already has this code (case ignored).
 	ErrBipraExists = errors.New("bipra category key already exists")
-	// ErrBipraHasUsers: a "kelola data BIPRA" user is assigned to the category.
+	// ErrBipraHasUsers: a scoped user or viewer is assigned to the category.
 	ErrBipraHasUsers = errors.New("bipra category has users assigned")
 )
 
@@ -125,7 +125,7 @@ func (s *Store) UpdateBipra(ctx context.Context, c model.BipraCategory) (model.B
 // DeleteBipra removes a category no user is assigned to; jenis ibadah
 // linked to it lose the link.
 func (s *Store) DeleteBipra(ctx context.Context, id bson.ObjectID) error {
-	n, err := s.users.CountDocuments(ctx, bson.D{{Key: "role", Value: model.RoleBipra}, {Key: "bipraId", Value: id}})
+	n, err := s.users.CountDocuments(ctx, bson.D{{Key: "role", Value: bson.D{{Key: "$in", Value: bson.A{model.RoleScoped, model.RoleViewer}}}}, {Key: "bipraIds", Value: id}})
 	if err != nil {
 		return err
 	}

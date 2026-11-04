@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { scheduleApi, type Service, type WorshipType } from './api'
-import { useAuth } from './auth'
+import { limited, ownBipraIds, ownKoloms, useAuth } from './auth'
 import { useData } from './data'
 import { ScheduleContext } from './schedule'
 
@@ -32,21 +32,31 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
     void reload()
   }, [reload])
 
+  // a limited user: their koloms' services (and the whole congregation's),
+  // plus their categories' services in every kolom
+  const ownKs = limited(user) ? ownKoloms(user).join(',') : ''
+  const ownBs = limited(user) ? ownBipraIds(user).join(',') : ''
+  const isLimited = limited(user)
   const services = useMemo(() => {
+    const linkedTo = (ids: string[]) =>
+      new Set(state.types.filter((t) => t.bipraId && ids.includes(t.bipraId)).map((t) => t.id))
+    let list = state.services
+    if (isLimited) {
+      const ks = ownKs ? ownKs.split(',').map(Number) : []
+      const own = linkedTo(ownBs ? ownBs.split(',') : [])
+      list = list.filter((s) => ks.includes(s.kolom) || (ks.length > 0 && s.kolom === 0) || own.has(s.typeId))
+    }
     // a kolom: its services and the whole congregation's (kolom 0)
-    const inKolom = kolom === null ? state.services : state.services.filter((s) => s.kolom === kolom || s.kolom === 0)
-    if (!bipraFilter) return inKolom
-    // a BIPRA category: of those, the services of the jenis linked to it
-    const linked = new Set(state.types.filter((t) => t.bipraId === bipraFilter.id).map((t) => t.id))
-    return inKolom.filter((s) => linked.has(s.typeId))
-  }, [state.services, state.types, kolom, bipraFilter])
-  // a "kelola data BIPRA" user's home page: their category's jenis only
-  const bipraId = user?.role === 'bipra' ? user.bipraId : undefined
-  const homeServices = useMemo(() => {
-    if (!bipraId) return services
-    const own = new Set(state.types.filter((t) => t.bipraId === bipraId).map((t) => t.id))
-    return services.filter((s) => own.has(s.typeId))
-  }, [services, state.types, bipraId])
+    if (kolom !== null) list = list.filter((s) => s.kolom === kolom || s.kolom === 0)
+    // a BIPRA category: the services of the jenis linked to it
+    if (bipraFilter) {
+      const linked = linkedTo([bipraFilter.id])
+      list = list.filter((s) => linked.has(s.typeId))
+    }
+    return list
+  }, [state.services, state.types, kolom, bipraFilter, isLimited, ownKs, ownBs])
+  // Beranda and the daily notice show the same
+  const homeServices = services
 
   return (
     <ScheduleContext.Provider value={{ ...state, services, homeServices, allServices: state.services, reload }}>

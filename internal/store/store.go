@@ -107,6 +107,10 @@ func Open(ctx context.Context, uri, dbName string) (*Store, error) {
 		_ = s.Close(ctx)
 		return nil, err
 	}
+	if err := s.MigrateUserScopes(ctx); err != nil {
+		_ = s.Close(ctx)
+		return nil, err
+	}
 	if err := s.ensureCeremonyIndexes(ctx); err != nil {
 		_ = s.Close(ctx)
 		return nil, err

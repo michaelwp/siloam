@@ -675,6 +675,26 @@ tr.highlight {
 .check input {
   min-height: 0;
 }
+/* a list of checkboxes (e.g. the koloms a user manages), wrapping in columns */
+.check-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.check-group:disabled .check {
+  opacity: 0.5;
+}
+.check-group legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
 
 /* ---- sidebar footer / theme toggle ---- */
 .sidebar {
@@ -2189,7 +2209,7 @@ textarea {
   margin: 16px 0;
 }
 
-/* a "kelola data kolom" user: their kolom, fixed */
+/* a scoped user with one kolom (or one category): fixed */
 .kolom-fixed {
   margin: 0 0 12px;
   padding: 9px 14px;

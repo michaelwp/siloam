@@ -2,6 +2,8 @@ package model
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -10,36 +12,48 @@ import (
 const (
 	RoleAdmin = "admin"
 	RoleUser  = "user"
-	// RoleKolom ("Pengguna – kelola data kolom") manages the data of one
-	// kolom (User.Kolom) only: its families, members and services.
-	RoleKolom = "kolom"
-	// RoleBipra ("Pengguna – kelola data BIPRA") manages the services of one
-	// BIPRA category (User.BipraID): those whose jenis ibadah is linked to it.
-	RoleBipra = "bipra"
+	// RoleScoped ("Pengguna – kelola kolom/BIPRA") manages some koloms
+	// (User.Koloms: their families, members and every service there) and/or
+	// some BIPRA categories (User.BipraIDs: the services whose jenis ibadah is
+	// linked to one of them, in every kolom). At least one of either.
+	RoleScoped = "scoped"
+	// RoleViewer ("Pengunjung terdaftar – hanya lihat") changes no jemaat
+	// data. Without koloms or categories they see the private data of the
+	// whole congregation; with some (User.Koloms, User.BipraIDs), only of
+	// those koloms and of those categories' members.
+	RoleViewer = "viewer"
+	// LegacyRoleKolom and LegacyRoleBipra were the one-kolom and
+	// one-category roles (fields "kolom" and "bipraId"); the store moves them
+	// to RoleScoped at startup.
+	LegacyRoleKolom = "kolom"
+	LegacyRoleBipra = "bipra"
 )
 
-// ValidRole reports whether role is one of the roles above.
+// ValidRole reports whether role is one of the roles above (not the legacy ones).
 func ValidRole(role string) bool {
-	return role == RoleAdmin || role == RoleUser || role == RoleKolom || role == RoleBipra
+	return role == RoleAdmin || role == RoleUser || role == RoleScoped || role == RoleViewer
 }
+
+// HasScope reports whether role keeps a list of koloms and BIPRA categories.
+func HasScope(role string) bool { return role == RoleScoped || role == RoleViewer }
 
 // User is an account that can sign in to the app.
 type User struct {
-	ID                 bson.ObjectID  `bson:"_id,omitempty" json:"id"`
-	Username           string         `bson:"username" json:"username"`
-	PasswordHash       string         `bson:"passwordHash" json:"-"`
-	Role               string         `bson:"role" json:"role"`
-	Kolom              int            `bson:"kolom,omitempty" json:"kolom,omitempty"`     // RoleKolom: the kolom they manage
-	BipraID            *bson.ObjectID `bson:"bipraId,omitempty" json:"bipraId,omitempty"` // RoleBipra: the category they manage
-	MustChangePassword bool           `bson:"mustChangePassword" json:"mustChangePassword"`
-	FailedLogins       int            `bson:"failedLogins" json:"failedLogins"` // consecutive wrong passwords
-	LockedAt           *time.Time     `bson:"lockedAt" json:"lockedAt"`         // when the current/last lock started
-	LockedUntil        *time.Time     `bson:"lockedUntil" json:"lockedUntil"`   // lock expiry; admin reset clears it
-	WebAuthnID         []byte         `bson:"webauthnId" json:"-"`              // random user handle for passkeys
-	Passkeys           []Passkey      `bson:"passkeys" json:"passkeys"`
-	LastLoginAt        *time.Time     `bson:"lastLoginAt" json:"lastLoginAt"`
-	CreatedAt          time.Time      `bson:"createdAt" json:"createdAt"`
-	UpdatedAt          time.Time      `bson:"updatedAt" json:"updatedAt"`
+	ID                 bson.ObjectID   `bson:"_id,omitempty" json:"id"`
+	Username           string          `bson:"username" json:"username"`
+	PasswordHash       string          `bson:"passwordHash" json:"-"`
+	Role               string          `bson:"role" json:"role"`
+	Koloms             []int           `bson:"koloms,omitempty" json:"koloms,omitempty"`     // RoleScoped: the koloms they manage; RoleViewer: see
+	BipraIDs           []bson.ObjectID `bson:"bipraIds,omitempty" json:"bipraIds,omitempty"` // RoleScoped: the categories they manage; RoleViewer: see
+	MustChangePassword bool            `bson:"mustChangePassword" json:"mustChangePassword"`
+	FailedLogins       int             `bson:"failedLogins" json:"failedLogins"` // consecutive wrong passwords
+	LockedAt           *time.Time      `bson:"lockedAt" json:"lockedAt"`         // when the current/last lock started
+	LockedUntil        *time.Time      `bson:"lockedUntil" json:"lockedUntil"`   // lock expiry; admin reset clears it
+	WebAuthnID         []byte          `bson:"webauthnId" json:"-"`              // random user handle for passkeys
+	Passkeys           []Passkey       `bson:"passkeys" json:"passkeys"`
+	LastLoginAt        *time.Time      `bson:"lastLoginAt" json:"lastLoginAt"`
+	CreatedAt          time.Time       `bson:"createdAt" json:"createdAt"`
+	UpdatedAt          time.Time       `bson:"updatedAt" json:"updatedAt"`
 }
 
 func (u *User) IsAdmin() bool { return u.Role == RoleAdmin }
@@ -48,27 +62,72 @@ func (u *User) IsAdmin() bool { return u.Role == RoleAdmin }
 // the koloms and jenis ibadah themselves): admins and regular users.
 func (u *User) ManagesAll() bool { return u.Role == RoleAdmin || u.Role == RoleUser }
 
-// ManagesKolom reports whether the user may change, and see the private
-// data of, kolom k.
+// A scoped user's or viewer's koloms and BIPRA categories add up: their
+// koloms' whole data (every service there, also BIPRA ones), and their
+// categories' members and services in every kolom.
+
+// ManagesKolom reports whether the user may change the data of kolom k
+// (families, members, every service there) and see its private data:
+// admins, regular users, and scoped users whose koloms include it.
 func (u *User) ManagesKolom(k int) bool {
-	return u.ManagesAll() || (u.Role == RoleKolom && u.Kolom == k)
+	return u.ManagesAll() || (u.Role == RoleScoped && k > 0 && slices.Contains(u.Koloms, k))
 }
 
-// ManagesType reports whether a "kelola data BIPRA" user may change services
-// of jenis ibadah t (linked to their category). Other roles: see ManagesKolom.
-func (u *User) ManagesType(t WorshipType) bool {
-	return u.Role == RoleBipra && u.BipraID != nil && t.BipraID != nil && *t.BipraID == *u.BipraID
-}
+// IsViewer reports whether the user may only look (never change jemaat data).
+func (u *User) IsViewer() bool { return u.Role == RoleViewer }
 
-// Scope says what a limited user may change, for refusals.
-func (u *User) Scope() string {
-	switch u.Role {
-	case RoleKolom:
-		return fmt.Sprintf("Anda hanya dapat mengelola data Kolom %d", u.Kolom)
-	case RoleBipra:
-		return "Anda hanya dapat mengelola jadwal ibadah kategori BIPRA Anda"
+// SeesKolom reports whether the user sees the private data of all of kolom
+// k: who manages it, or a viewer whose koloms include it (a viewer with no
+// koloms or categories: every kolom).
+func (u *User) SeesKolom(k int) bool {
+	if u.ManagesKolom(k) {
+		return true
 	}
-	return "Anda tidak dapat mengubah data ini"
+	if u.Role != RoleViewer {
+		return false
+	}
+	if len(u.Koloms) == 0 && len(u.BipraIDs) == 0 {
+		return true
+	}
+	return k > 0 && slices.Contains(u.Koloms, k)
+}
+
+// SeesBipra reports whether the user sees the private data of the members of
+// BIPRA category id (in every kolom) because it is one of theirs.
+func (u *User) SeesBipra(id bson.ObjectID) bool {
+	return HasScope(u.Role) && slices.Contains(u.BipraIDs, id)
+}
+
+// ManagesService reports whether the user may change a service of jenis t in
+// kolom k (0: the whole congregation): who manages kolom k (any jenis), or a
+// scoped user whose categories include the one t is linked to (any kolom).
+func (u *User) ManagesService(k int, t WorshipType) bool {
+	if u.ManagesKolom(k) {
+		return true
+	}
+	return u.Role == RoleScoped && t.BipraID != nil && slices.Contains(u.BipraIDs, *t.BipraID)
+}
+
+// Scope says what a scoped user may change, for refusals.
+func (u *User) Scope() string {
+	if u.Role == RoleViewer {
+		return "Akun Anda hanya dapat melihat data"
+	}
+	if u.Role != RoleScoped {
+		return "Anda tidak dapat mengubah data ini"
+	}
+	var parts []string
+	if len(u.Koloms) > 0 {
+		ks := make([]string, len(u.Koloms))
+		for i, k := range u.Koloms {
+			ks[i] = fmt.Sprint(k)
+		}
+		parts = append(parts, "data Kolom "+strings.Join(ks, ", "))
+	}
+	if len(u.BipraIDs) > 0 {
+		parts = append(parts, "jadwal ibadah kategori BIPRA Anda")
+	}
+	return "Anda hanya dapat mengelola " + strings.Join(parts, " dan ")
 }
 
 // IsLockedAt reports whether a temporary lock is in force at the given time.

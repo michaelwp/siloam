@@ -206,8 +206,8 @@ reach the app (not signed in, not an admin) are not logged either.
 - **Passkeys:** under *Akun Saya* each user can add passkeys (Touch ID / Face ID,
   Windows Hello, Android, security keys), rename or delete them, then use
   *Masuk dengan Passkey* on the sign-in page without typing a username.
-- **Admin → Pengguna:** add users (role *Admin*, *Pengguna* or *Pengguna –
-  kelola data kolom*, see below) with a generated
+- **Admin → Pengguna:** add users (role *Admin*, *Pengguna*, *Pengguna –
+  kelola kolom/BIPRA* or *Pengguna – hanya lihat*, see below) with a generated
   temporary password, edit username/role, reset a password (optionally removing
   the user's passkeys, e.g. for a lost phone) and delete users. New and reset
   accounts must change their password at the next sign-in. You cannot delete or
@@ -218,22 +218,37 @@ reach the app (not signed in, not an admin) are not logged either.
   |---|---|---|
   | Admin | all jemaat data, koloms, jenis ibadah, users, Android version, log | every kolom |
   | Pengguna | all jemaat data, koloms, jenis ibadah | every kolom |
-  | Pengguna – kelola data kolom | families, members and services of **their one kolom** (chosen when the account is created; required) | their kolom only — the app shows only their kolom |
-  | Pengguna – kelola data BIPRA | only **services** whose jenis ibadah is linked to **their one BIPRA category** (chosen when the account is created; required); the kolom is optional | their category's members only |
+  | Pengguna – kelola kolom/BIPRA | **their koloms** (any number): families, members and **every service** there, BIPRA ones too. **Their BIPRA categories** (any number): the services whose jenis ibadah is linked to one of them, **in every kolom** (or "Semua kolom"). Koloms and categories may be combined (they add up); at least one in all | their koloms, and their categories' members in every kolom |
+  | Pengguna – hanya lihat | nothing (only their own username, password and passkeys) | with nothing chosen: every kolom; otherwise their koloms and their categories' members in every kolom (combined like above) |
 
   The server enforces this (`403` otherwise, also for moving data into or out
-  of the kolom); the web app shows a kolom user only their kolom (no kolom
-  picker; services for the whole congregation, "Semua kolom", still show),
-  offers only that kolom in forms and hides *Kelola Kolom* and *Jenis Ibadah*.
-  A kolom assigned to a user cannot be deleted.
+  of their koloms). In the web app a limited user (*kelola kolom/BIPRA* or a
+  viewer with choices) sees only their data: their koloms' families, members
+  and services (and the whole congregation's services), plus their
+  categories' members and services in every kolom. The notifications
+  (services, birthdays) follow the same data. The sidebar offers *Semua Data
+  Saya* and their koloms (every kolom when they have categories, to see their
+  categories' members there); a user with a single kolom and no categories has
+  it fixed. The BIPRA picker offers every category while one of their own
+  koloms is picked, and only their own categories in any other kolom or in
+  *Semua Data Saya* (e.g. Kolom 11 + Remaja + Pemuda: in Kolom 11 any
+  category, elsewhere Remaja or Pemuda). Families and members can be changed while viewing one of their
+  koloms (or *Semua Data Saya* without categories); services wherever they
+  manage them. Forms offer only their koloms (every kolom for a jenis linked
+  to one of their categories), and *Kelola Kolom* and *Jenis Ibadah* are
+  hidden. A kolom or category assigned to a user cannot be deleted.
 
-  A *kelola data BIPRA* user (e.g. for Pemuda) sees, on Beranda, Daftar HUT
-  Jemaat and Daftar Anggota Jemaat, only their category's members (and on
-  Beranda only their category's services and statistics); Daftar Keluarga,
-  Data Base Keluarga, Daftar HUT Pernikahan and Kategorial BIPRA are hidden.
-  Their Jadwal Ibadah form offers only their category's jenis, with
-  "Semua kolom" as the default. A category assigned to a user cannot be
-  deleted.
+  A user with **only** BIPRA categories (e.g. Pemuda) has no family pages
+  (Daftar Keluarga, Data Base Keluarga, Daftar HUT Pernikahan and Kategorial
+  BIPRA are hidden), the BIPRA picker offers only their categories, and their
+  Jadwal Ibadah form offers only their categories' jenis.
+
+  A *hanya lihat* (viewer) user sees the pages like a signed-in user, but
+  without any add, edit or delete buttons; the server refuses every change to
+  jemaat data (`403`).
+
+  Users of the former one-kolom (`kolom`) and one-category (`bipra`) roles are
+  moved to this role at startup, keeping their kolom or category.
 - **Account lockout:** after **3 wrong passwords in a row** an account is locked
   for **3 minutes** (`MAX_FAILED_LOGINS`, `LOCK_DURATION`; the sign-in page shows
   the current values). During the lock it cannot sign in — not even with the
@@ -537,8 +552,8 @@ user has proven who they are).
 | PUT    | `/api/auth/passkeys/{id}`              | rename `{name}`                           |
 | DELETE | `/api/auth/passkeys/{id}`              |                                           |
 | GET    | `/api/users`                           | admin                                     |
-| POST   | `/api/users`                           | admin: `{username, password, role, kolom, bipraId}` — role `admin`, `user`, `kolom` (then `kolom` is required) or `bipra` (then `bipraId`, a BIPRA category's id, is required) |
-| PUT    | `/api/users/{id}`                      | admin: `{username, role, kolom, bipraId}` |
+| POST   | `/api/users`                           | admin: `{username, password, role, koloms, bipraIds}` — role `admin`, `user`, `scoped` (then `koloms`, kolom numbers, and/or `bipraIds`, BIPRA category ids, at least one in all) or `viewer` (`koloms`/`bipraIds` optional; none: sees everything) |
+| PUT    | `/api/users/{id}`                      | admin: `{username, role, koloms, bipraIds}` |
 | POST   | `/api/users/{id}/reset-password`       | admin: `{password, clearPasskeys}`; also unlocks |
 | DELETE | `/api/users/{id}`                      | admin                                     |
 | GET    | `/api/koloms`                          | public                                    |

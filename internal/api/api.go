@@ -504,8 +504,8 @@ func (a *API) writeMember(w http.ResponseWriter, r *http.Request, status int, m 
 
 // ---- helpers ----
 
-// mayManage reports whether the signed-in user may change data of kolom k
-// (a "kelola data kolom" user only their own); if not, it answers 403.
+// mayManage reports whether the signed-in user may change families and
+// members of kolom k (see User.ManagesKolom); if not, it answers 403.
 func mayManage(w http.ResponseWriter, r *http.Request, k int) bool {
 	u := auth.CurrentUser(r)
 	if u == nil || u.ManagesKolom(k) { // writes always have a user (auth middleware)
@@ -515,14 +515,15 @@ func mayManage(w http.ResponseWriter, r *http.Request, k int) bool {
 	return false
 }
 
-// seesPrivate reports whether r gets the private data of kolom k: signed in,
-// and (for a "kelola data kolom" user) their own kolom. full is dataView's answer.
+// seesPrivate reports whether r gets the private data of all of kolom k:
+// signed in, and (for a scoped user or viewer) see User.SeesKolom. full is
+// dataView's answer.
 func seesPrivate(r *http.Request, full bool, k int) bool {
 	if !full {
 		return false
 	}
 	u := auth.CurrentUser(r)
-	return u == nil || u.ManagesKolom(k)
+	return u == nil || u.SeesKolom(k)
 }
 
 // dataView reports whether r gets the full (signed-in) view, and tells the
@@ -538,31 +539,40 @@ func dataView(w http.ResponseWriter, r *http.Request) bool {
 	return full
 }
 
-// ownBipra is the category of a "kelola data BIPRA" user (they see its
-// members' private data), or nil.
-func ownBipra(r *http.Request, rules model.BipraRules) *model.BipraCategory {
+// ownBipra is the categories of a scoped user or viewer (they see their
+// members' private data in every kolom), or nil.
+func ownBipra(r *http.Request, rules model.BipraRules) []model.BipraCategory {
 	u := auth.CurrentUser(r)
-	if u == nil || u.Role != model.RoleBipra || u.BipraID == nil {
+	if u == nil || !model.HasScope(u.Role) || len(u.BipraIDs) == 0 {
 		return nil
 	}
+	var out []model.BipraCategory
 	for _, c := range rules {
-		if c.ID == *u.BipraID {
-			return &c
+		if u.SeesBipra(c.ID) {
+			out = append(out, c)
 		}
 	}
-	return nil
+	return out
 }
 
-// seesMember: seesPrivate for the member's kolom, or the member is in the
-// category of a "kelola data BIPRA" user.
-func seesMember(r *http.Request, full bool, kolom int, v model.MemberView, own *model.BipraCategory) bool {
-	return seesPrivate(r, full, kolom) || (full && inBipra(v, own))
-}
-
-func inBipra(v model.MemberView, c *model.BipraCategory) bool {
-	if c == nil {
+// seesMember: seesPrivate for the member's kolom, or the member is in one of
+// the categories of a scoped user or viewer.
+func seesMember(r *http.Request, full bool, kolom int, v model.MemberView, own []model.BipraCategory) bool {
+	if seesPrivate(r, full, kolom) {
+		return true
+	}
+	if !full {
 		return false
 	}
+	for _, c := range own {
+		if inBipra(v, c) {
+			return true
+		}
+	}
+	return false
+}
+
+func inBipra(v model.MemberView, c model.BipraCategory) bool {
 	if c.Kind == model.KindFlag {
 		return slices.Contains(v.Flags, c.Key)
 	}

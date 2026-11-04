@@ -13,7 +13,7 @@ type WorshipType struct {
 	Color string        `bson:"color" json:"color"` // #rrggbb, the type's calendar color
 	Order int           `bson:"order" json:"order"`
 	// BipraID links the jenis to a BIPRA category: its services may have no
-	// kolom (the whole congregation) and its "kelola data BIPRA" users manage them
+	// kolom (the whole congregation) and the scoped users of that category manage them
 	BipraID   *bson.ObjectID `bson:"bipraId,omitempty" json:"bipraId"`
 	CreatedAt time.Time      `bson:"createdAt" json:"createdAt,omitzero"`
 }

@@ -11,11 +11,11 @@ import { clock, serviceDayKey, serviceTitle, shortDay, upcomingServices, useSche
 /** Public homepage: totals plus this month's birthdays and wedding anniversaries. */
 export default function Beranda() {
   const { families, members, categories: allCategories, filterLabel, bipraFilter, loading, error } = useData()
-  // a "kelola data BIPRA" user (scope), or a category chosen in the filter:
-  // members, families and statistics of that category only
+  // a category chosen in the filter, or a BIPRA-only user's (scope): members,
+  // families and statistics of those categories only
   const scope = useBipraScope()
-  const shown = scope ?? bipraFilter
-  const categories = shown ? [shown] : allCategories
+  const shown = bipraFilter ? [bipraFilter] : scope
+  const categories = shown ?? allCategories
   const [today] = useState(() => new Date())
   const month = today.getMonth()
   const day = today.getDate()
@@ -115,7 +115,7 @@ export default function Beranda() {
             {bipra.map((c) => (
               <Link
                 key={c.label}
-                // a "kelola data BIPRA" user has no BIPRA page; Anggota is already their category
+                // a BIPRA-only user has no BIPRA page; Anggota is already their category
                 to={scope ? '/anggota' : `/bipra?kategori=${encodeURIComponent(c.key)}`}
                 className="stat"
               >
