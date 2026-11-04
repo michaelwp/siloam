@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import id.gmimsiloam.jemaat.data.AppRelease
 import id.gmimsiloam.jemaat.data.DataFilter
+import id.gmimsiloam.jemaat.data.NotSignedInException
+import id.gmimsiloam.jemaat.data.PublicStats
 import id.gmimsiloam.jemaat.data.Prefs
 import id.gmimsiloam.jemaat.data.Repository
 import id.gmimsiloam.jemaat.data.Snapshot
@@ -26,12 +28,27 @@ data class UiState(
     val filter: DataFilter = DataFilter.all,
     /** a newer app version to offer, if the last check found one */
     val update: AppRelease? = null,
+    /** signed in: the jemaat data; else (a visitor) only [publicStats] */
+    val signedIn: Boolean = false,
+    /** who is signed in ("budi · Kelola Kolom 11") */
+    val account: String = "",
+    /** the statistics summary visitors see */
+    val publicStats: PublicStats? = null,
+    val loggingIn: Boolean = false,
+    val loginError: String? = null,
 )
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = Prefs(app)
     private val repo = Repository(app)
-    private val _state = MutableStateFlow(UiState(filter = prefs.filter, update = prefs.availableUpdate(BuildConfig.VERSION_NAME)))
+    private val _state = MutableStateFlow(
+        UiState(
+            filter = prefs.filter,
+            update = prefs.availableUpdate(BuildConfig.VERSION_NAME),
+            signedIn = prefs.signedIn,
+            account = prefs.account,
+        ),
+    )
     val state: StateFlow<UiState> = _state.asStateFlow()
 
     init {
@@ -48,8 +65,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (_state.value.refreshing && !restart) return
         refreshJob?.cancel()
         _state.update { it.copy(refreshing = true) }
+        if (!prefs.signedIn) {
+            // a visitor: the statistics summary only
+            refreshJob = viewModelScope.launch {
+                val stats = repo.publicStats()
+                repo.checkRelease()
+                ensureActive()
+                _state.update {
+                    it.copy(
+                        publicStats = stats ?: it.publicStats,
+                        refreshing = false,
+                        error = if (stats == null) "Statistik belum dapat dimuat" else null,
+                        update = prefs.availableUpdate(BuildConfig.VERSION_NAME),
+                    )
+                }
+            }
+            return
+        }
         refreshJob = viewModelScope.launch {
             val result = runCatching { repo.refresh() }
+            // the session ended (expired, or an admin signed this device out): back to the visitor view
+            if (result.exceptionOrNull() is NotSignedInException) {
+                signedOut(result.exceptionOrNull()?.message)
+                return@launch
+            }
             // replaced by a newer load (runCatching also caught the cancellation):
             // leave the state to that one, never show "Job was cancelled"
             ensureActive()
@@ -76,6 +115,39 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // today's reminders were queued for the old filter's services
         DailyWorker.rescheduleReminders(getApplication())
     }
+
+    fun login(username: String, password: String) {
+        if (_state.value.loggingIn) return
+        _state.update { it.copy(loggingIn = true, loginError = null) }
+        viewModelScope.launch {
+            val result = runCatching { repo.login(username.trim(), password) }
+            result.fold(
+                onSuccess = { account ->
+                    _state.update { it.copy(loggingIn = false, signedIn = true, account = account, error = null) }
+                    refresh(restart = true)
+                    DailyWorker.rescheduleReminders(getApplication())
+                },
+                onFailure = { e -> _state.update { it.copy(loggingIn = false, loginError = e.message ?: "Gagal masuk") } },
+            )
+        }
+    }
+
+    fun logout() {
+        viewModelScope.launch {
+            repo.logout()
+            signedOut(null)
+        }
+    }
+
+    /** Back to the visitor view: no data, no notifications (queued reminders dropped). */
+    private fun signedOut(message: String?) {
+        refreshJob?.cancel()
+        _state.update { it.copy(signedIn = false, account = "", data = null, refreshing = false, error = message) }
+        DailyWorker.rescheduleReminders(getApplication())
+        refresh(restart = true)
+    }
+
+    fun serverUrl() = prefs.serverUrl
 
     fun setServerUrl(url: String) {
         prefs.serverUrl = url

@@ -136,9 +136,13 @@ export function icsUrl(s: Service) {
   return `/api/services/${s.id}/ics`
 }
 
-/** The subscribable feed: all services, or one kolom; typeIds (when given) limits the jenis. */
-export function feedUrl(kolom: number | null, typeIds?: string[]) {
-  const q = new URLSearchParams()
+/**
+ * The user's subscribable feed (token: the secret of their link, see
+ * authApi.calendarToken): all their services, or one kolom; typeIds (when
+ * given) limits the jenis.
+ */
+export function feedUrl(token: string, kolom: number | null, typeIds?: string[]) {
+  const q = new URLSearchParams({ token })
   if (kolom !== null) q.set('kolom', String(kolom))
   for (const id of typeIds ?? []) q.append('type', id)
   const qs = q.toString()

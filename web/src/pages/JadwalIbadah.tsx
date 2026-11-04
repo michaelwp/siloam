@@ -1,5 +1,5 @@
-import { useMemo, useState, type CSSProperties } from 'react'
-import { scheduleApi, serviceToInput, type Member, type Service, type ServiceInput, type WorshipType } from '../api'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { authApi, scheduleApi, serviceToInput, type Member, type Service, type ServiceInput, type WorshipType } from '../api'
 import { bipraOnly, managesAll, managesKolom, managesService, managesType, useAuth, useCanAddServices } from '../auth'
 import { KolomField } from '../components/forms'
 import { MonthGrid, MonthNav } from '../components/calendar'
@@ -607,7 +607,17 @@ function Subscribe({
   types: WorshipType[] | null
   onClose: () => void
 }) {
-  const url = feedUrl(kolom, types?.map((t) => t.id))
+  // the feed link carries the user's secret token (calendar apps cannot sign in)
+  const [token, setToken] = useState<string | null>(null)
+  const [tokenError, setTokenError] = useState<string | null>(null)
+  const [renewed, setRenewed] = useState(false)
+  useEffect(() => {
+    authApi.calendarToken().then(
+      (r) => setToken(r.token),
+      (e: Error) => setTokenError(e.message),
+    )
+  }, [])
+  const url = token ? feedUrl(token, kolom, types?.map((t) => t.id)) : ''
   const webcal = url.replace(/^https?:/, 'webcal:')
   const [copy, setCopy] = useState<'idle' | 'done' | 'manual'>('idle')
   const local = /^(localhost|127\.|\[::1\])/.test(window.location.hostname)
@@ -625,7 +635,11 @@ function Subscribe({
           : jadwal baru dan perubahan akan muncul otomatis di kalender Anda.
         </p>
         {/* a category without linked jenis: a feed without types would carry every service */}
-        {types?.length === 0 ? (
+        {tokenError ? (
+          <p className="form-error flush">Gagal membuat link kalender: {tokenError}</p>
+        ) : !token ? (
+          <p className="status">Menyiapkan link kalender…</p>
+        ) : types?.length === 0 ? (
           <p className="form-error flush">Belum ada jenis ibadah untuk pilihan ini, jadi belum ada yang dapat ditambahkan ke kalender.</p>
         ) : (
           <>
@@ -672,6 +686,24 @@ function Subscribe({
             publik (setelah aplikasi di-deploy).
           </p>
         )}
+        <p className="muted small">
+          Link ini pribadi: siapa pun yang memilikinya dapat melihat jadwal ibadah Anda. Jangan dibagikan.{' '}
+          {token && (
+            <button
+              type="button"
+              className="link"
+              onClick={async () => {
+                const r = await authApi.calendarToken(true)
+                setToken(r.token)
+                setRenewed(true)
+                setCopy('idle')
+              }}
+            >
+              Buat link baru
+            </button>
+          )}
+          {renewed && ' — link lama tidak berlaku lagi; tambahkan ulang kalender Anda dengan link baru.'}
+        </p>
         <p className="muted small">Ingin menambahkan satu ibadah saja? Klik ibadahnya di kalender.</p>
       </div>
     </Modal>

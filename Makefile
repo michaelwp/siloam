@@ -352,7 +352,7 @@ fly-logs: ## Show recent logs
 fly-open: ## Open the deployed app
 	fly open
 
-##@ Android app (android/, public view + background notifications)
+##@ Android app (android/, sign-in + background notifications)
 
 # JDK 17+ for Gradle: $JAVA_HOME, else a JDK unpacked in ~/.jdks
 ANDROID_JAVA_HOME ?= $(or $(JAVA_HOME),$(shell ls -d $(HOME)/.jdks/jdk-*/Contents/Home 2>/dev/null | tail -1))

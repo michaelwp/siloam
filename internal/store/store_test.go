@@ -64,7 +64,7 @@ func TestRecordLoginLosesToLock(t *testing.T) {
 		}
 	}
 	// a correct-password sign-in that was checked before the lock landed
-	if _, err := s.RecordLogin(ctx, u.ID, now); !errors.Is(err, ErrLocked) {
+	if _, err := s.RecordLogin(ctx, u.ID, now, model.LoginWeb); !errors.Is(err, ErrLocked) {
 		t.Fatalf("RecordLogin on locked account = %v, want ErrLocked", err)
 	}
 	got, _ := s.GetUser(ctx, u.ID)
@@ -105,7 +105,7 @@ func TestLockExpiresAfterDuration(t *testing.T) {
 		t.Fatalf("after expiry: failed=%d locked=%v", got.FailedLogins, got.IsLockedAt(after))
 	}
 	// … and a correct password signs in and clears everything
-	got, err := s.RecordLogin(ctx, u.ID, after)
+	got, err := s.RecordLogin(ctx, u.ID, after, model.LoginWeb)
 	if err != nil || got.FailedLogins != 0 || got.LockedUntil != nil || got.LockedAt != nil {
 		t.Fatalf("login after expiry: %v failed=%d until=%v", err, got.FailedLogins, got.LockedUntil)
 	}
@@ -126,7 +126,7 @@ func TestLoginDoesNotUndoReset(t *testing.T) {
 	if err := s.UsePasskey(ctx, stale.ID, "pk1", []byte("{}")); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("UsePasskey on removed passkey = %v, want ErrNotFound", err)
 	}
-	if _, err := s.RecordLogin(ctx, stale.ID, time.Now().UTC()); err != nil {
+	if _, err := s.RecordLogin(ctx, stale.ID, time.Now().UTC(), model.LoginAndroid); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := s.GetUser(ctx, u.ID)

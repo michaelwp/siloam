@@ -73,7 +73,15 @@ function DataProvider({
    */
   limit: { koloms: number[]; bipras: string[] } | null
 }) {
-  const [state, setState] = useState<State>({ koloms: [], categories: [], families: [], members: [], view: null, loading: true, error: null })
+  const [state, setState] = useState<State>({
+    koloms: [],
+    categories: [],
+    families: [],
+    members: [],
+    view: null,
+    loading: expectFull, // remounted (keyed) when the user changes
+    error: null,
+  })
   const [chosenKolom, setChosenKolom] = useState(savedKolom)
   const [chosenBipra, setChosenBipra] = useState(savedBipra)
   const latest = useRef(0) // ignore responses of superseded loads
@@ -93,9 +101,10 @@ function DataProvider({
     )
   }, [expectFull, onStale])
 
+  // visitors get no jemaat data (only the statistics summary, see Beranda)
   useEffect(() => {
-    void load()
-  }, [load])
+    if (expectFull) void load()
+  }, [load, expectFull])
 
   // What a limited user may pick: with categories, every kolom (their
   // members are everywhere), else their own koloms; "Semua Kolom" (all of

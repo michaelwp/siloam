@@ -53,6 +53,12 @@ class DailyWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         val ctx = applicationContext
         val prefs = Prefs(ctx)
         val repo = Repository(ctx)
+        // visitors (not signed in) get no notifications, only the update check
+        if (!prefs.signedIn) {
+            repo.checkRelease()
+            notifyUpdate(ctx, prefs)
+            return Result.success()
+        }
         val cached = repo.cached()
         val today = LocalDate.now()
         val stale = cached == null || System.currentTimeMillis() - cached.fetchedAt > STALE_AFTER_MS ||
@@ -249,6 +255,8 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         // the filter may have changed since the reminder was queued, or the
         // service been removed; and Android may run it late (Doze): never
         // remind about a started service
+        // signed out since it was queued: no reminder
+        if (!prefs.signedIn) return Result.success()
         val cached = Repository(applicationContext).cached()
         val wanted = cached == null || prefs.filter.services(cached).any { it.id == id }
         val started = start > 0 && System.currentTimeMillis() >= start

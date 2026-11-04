@@ -11,6 +11,18 @@ class Prefs(context: Context) {
         get() = p.getString("serverUrl", DEFAULT_SERVER) ?: DEFAULT_SERVER
         set(v) = p.edit { putString("serverUrl", v.trim().trimEnd('/')) }
 
+    /** The sign-in session (the server's cookie value); "" = not signed in (a visitor). */
+    var session: String
+        get() = p.getString("session", "") ?: ""
+        set(v) = p.edit { putString("session", v) }
+
+    val signedIn get() = session.isNotEmpty()
+
+    /** Who is signed in, as shown in Pengaturan ("budi · Kelola Kolom 11"). */
+    var account: String
+        get() = p.getString("account", "") ?: ""
+        set(v) = p.edit { putString("account", v) }
+
     /** The kolom chosen before [filter] existed (its starting value); null = all koloms. */
     var kolom: Int?
         get() = p.getInt("kolom", 0).takeIf { it > 0 }

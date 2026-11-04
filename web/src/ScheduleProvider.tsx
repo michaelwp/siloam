@@ -16,6 +16,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>({ services: [], types: [], loading: true, error: null })
   const latest = useRef(0) // ignore responses of superseded loads
 
+  const signedIn = !!user && !user.mustChangePassword
   const reload = useCallback(() => {
     const n = ++latest.current
     return scheduleApi.load().then(
@@ -28,9 +29,10 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
     )
   }, [])
 
+  // visitors get no schedule (it is jemaat data)
   useEffect(() => {
-    void reload()
-  }, [reload])
+    if (signedIn) void reload()
+  }, [reload, signedIn])
 
   // a limited user: their koloms' services (and the whole congregation's),
   // plus their categories' services in every kolom
@@ -59,7 +61,13 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
   const homeServices = services
 
   return (
-    <ScheduleContext.Provider value={{ ...state, services, homeServices, allServices: state.services, reload }}>
+    <ScheduleContext.Provider
+      value={
+        signedIn
+          ? { ...state, services, homeServices, allServices: state.services, reload }
+          : { services: [], types: [], loading: false, error: null, homeServices: [], allServices: [], reload }
+      }
+    >
       {children}
     </ScheduleContext.Provider>
   )

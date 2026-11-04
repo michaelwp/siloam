@@ -82,6 +82,14 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            Text("Akun", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("Masuk sebagai ${state.account}", style = MaterialTheme.typography.bodyMedium)
+            OutlinedButton(onClick = {
+                vm.logout()
+                onBack()
+            }) { Text("Keluar") }
+            Hint("Setelah keluar, data jemaat dihapus dari perangkat ini dan notifikasi berhenti.")
+            HorizontalDivider()
             DataFilterFields(state, vm::setFilter)
             HorizontalDivider()
             Text("Notifikasi", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)

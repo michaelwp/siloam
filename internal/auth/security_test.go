@@ -208,10 +208,17 @@ func TestPublicReadOnlyData(t *testing.T) {
 		method, path string
 		public       bool
 	}{
-		{"GET", "/api/families", true},
-		{"GET", "/api/families/abc", true},
-		{"GET", "/api/members", true},
-		{"HEAD", "/api/members/abc", true},
+		{"GET", "/api/stats", true},
+		{"HEAD", "/api/stats", true},
+		{"GET", "/api/calendar.ics", true},
+		{"GET", "/api/families", false},
+		{"GET", "/api/families/abc", false},
+		{"GET", "/api/members", false},
+		{"HEAD", "/api/members/abc", false},
+		{"GET", "/api/services", false},
+		{"GET", "/api/koloms", false},
+		{"GET", "/api/worship-types", false},
+		{"GET", "/api/bipra-categories", false},
 		{"POST", "/api/families", false},
 		{"PUT", "/api/members/abc", false},
 		{"DELETE", "/api/families/abc", false},

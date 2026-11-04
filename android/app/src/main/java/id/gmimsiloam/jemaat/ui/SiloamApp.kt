@@ -129,6 +129,12 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
         )
     }
 
+    // visitors: the statistics summary and the sign-in form only
+    if (!state.signedIn) {
+        PublicApp(state, vm)
+        return
+    }
+
     if (settings) {
         SettingsScreen(state = state, vm = vm, onBack = { settings = false })
         return

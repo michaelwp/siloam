@@ -50,8 +50,10 @@ type User struct {
 	LockedAt           *time.Time      `bson:"lockedAt" json:"lockedAt"`         // when the current/last lock started
 	LockedUntil        *time.Time      `bson:"lockedUntil" json:"lockedUntil"`   // lock expiry; admin reset clears it
 	WebAuthnID         []byte          `bson:"webauthnId" json:"-"`              // random user handle for passkeys
+	CalendarToken      string          `bson:"calendarToken,omitempty" json:"-"` // secret of their calendar feed link
 	Passkeys           []Passkey       `bson:"passkeys" json:"passkeys"`
 	LastLoginAt        *time.Time      `bson:"lastLoginAt" json:"lastLoginAt"`
+	LastLoginSource    string          `bson:"lastLoginSource,omitempty" json:"lastLoginSource,omitempty"` // LoginWeb or LoginAndroid
 	CreatedAt          time.Time       `bson:"createdAt" json:"createdAt"`
 	UpdatedAt          time.Time       `bson:"updatedAt" json:"updatedAt"`
 }
@@ -108,6 +110,20 @@ func (u *User) ManagesService(k int, t WorshipType) bool {
 	return u.Role == RoleScoped && t.BipraID != nil && slices.Contains(u.BipraIDs, *t.BipraID)
 }
 
+// SeesService reports whether service of jenis t in kolom k (0: the whole
+// congregation) is in the user's data: everything, or for a user limited to
+// some koloms and/or categories, their koloms' services (and the whole
+// congregation's) plus their categories' services in every kolom.
+func (u *User) SeesService(k int, t WorshipType) bool {
+	if !HasScope(u.Role) || (len(u.Koloms) == 0 && len(u.BipraIDs) == 0) {
+		return true
+	}
+	if len(u.Koloms) > 0 && (k == 0 || slices.Contains(u.Koloms, k)) {
+		return true
+	}
+	return t.BipraID != nil && slices.Contains(u.BipraIDs, *t.BipraID)
+}
+
 // Scope says what a scoped user may change, for refusals.
 func (u *User) Scope() string {
 	if u.Role == RoleViewer {
@@ -135,6 +151,25 @@ func (u *User) IsLockedAt(now time.Time) bool {
 	return u.LockedUntil != nil && now.Before(*u.LockedUntil)
 }
 
+// Where a sign-in came from: the web app, or the Android app (which sends
+// the header X-Client: android).
+const (
+	LoginWeb     = "web"
+	LoginAndroid = "android"
+)
+
+// Login is one successful sign-in, for the admins' user statistics (kept 90 days).
+type Login struct {
+	ID       bson.ObjectID   `bson:"_id,omitempty" json:"id"`
+	UserID   bson.ObjectID   `bson:"userId" json:"userId"`
+	Username string          `bson:"username" json:"username"`
+	Role     string          `bson:"role" json:"role"`
+	Koloms   []int           `bson:"koloms,omitempty" json:"koloms,omitempty"`
+	BipraIDs []bson.ObjectID `bson:"bipraIds,omitempty" json:"bipraIds,omitempty"`
+	Source   string          `bson:"source" json:"source"`
+	At       time.Time       `bson:"at" json:"at"`
+}
+
 // Passkey is a registered WebAuthn credential. Credential holds the
 // JSON-encoded webauthn.Credential so the library type can evolve freely.
 type Passkey struct {
@@ -151,6 +186,7 @@ type Session struct {
 	ID        string        `bson:"_id"`
 	UserID    bson.ObjectID `bson:"userId"`
 	UserAgent string        `bson:"userAgent"`
+	Source    string        `bson:"source,omitempty"` // LoginWeb or LoginAndroid
 	CreatedAt time.Time     `bson:"createdAt"`
 	ExpiresAt time.Time     `bson:"expiresAt"`
 }

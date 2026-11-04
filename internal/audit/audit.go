@@ -59,6 +59,7 @@ var routes = map[string]route{
 	"PUT /api/users/{id}":                     {"pengguna", "Ubah pengguna"},
 	"POST /api/users/{id}/reset-password":     {"pengguna", "Reset password pengguna"},
 	"DELETE /api/users/{id}":                  {"pengguna", "Hapus pengguna"},
+	"POST /api/users/{id}/logout":             {"pengguna", "Keluarkan pengguna"},
 	"POST /api/koloms":                        {"kolom", "Tambah kolom"},
 	"DELETE /api/koloms/{id}":                 {"kolom", "Hapus kolom"},
 	"POST /api/families":                      {"keluarga", "Tambah keluarga"},
@@ -173,6 +174,7 @@ type noteKey struct{}
 type note struct {
 	user    *model.User
 	attempt string
+	detail  string
 }
 
 func noteOf(r *http.Request) *note {
@@ -191,6 +193,13 @@ func SetUser(r *http.Request, u *model.User) {
 func SetAttempt(r *http.Request, username string) {
 	if n := noteOf(r); n != nil {
 		n.attempt = username
+	}
+}
+
+// SetDetail records more about the action (e.g. why an admin signed a user out).
+func SetDetail(r *http.Request, detail string) {
+	if n := noteOf(r); n != nil {
+		n.detail = detail
 	}
 }
 
@@ -276,6 +285,7 @@ func (rec *Recorder) Middleware(next http.Handler) http.Handler {
 			e.TargetID = id.Hex()
 		}
 		e.Target = label
+		e.Detail = n.detail
 		if e.Target == "" && e.Status < 300 && r.Method != http.MethodDelete {
 			e.Target = labelFromBody(kind, sw.body.Bytes())
 		}

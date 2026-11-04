@@ -27,7 +27,7 @@ import Kolom from './pages/Kolom'
 import Login from './pages/Login'
 
 // The homepage plus one page per sheet of the original workbook. Visitors see
-// them read-only; signed-in users can also edit.
+// only the homepage's statistics summary; every other page needs a sign-in.
 const PAGES = [
   { path: '/', label: 'Beranda', element: <Beranda /> },
   { path: '/jadwal', label: 'Jadwal Ibadah', element: <JadwalIbadah /> },
@@ -103,10 +103,11 @@ function Shell() {
             <small>Data Base Jemaat</small>
           </div>
         </Link>
-        <KolomPicker />
+        {/* visitors cannot filter: they get the whole congregation's summary only */}
+        {user && <KolomPicker />}
         <nav>
           {/* a BIPRA-only user sees only their categories' members: no family pages */}
-          {PAGES.filter((p) => !(p.noBipra && bipraOnly(user))).map((p) => (
+          {PAGES.filter((p) => (user ? !(p.noBipra && bipraOnly(user)) : p.path === '/')).map((p) => (
             <NavLink key={p.path} to={p.path} end={p.path === '/'}>
               {p.label}
             </NavLink>
@@ -165,14 +166,22 @@ function Shell() {
           )}
         </div>
       </aside>
-      <DailyNotice />
+      {user && <DailyNotice />}
       <main className="content">
         <Routes>
           {PAGES.map((p) => (
             <Route
               key={p.path}
               path={p.path}
-              element={p.noBipra && bipraOnly(user) ? <Navigate to="/" replace /> : p.element}
+              element={
+                p.path === '/' ? (
+                  p.element
+                ) : p.noBipra && bipraOnly(user) ? (
+                  <Navigate to="/" replace />
+                ) : (
+                  <RequireUser>{p.element}</RequireUser>
+                )
+              }
             />
           ))}
           <Route

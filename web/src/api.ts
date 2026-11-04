@@ -96,7 +96,7 @@ async function send(method: string, url: string, body?: unknown): Promise<Respon
   return res
 }
 
-async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
+export async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await send(method, url, body)
   return res.status === 204 ? (undefined as T) : res.json()
 }
@@ -203,6 +203,7 @@ export type User = {
   lockedUntil: string | null
   passkeys: Passkey[]
   lastLoginAt: string | null
+  lastLoginSource?: LoginSource
   createdAt: string
 }
 
@@ -211,6 +212,8 @@ export const authApi = {
   me: () => request<User>('GET', '/api/auth/me'),
   login: (username: string, password: string) => request<User>('POST', '/api/auth/login', { username, password }),
   logout: () => request<void>('POST', '/api/auth/logout'),
+  /** the secret of the user's calendar feed link (created on first use); reset: a new one, the old link stops working */
+  calendarToken: (reset = false) => request<{ token: string }>('POST', '/api/auth/calendar-token', { reset }),
   changeCredentials: (body: { currentPassword: string; username: string; newPassword: string }) =>
     request<User>('POST', '/api/auth/change-credentials', body),
 
@@ -249,6 +252,8 @@ export type AuditEntry = {
   action: string
   target?: string
   targetId?: string
+  /** more about the action, e.g. "Alasan: HP hilang" */
+  detail?: string
   method: string
   path: string
   status: number
@@ -281,12 +286,52 @@ export const adminApi = {
     request<{ categories: { key: string; label: string }[]; usernames: string[] }>('GET', '/api/admin/audit/meta'),
 }
 
+export type LoginSource = 'web' | 'android'
+
+/** One sign-in (kept 90 days), with the user's role at that moment. */
+export type Login = {
+  id: string
+  userId: string
+  username: string
+  role: Role
+  koloms?: number[]
+  bipraIds?: string[]
+  source: LoginSource
+  at: string
+}
+
+/** The admins' user statistics for one day, and who is signed in now. */
+export type LoginStats = {
+  date: string
+  users: number
+  web: number
+  android: number
+  logins: Login[]
+  active: {
+    userId: string
+    username: string
+    role: Role
+    koloms?: number[]
+    bipraIds?: string[]
+    web: number
+    android: number
+    since: string
+  }[]
+}
+
+export const loginsApi = {
+  /** date: YYYY-MM-DD (default today) */
+  get: (date?: string) => request<LoginStats>('GET', `/api/admin/logins${date ? `?date=${date}` : ''}`),
+}
+
 export const usersApi = {
   list: () => request<User[]>('GET', '/api/users'),
   create: (body: { username: string; password: string; role: Role; koloms?: number[]; bipraIds?: string[] }) =>
     request<User>('POST', '/api/users', body),
   update: (id: string, body: { username: string; role: Role; koloms?: number[]; bipraIds?: string[] }) =>
     request<User>('PUT', `/api/users/${id}`, body),
+  /** ends all of the user's sessions (web and Android); the reason goes to the activity log */
+  logout: (id: string, reason: string) => request<User>('POST', `/api/users/${id}/logout`, { reason }),
   resetPassword: (id: string, body: { password: string; clearPasskeys: boolean }) =>
     request<User>('POST', `/api/users/${id}/reset-password`, body),
   remove: (id: string) => request<void>('DELETE', `/api/users/${id}`),

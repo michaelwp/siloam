@@ -516,3 +516,108 @@ func TestBipraUserWithSeveralCategories(t *testing.T) {
 		}
 	}
 }
+
+// Visitors get only counts: no names, no member or family data.
+func TestStatsAreOnlyCounts(t *testing.T) {
+	_, st, h := testAPI(t)
+	ctx := context.Background()
+	if err := st.SeedBipra(ctx); err != nil {
+		t.Fatal(err)
+	}
+	f, _ := st.CreateFamily(ctx, model.Family{Kolom: 3, Name: "Umboh"})
+	g, _ := st.CreateFamily(ctx, model.Family{Kolom: 4, Name: "Kowaas"})
+	young := time.Date(2006, 3, 9, 0, 0, 0, 0, time.UTC)
+	yes := true
+	_, _ = st.CreateMember(ctx, model.Member{FamilyID: f.ID, Name: "Budi Rahasia", Gender: model.GenderMale, MaritalStatus: model.StatusSingle, BirthDate: &young, Baptized: &yes})
+	_, _ = st.CreateMember(ctx, model.Member{FamilyID: f.ID, Name: "Ani", Gender: model.GenderFemale, MaritalStatus: "Menikah"})
+	_, _ = st.CreateMember(ctx, model.Member{FamilyID: g.ID, Name: "Erwin", Gender: model.GenderMale, MaritalStatus: "Menikah"})
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/stats", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("stats: %d %s", rec.Code, rec.Body)
+	}
+	if body := rec.Body.String(); strings.Contains(body, "Budi") || strings.Contains(body, "Umboh") {
+		t.Fatalf("stats leak names: %s", body)
+	}
+	var s Stats
+	if err := json.Unmarshal(rec.Body.Bytes(), &s); err != nil {
+		t.Fatal(err)
+	}
+	if s.Families != 2 || s.Members != 3 || s.Male != 2 || s.Female != 1 || s.Baptized.Yes != 1 || s.Baptized.Unknown != 2 ||
+		s.BirthMonths[2] != 1 || len(s.FamilySizes) != 2 || s.FamilySizes[0] != 1 || s.FamilySizes[1] != 1 {
+		t.Errorf("stats: %+v", s)
+	}
+	if s.MaritalStatuses[0].Label != model.StatusSingle || s.MaritalStatuses[0].Value != 1 || s.MaritalStatuses[1].Value != 2 {
+		t.Errorf("marital statuses: %+v", s.MaritalStatuses)
+	}
+}
+
+// The calendar feed needs the secret token of a user's link, and has the
+// services of that user's data.
+func TestCalendarFeedNeedsToken(t *testing.T) {
+	_, st, h := testAPI(t)
+	ctx := context.Background()
+	types, _ := st.ListWorshipTypes(ctx)
+	day := time.Now().AddDate(0, 0, 7).UTC().Truncate(24 * time.Hour)
+	_, _ = st.CreateService(ctx, model.Service{Kolom: 3, TypeID: types[0].ID, Date: day, Time: "19:00", Host: "Umboh"})
+	_, _ = st.CreateService(ctx, model.Service{Kolom: 4, TypeID: types[0].ID, Date: day, Time: "19:00", Host: "Kowaas"})
+	u := &model.User{Username: "k3", Role: model.RoleScoped, Koloms: []int{3}, WebAuthnID: []byte("k3")}
+	if err := st.CreateUser(ctx, u); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SetCalendarToken(ctx, u.ID, "secret"); err != nil {
+		t.Fatal(err)
+	}
+	get := func(q string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/calendar.ics"+q, nil))
+		return rec
+	}
+	if rec := get(""); rec.Code != http.StatusNotFound {
+		t.Errorf("no token: %d", rec.Code)
+	}
+	if rec := get("?token=wrong"); rec.Code != http.StatusNotFound {
+		t.Errorf("wrong token: %d", rec.Code)
+	}
+	rec := get("?token=secret")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Umboh") || strings.Contains(rec.Body.String(), "Kowaas") {
+		t.Errorf("their feed: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// The admins' user statistics: today's sign-ins with their source and role,
+// and who is signed in now.
+func TestLoginStats(t *testing.T) {
+	a, st, h := testAPI(t)
+	ctx := context.Background()
+	u := &model.User{Username: "budi", Role: model.RoleScoped, Koloms: []int{3}, WebAuthnID: []byte("budi")}
+	if err := st.CreateUser(ctx, u); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	a.now = func() time.Time { return now }
+	if _, err := st.RecordLogin(ctx, u.ID, now.Add(-time.Minute), model.LoginWeb); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.RecordLogin(ctx, u.ID, now, model.LoginAndroid)
+	if err != nil || got.LastLoginSource != model.LoginAndroid {
+		t.Fatalf("last login source: %+v %v", got, err)
+	}
+	if err := st.CreateSession(ctx, model.Session{ID: "s1", UserID: u.ID, Source: model.LoginAndroid, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/admin/logins", nil))
+	var s LoginStats
+	if err := json.Unmarshal(rec.Body.Bytes(), &s); err != nil {
+		t.Fatal(rec.Body.String(), err)
+	}
+	if s.Users != 1 || s.Web != 1 || s.Android != 1 || len(s.Logins) != 2 || s.Logins[0].Source != model.LoginAndroid ||
+		s.Logins[0].Role != model.RoleScoped || s.Logins[0].Username != "budi" {
+		t.Errorf("today: %+v", s)
+	}
+	if len(s.Active) != 1 || s.Active[0].Username != "budi" || s.Active[0].Android != 1 {
+		t.Errorf("active: %+v", s.Active)
+	}
+}

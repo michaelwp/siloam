@@ -49,7 +49,7 @@ func TestPublicReadSessionHandling(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	do := func(cookie string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest(http.MethodGet, "/api/members", nil)
+		r := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
 		if cookie != "" {
 			r.AddCookie(&http.Cookie{Name: sessionCookie, Value: cookie})
 		}
@@ -68,6 +68,14 @@ func TestPublicReadSessionHandling(t *testing.T) {
 	rec = do("expired-or-revoked")
 	if rec.Code != http.StatusNoContent || signedIn || !strings.Contains(rec.Header().Get("Set-Cookie"), "Max-Age=0") {
 		t.Fatalf("stale cookie: code=%d signedIn=%v set-cookie=%q", rec.Code, signedIn, rec.Header().Get("Set-Cookie"))
+	}
+
+	// jemaat data needs a session
+	r := httptest.NewRequest(http.MethodGet, "/api/members", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, r)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("visitor reads members: %d", rec.Code)
 	}
 
 	// valid session: full view
@@ -218,5 +226,47 @@ func TestRoleScope(t *testing.T) {
 		if _, _, err := svc.roleScope(r, c.role, c.koloms, c.bipras); (err == nil) != c.ok {
 			t.Errorf("%s: %v", c.what, err)
 		}
+	}
+}
+
+// An admin signs a user out everywhere, giving the reason.
+func TestAdminLogsOutUser(t *testing.T) {
+	svc, st := testService(t)
+	ctx := context.Background()
+	mux := http.NewServeMux()
+	svc.Register(mux)
+	h := svc.Middleware(mux)
+	admin := &model.User{Username: "admin", Role: model.RoleAdmin, WebAuthnID: []byte("admin")}
+	budi := &model.User{Username: "budi", Role: model.RoleUser, WebAuthnID: []byte("budi")}
+	for _, u := range []*model.User{admin, budi} {
+		if err := st.CreateUser(ctx, u); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := time.Now().UTC()
+	for id, u := range map[string]*model.User{"a": admin, "b1": budi, "b2": budi} {
+		if err := st.CreateSession(ctx, model.Session{ID: hashToken(id), UserID: u.ID, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	post := func(id bson.ObjectID, body string) int {
+		r := httptest.NewRequest(http.MethodPost, "/api/users/"+id.Hex()+"/logout", strings.NewReader(body))
+		r.AddCookie(&http.Cookie{Name: sessionCookie, Value: "a"})
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, r)
+		return rec.Code
+	}
+	if c := post(budi.ID, `{"reason":""}`); c != http.StatusBadRequest {
+		t.Errorf("without a reason: %d", c)
+	}
+	if c := post(admin.ID, `{"reason":"tes saja"}`); c != http.StatusBadRequest {
+		t.Errorf("themselves: %d", c)
+	}
+	if c := post(budi.ID, `{"reason":"HP hilang"}`); c != http.StatusOK {
+		t.Fatalf("with a reason: %d", c)
+	}
+	sessions, _ := st.ListActiveSessions(ctx, now)
+	if len(sessions) != 1 || sessions[0].UserID != admin.ID {
+		t.Errorf("sessions left: %+v", sessions)
 	}
 }

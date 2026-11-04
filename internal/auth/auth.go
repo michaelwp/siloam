@@ -129,6 +129,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/auth/logout", s.logout)
 	mux.HandleFunc("GET /api/auth/me", s.me)
 	mux.HandleFunc("POST /api/auth/change-credentials", s.changeCredentials)
+	mux.HandleFunc("POST /api/auth/calendar-token", s.calendarToken)
 
 	mux.HandleFunc("POST /api/auth/passkey/login/begin", s.passkeyLoginBegin)
 	mux.HandleFunc("POST /api/auth/passkey/login/finish", s.passkeyLoginFinish)
@@ -142,6 +143,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/users/{id}", s.updateUser)
 	mux.HandleFunc("POST /api/users/{id}/reset-password", s.resetPassword)
 	mux.HandleFunc("DELETE /api/users/{id}", s.deleteUser)
+	mux.HandleFunc("POST /api/users/{id}/logout", s.logoutUser)
 }
 
 // paths reachable without a session
@@ -155,17 +157,16 @@ var publicPaths = map[string]bool{
 	"/api/auth/passkey/login/finish": true,
 }
 
-// publicRead reports whether r only reads jemaat data, which the public
-// (read-only) pages show without signing in (or the Android app's update check). Every write still needs a session.
+// publicRead reports whether r reads what visitors (not signed in) get: the
+// congregation's statistics summary, the Android app's update check, and the
+// calendar feed (which checks its own secret link token). Every jemaat data
+// read and every write needs a session.
 func publicRead(r *http.Request) bool {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		return false
 	}
 	p := r.URL.Path
-	return p == "/api/koloms" || p == "/api/app/android" || p == "/api/bipra-categories" || p == "/api/worship-types" || p == "/api/calendar.ics" ||
-		p == "/api/services" || strings.HasPrefix(p, "/api/services/") ||
-		p == "/api/families" || strings.HasPrefix(p, "/api/families/") ||
-		p == "/api/members" || strings.HasPrefix(p, "/api/members/")
+	return p == "/api/stats" || p == "/api/app/android" || p == "/api/calendar.ics"
 }
 
 // adminOnly: user management and the admin pages (Android version, audit log).
@@ -339,7 +340,7 @@ func (s *Service) authenticate(r *http.Request) (*model.User, *model.Session, er
 // returns store.ErrLocked, without a session, if the account was locked
 // meanwhile.
 func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID bson.ObjectID) (*model.User, error) {
-	u, err := s.store.RecordLogin(r.Context(), userID, time.Now().UTC())
+	u, err := s.store.RecordLogin(r.Context(), userID, time.Now().UTC(), loginSource(r))
 	if err != nil {
 		return nil, err
 	}
@@ -349,6 +350,7 @@ func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID bs
 		ID:        hashToken(token),
 		UserID:    u.ID,
 		UserAgent: r.UserAgent(),
+		Source:    loginSource(r),
 		CreatedAt: now,
 		ExpiresAt: now.Add(s.cfg.SessionTTL),
 	}
@@ -357,6 +359,14 @@ func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID bs
 	}
 	s.setCookie(w, sessionCookie, token, "/", s.cfg.SessionTTL)
 	return u, nil
+}
+
+// loginSource tells the Android app (header X-Client: android) from the web app.
+func loginSource(r *http.Request) string {
+	if strings.EqualFold(r.Header.Get("X-Client"), model.LoginAndroid) {
+		return model.LoginAndroid
+	}
+	return model.LoginWeb
 }
 
 func (s *Service) setCookie(w http.ResponseWriter, name, value, path string, ttl time.Duration) {

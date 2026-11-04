@@ -82,3 +82,35 @@ fun stats(members: List<Member>, families: List<Family>, categories: List<Catego
         familySizes = (1..maxSize).map { size -> families.count { it.memberCount == size } },
     )
 }
+
+/** The statistics summary visitors get (GET /api/stats), with its categories (in order). */
+data class PublicStats(val stats: Stats, val categories: List<Category>)
+
+/** Parses /api/stats: the whole congregation's counts, no names. */
+fun parsePublicStats(json: String): PublicStats {
+    val o = org.json.JSONObject(json)
+    fun yn(key: String) = o.getJSONObject(key).let { YesNo(it.optInt("yes"), it.optInt("no"), it.optInt("unknown")) }
+    fun ints(key: String) = o.optJSONArray(key)?.let { a -> (0 until a.length()).map { a.optInt(it) } } ?: emptyList()
+    val catArray = o.optJSONArray("categories") ?: org.json.JSONArray()
+    val categories = Parse.categories(catArray.toString())
+    val counts = (0 until catArray.length()).map { catArray.getJSONObject(it) }
+    val statuses = o.optJSONArray("maritalStatuses") ?: org.json.JSONArray()
+    return PublicStats(
+        stats = Stats(
+            families = o.optInt("families"),
+            members = o.optInt("members"),
+            male = o.optInt("male"),
+            female = o.optInt("female"),
+            byStatus = (0 until statuses.length()).map { statuses.getJSONObject(it) }.map { it.optString("label") to it.optInt("value") },
+            baptized = yn("baptized"),
+            confirmed = yn("confirmed"),
+            bipra = categories.zip(counts).associate { (c, j) -> c.key to j.optInt("count") },
+            uncategorized = 0,
+            bipraByGender = categories.zip(counts).filterNot { it.first.isFlag }
+                .map { (c, j) -> c to GenderSplit(j.optInt("male"), j.optInt("female")) },
+            birthdaysPerMonth = ints("birthMonths").let { if (it.size == 12) it else List(12) { 0 } },
+            familySizes = ints("familySizes"),
+        ),
+        categories = categories,
+    )
+}

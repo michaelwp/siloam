@@ -18,6 +18,7 @@ func (s *Store) ensureAuthIndexes(ctx context.Context) error {
 	if _, err := s.users.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{{Key: "username", Value: 1}}, Options: options.Index().SetUnique(true)},
 		{Keys: bson.D{{Key: "webauthnId", Value: 1}}, Options: options.Index().SetUnique(true)},
+		{Keys: bson.D{{Key: "calendarToken", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true)},
 	}); err != nil {
 		return err
 	}
@@ -151,11 +152,12 @@ func set(fields bson.D) bson.D {
 
 func byID(id bson.ObjectID) bson.D { return bson.D{{Key: "_id", Value: id}} }
 
-// RecordLogin marks a successful sign-in at now: clears the failed-login
-// counter and any expired lock, and sets lastLoginAt — only if no lock is in
-// force. A lock that landed while the password was being checked wins:
+// RecordLogin marks a successful sign-in at now from source (model.LoginWeb
+// or LoginAndroid): clears the failed-login counter and any expired lock,
+// sets lastLoginAt, and logs it for the user statistics — only if no lock is
+// in force. A lock that landed while the password was being checked wins:
 // ErrLocked is returned.
-func (s *Store) RecordLogin(ctx context.Context, id bson.ObjectID, now time.Time) (*model.User, error) {
+func (s *Store) RecordLogin(ctx context.Context, id bson.ObjectID, now time.Time, source string) (*model.User, error) {
 	u, err := s.modifyUser(ctx,
 		bson.D{{Key: "_id", Value: id}, {Key: "$or", Value: bson.A{
 			bson.D{{Key: "lockedUntil", Value: nil}},
@@ -166,11 +168,42 @@ func (s *Store) RecordLogin(ctx context.Context, id bson.ObjectID, now time.Time
 			{Key: "lockedAt", Value: nil},
 			{Key: "lockedUntil", Value: nil},
 			{Key: "lastLoginAt", Value: now},
+			{Key: "lastLoginSource", Value: source},
 		}))
 	if errors.Is(err, ErrNotFound) {
 		return nil, ErrLocked
 	}
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.logins().InsertOne(ctx, model.Login{
+		UserID: u.ID, Username: u.Username, Role: u.Role, Koloms: u.Koloms, BipraIDs: u.BipraIDs, Source: source, At: now,
+	})
 	return u, err
+}
+
+// loginRetention is how long the sign-in log is kept.
+const loginRetention = 90 * 24 * time.Hour
+
+func (s *Store) logins() *mongo.Collection { return s.users.Database().Collection("logins") }
+
+func (s *Store) ensureLoginIndexes(ctx context.Context) error {
+	_, err := s.logins().Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "at", Value: -1}}, Options: options.Index().SetExpireAfterSeconds(int32(loginRetention.Seconds())),
+	})
+	return err
+}
+
+// ListLogins returns the sign-ins from from (inclusive) to to (exclusive), newest first.
+func (s *Store) ListLogins(ctx context.Context, from, to time.Time) ([]model.Login, error) {
+	cur, err := s.logins().Find(ctx,
+		bson.D{{Key: "at", Value: bson.D{{Key: "$gte", Value: from}, {Key: "$lt", Value: to}}}},
+		options.Find().SetSort(bson.D{{Key: "at", Value: -1}}))
+	if err != nil {
+		return nil, err
+	}
+	out := []model.Login{}
+	return out, cur.All(ctx, &out)
 }
 
 var ErrLocked = errors.New("account locked")
@@ -198,6 +231,19 @@ func (s *Store) ResetPassword(ctx context.Context, id bson.ObjectID, hash string
 		fields = append(fields, bson.E{Key: "passkeys", Value: bson.A{}})
 	}
 	return s.modifyUser(ctx, byID(id), set(fields))
+}
+
+// GetUserByCalendarToken finds the user whose calendar feed link has token.
+func (s *Store) GetUserByCalendarToken(ctx context.Context, token string) (*model.User, error) {
+	if token == "" {
+		return nil, ErrNotFound
+	}
+	return s.findUser(ctx, bson.D{{Key: "calendarToken", Value: token}})
+}
+
+// SetCalendarToken gives the user a new calendar feed link (the old one stops working).
+func (s *Store) SetCalendarToken(ctx context.Context, id bson.ObjectID, token string) (*model.User, error) {
+	return s.modifyUser(ctx, byID(id), set(bson.D{{Key: "calendarToken", Value: token}}))
 }
 
 func (s *Store) SetUsername(ctx context.Context, id bson.ObjectID, username string) (*model.User, error) {
@@ -362,4 +408,22 @@ func (s *Store) DeleteUserSessions(ctx context.Context, userID bson.ObjectID, ke
 	}
 	_, err := s.sessions.DeleteMany(ctx, filter)
 	return err
+}
+
+// ActiveSession is a user's unexpired sign-in (signed in now).
+type ActiveSession struct {
+	UserID    bson.ObjectID `bson:"userId"`
+	Source    string        `bson:"source"`
+	CreatedAt time.Time     `bson:"createdAt"`
+}
+
+// ListActiveSessions returns the sessions that have not expired, newest first.
+func (s *Store) ListActiveSessions(ctx context.Context, now time.Time) ([]ActiveSession, error) {
+	cur, err := s.sessions.Find(ctx, bson.D{{Key: "expiresAt", Value: bson.D{{Key: "$gt", Value: now}}}},
+		options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}}))
+	if err != nil {
+		return nil, err
+	}
+	out := []ActiveSession{}
+	return out, cur.All(ctx, &out)
 }

@@ -450,10 +450,34 @@ func (a *API) serviceICS(w http.ResponseWriter, r *http.Request) {
 		ics.Calendar("Jadwal Ibadah GMIM Siloam", []ics.Event{icsEvent(v)}))
 }
 
-// calendarICS is a subscribable feed of the schedule, optionally narrowed with
-// ?kolom=11 and ?type=<id> (repeatable).
+// calendarICS is a user's subscribable feed of the schedule (?token= is the
+// secret of their link: calendar apps cannot sign in), with the services of
+// their data (see User.SeesService), optionally narrowed with ?kolom=11 and
+// ?type=<id> (repeatable).
 func (a *API) calendarICS(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
+	u, err := a.store.GetUserByCalendarToken(r.Context(), q.Get("token"))
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "link kalender tidak berlaku; buat link baru di Jadwal Ibadah")
+		return
+	}
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	if u.IsLockedAt(time.Now()) {
+		writeError(w, http.StatusForbidden, "akun terkunci")
+		return
+	}
+	typesByID := map[bson.ObjectID]model.WorshipType{}
+	all, err := a.store.ListWorshipTypes(r.Context())
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	for _, t := range all {
+		typesByID[t.ID] = t
+	}
 	kolom := 0
 	if k := q.Get("kolom"); k != "" {
 		n, err := strconv.Atoi(k)
@@ -480,6 +504,9 @@ func (a *API) calendarICS(w http.ResponseWriter, r *http.Request) {
 	events := make([]ics.Event, 0, len(views))
 	for _, v := range views {
 		// a kolom's feed also has the services of the whole congregation (no kolom)
+		if !u.SeesService(v.Kolom, typesByID[v.TypeID]) {
+			continue
+		}
 		if (kolom == 0 || v.Kolom == kolom || v.Kolom == 0) && (len(types) == 0 || types[v.TypeID.Hex()]) {
 			events = append(events, icsEvent(v))
 		}

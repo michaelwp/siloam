@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { usersApi, type Role, type User } from '../api'
+import { loginsApi, usersApi, type LoginSource, type LoginStats, type Role, type User } from '../api'
 import { roleLabel, useAuth } from '../auth'
 import { PasswordStrength } from '../components/PasswordStrength'
 import { Badge, ConfirmDelete, Field, FormShell, Modal, PageHeader, Status } from '../components/ui'
@@ -10,6 +10,7 @@ import { generatePassword, MIN_PASSWORD_LENGTH, passwordValid } from '../passwor
 type Dialog =
   | { kind: 'add' }
   | { kind: 'edit' | 'reset' | 'delete'; user: User }
+  | { kind: 'logout'; user: { id: string; username: string } }
   | { kind: 'created'; user: User; password: string }
   | null
 
@@ -20,6 +21,7 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [dialog, setDialog] = useState<Dialog>(null)
+  const [statsKey, setStatsKey] = useState(0)
   // locks expire on their own; judge them against the time the list was loaded
   const [loadedAt, setLoadedAt] = useState(0)
 
@@ -94,7 +96,16 @@ export default function AdminUsers() {
                       )}
                     </td>
                     <td className="num">{u.passkeys.length}</td>
-                    <td>{u.lastLoginAt ? longDate(u.lastLoginAt) : <span className="muted">Belum pernah</span>}</td>
+                    <td>
+                      {u.lastLoginAt ? (
+                        <>
+                          {longDate(u.lastLoginAt)}, {clockTime(u.lastLoginAt)}
+                          {u.lastLoginSource && <span className="muted"> · {SOURCE_LABELS[u.lastLoginSource]}</span>}
+                        </>
+                      ) : (
+                        <span className="muted">Belum pernah</span>
+                      )}
+                    </td>
                     <td className="actions">
                       <button className="link" onClick={() => setDialog({ kind: 'edit', user: u })}>
                         Ubah
@@ -102,6 +113,11 @@ export default function AdminUsers() {
                       <button className="link" onClick={() => setDialog({ kind: 'reset', user: u })}>
                         {locked ? 'Buka Kunci' : 'Reset Password'}
                       </button>
+                      {!self && (
+                        <button className="link" onClick={() => setDialog({ kind: 'logout', user: u })}>
+                          Keluarkan
+                        </button>
+                      )}
                       {!self && (
                         <button className="link danger" onClick={() => setDialog({ kind: 'delete', user: u })}>
                           Hapus
@@ -115,6 +131,8 @@ export default function AdminUsers() {
           </table>
         </div>
       )}
+
+      <UserStats key={statsKey} onLogout={(user) => setDialog({ kind: 'logout', user })} />
 
       {dialog?.kind === 'add' && (
         <AddUser
@@ -140,6 +158,16 @@ export default function AdminUsers() {
       )}
       {dialog?.kind === 'reset' && (
         <ResetPassword user={dialog.user} locked={isLocked(dialog.user, loadedAt)} onClose={close} onSaved={load} />
+      )}
+      {dialog?.kind === 'logout' && (
+        <LogoutUser
+          user={dialog.user}
+          onClose={close}
+          onDone={() => {
+            setStatsKey((k) => k + 1) // the "signed in now" list changed
+            close()
+          }}
+        />
       )}
       {dialog?.kind === 'delete' && (
         <ConfirmDelete
@@ -476,5 +504,168 @@ function ResetPassword({
         </p>
       </FormShell>
     </Modal>
+  )
+}
+
+const SOURCE_LABELS: Record<LoginSource, string> = { web: 'Web', android: 'Android' }
+
+function today() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** Ends all of a user's sessions; the reason is required and kept in the activity log. */
+function LogoutUser({ user, onClose, onDone }: { user: { id: string; username: string }; onClose: () => void; onDone: () => void }) {
+  const [reason, setReason] = useState('')
+  return (
+    <Modal title={`Keluarkan ${user.username}`} onClose={onClose}>
+      <FormShell
+        onCancel={onClose}
+        submitLabel="Keluarkan"
+        onSubmit={async () => {
+          if (reason.trim().length < 3) throw new Error('Alasan wajib diisi')
+          await usersApi.logout(user.id, reason)
+          onDone()
+        }}
+      >
+        <p className="wide">
+          <b>{user.username}</b> akan dikeluarkan dari semua perangkat (web dan Android). Pengguna tetap dapat masuk lagi;
+          untuk mencegahnya, reset password atau hapus akunnya.
+        </p>
+        <Field label="Alasan (wajib, dicatat di Log Aktivitas)" wide>
+          <textarea required minLength={3} maxLength={200} rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
+        </Field>
+      </FormShell>
+    </Modal>
+  )
+}
+
+/** Who signed in on a day (with source and role), and who is signed in now. */
+function UserStats({ onLogout }: { onLogout: (u: { id: string; username: string }) => void }) {
+  const { user: me } = useAuth()
+  const { categories } = useData()
+  const [date, setDate] = useState(today)
+  const [stats, setStats] = useState<LoginStats | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    let live = true
+    loginsApi.get(date).then(
+      (s) => {
+        if (!live) return
+        setStats(s)
+        setError(null)
+      },
+      (e: Error) => {
+        if (live) setError(e.message)
+      },
+    )
+    return () => {
+      live = false
+    }
+  }, [date])
+  const isToday = date === today()
+  return (
+    <section className="user-stats">
+      <header className="family-head">
+        <h2 className="section-title">Statistik Pengguna</h2>
+        <label className="inline-field">
+          <span className="muted small">Tanggal</span>
+          <input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value || today())} />
+        </label>
+      </header>
+      <Status loading={!stats && !error} error={error} />
+      {stats && (
+        <>
+          <div className="stats">
+            <div className="stat">
+              <span className="stat-value">{stats.users}</span>
+              <span className="stat-label">Pengguna masuk {isToday ? 'hari ini' : `(${longDate(stats.date)})`}</span>
+            </div>
+            <div className="stat">
+              <span className="stat-value">{stats.web}</span>
+              <span className="stat-label">Masuk lewat web</span>
+            </div>
+            <div className="stat">
+              <span className="stat-value">{stats.android}</span>
+              <span className="stat-label">Masuk lewat Android</span>
+            </div>
+            <div className="stat">
+              <span className="stat-value">{stats.active.length}</span>
+              <span className="stat-label">Sedang masuk sekarang</span>
+            </div>
+          </div>
+
+          <h3 className="subsection-title">Daftar masuk {isToday ? 'hari ini' : longDate(stats.date)}</h3>
+          {stats.logins.length ? (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Jam</th>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th>Sumber</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.logins.map((l) => (
+                    <tr key={l.id}>
+                      <td>{clockTime(l.at)}</td>
+                      <td className="strong">{l.username}</td>
+                      <td>{roleLabel(l, categories)}</td>
+                      <td>{SOURCE_LABELS[l.source] ?? l.source}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="status">Tidak ada yang masuk pada tanggal ini.</p>
+          )}
+
+          <h3 className="subsection-title">Sedang masuk sekarang</h3>
+          {stats.active.length ? (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th>Perangkat</th>
+                    <th>Masuk terakhir</th>
+                    <th>
+                      <span className="sr-only">Aksi</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.active.map((a) => (
+                    <tr key={a.userId}>
+                      <td className="strong">{a.username}</td>
+                      <td>{roleLabel(a, categories)}</td>
+                      <td>
+                        {[a.web && `${a.web} web`, a.android && `${a.android} Android`].filter(Boolean).join(' · ')}
+                      </td>
+                      <td>
+                        {longDate(a.since)}, {clockTime(a.since)}
+                      </td>
+                      <td className="actions">
+                        {a.userId !== me?.id && (
+                          <button className="link" onClick={() => onLogout({ id: a.userId, username: a.username })}>
+                            Keluarkan
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="status">Tidak ada.</p>
+          )}
+        </>
+      )}
+    </section>
   )
 }

@@ -120,7 +120,10 @@ export default function AuditLog() {
                     {e.action}
                     <span className="muted small block">{label(e.category)}</span>
                   </td>
-                  <td>{e.target || <span className="muted">–</span>}</td>
+                  <td>
+                    {e.target || <span className="muted">–</span>}
+                    {e.detail && <span className="muted small block">{e.detail}</span>}
+                  </td>
                   <td>
                     {e.status < 400 ? (
                       <Badge tone="green">Berhasil</Badge>

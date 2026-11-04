@@ -2261,3 +2261,30 @@ textarea {
   font-size: 0.75rem;
   color: var(--muted);
 }
+
+/* visitors: why they see only the statistics */
+.public-note {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+}
+
+/* Admin → Pengguna: user statistics */
+.user-stats {
+  margin-top: 28px;
+}
+.user-stats .family-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+.inline-field {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.subsection-title {
+  margin: 20px 0 8px;
+  font-size: 1rem;
+}

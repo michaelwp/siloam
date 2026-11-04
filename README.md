@@ -14,8 +14,11 @@ and `-import` loads the workbook into Kolom 11 unless you pass `-kolom N`.
 **Jadwal Ibadah** is a Google-Calendar-style schedule (month grid or list)
 of worship services per kolom. Each service can be added to Google Calendar
 or Apple Calendar (`.ics`), and "Tambahkan ke Kalender Saya" subscribes a
-calendar app to `/api/calendar.ics` (optionally `?kolom=N`), so changes show
-up automatically. The kinds of service ("Jenis Ibadah": Kolom, WKI, PKB,
+calendar app to the user's **personal feed link**
+(`/api/calendar.ics?token=…`, optionally `&kolom=N`; calendar apps cannot
+sign in, so the secret token is the key — "Buat link baru" replaces it and the
+old link stops working), with the services of that user's data, so changes
+show up automatically. The kinds of service ("Jenis Ibadah": Kolom, WKI, PKB,
 Pemuda, Remaja, ASM, with their colors) are managed on their own page; each
 can be linked to a BIPRA category (WKI, PKB, Pemuda, Remaja and ASM are linked
 by name once, automatically). A service of a linked jenis may have no kolom
@@ -37,9 +40,20 @@ column may be headed "Pemimpin Ibadah" or "Khadim").
 
 ## Android app (`android/`)
 
-A Kotlin (Jetpack Compose) app for the congregation: the **public view** only
-(no sign-in, the same redacted data visitors see on the web), with a kolom
-picker, an offline cache, and five tabs:
+A Kotlin (Jetpack Compose) app for the congregation. **Not signed in** it
+shows only the whole congregation's statistics summary (`/api/stats`: counts
+and charts, no names, no filters) and the sign-in form, and sends no
+notifications. **Signed in** (username + password, the same accounts as the
+web; an account that must first change its password is sent to the web) it
+shows that user's data, with a kolom picker, an offline cache, notifications,
+and five tabs. *Pengaturan → Keluar* signs out and deletes the data from the
+phone; when the session ends (expired, or an admin used *Keluarkan*) the app
+returns to the visitor view. Sign-ins from the app are counted as *Android* in
+the admins' user statistics (header `X-Client: android`).
+
+Older app versions (without sign-in) can no longer load data from this
+server; they still get the update notice, so publish the new APK on
+*Aplikasi Android* when deploying.
 
 | Tab | What it shows |
 |---|---|
@@ -151,33 +165,24 @@ are computed by the server:
   change applies at once on the web and in the Android app (which reads
   `/api/bipra-categories`; older servers without it keep the defaults).
 
-## Public view
+## Visitors (not signed in)
 
-The homepage (**Beranda**) and the six data pages can be viewed **without
-signing in**, read-only (no add/edit/delete). Visitors only get non-private
-information — the server removes the rest from the API responses, it is not
-just hidden in the page:
-
-| Visitors see | Only signed-in users see |
-|---|---|
-| member name, family, gender, BIPRA category (incl. Lansia — an age range) | birth year / full birth date, exact age, birth place |
-| birthday as day + month | relationship in the family |
-| marital status, baptism / sidi status (on all pages; filters on *Daftar Anggota Jemaat*) | domisili, wedding year, years married |
-| family name, note (e.g. Simpatisan), number of members, anniversary as day + month | |
-
-The homepage shows totals, BIPRA counts and this month's birthdays and wedding
-anniversaries. **Masuk** (sidebar) opens `/login`; *Akun Saya* and *Pengguna*
-require signing in. The site asks search engines not to index it (a
+**All jemaat data needs a sign-in.** A visitor sees only **Beranda** with the
+whole congregation's statistics summary — totals (families, members, gender,
+baptism / sidi), marital statuses, BIPRA counts and the charts — from
+`GET /api/stats`, which returns counts only (no names, no member or family
+data). Visitors get no kolom / BIPRA picker, no notifications and no other
+page: every other page goes to `/login` (**Masuk** in the sidebar) and comes
+back after signing in. The site asks search engines not to index it (a
 `noindex` meta tag on the page and an `X-Robots-Tag: noindex` header on every
-response, including the API); remove both to allow indexing. Public API reads
-are rate-limited like everything else.
+response, including the API); remove both to allow indexing.
 
-Every families/members response says which view it is in an `X-Data-View`
-header (`full` or `public`). The page shows private columns and edit controls
-only when the data it holds is the full view, and reloads all data whenever the
-user signs in or out, so redacted data can never be edited and saved back, and
-private data never stays on screen after signing out. An expired session on a
-public page gets its cookie cleared and the page returns to visitor mode.
+For signed-in users, families/members responses still say which view they are
+in an `X-Data-View` header, and a limited user (*kelola kolom/BIPRA*, a
+viewer with choices) gets the data outside their scope redacted by the
+server. When a session ends (expired, signed out elsewhere, or *Keluarkan* by
+an admin) the next request answers `401` and the page returns to the visitor
+view.
 
 ## Sign-in & users
 
@@ -211,7 +216,15 @@ reach the app (not signed in, not an admin) are not logged either.
   temporary password, edit username/role, reset a password (optionally removing
   the user's passkeys, e.g. for a lost phone) and delete users. New and reset
   accounts must change their password at the next sign-in. You cannot delete or
-  demote yourself, and there is always at least one admin.
+  demote yourself, and there is always at least one admin. The list shows each
+  user's last sign-in (date, time, and web or Android). **Keluarkan** signs a
+  user out on every device (web and Android) and requires a reason, which the
+  *Log Aktivitas* keeps ("Keluarkan pengguna", *Alasan: …*); they can sign in
+  again (reset the password or delete the account to stop that).
+- **Statistik Pengguna** (on *Pengguna*): for a chosen day (default today) how
+  many users signed in, how many sign-ins came from the web and from Android,
+  the list of sign-ins (time, username, role, source), and who is signed in
+  now (per device type, with *Keluarkan*). Sign-ins are kept 90 days.
 - **Roles:**
 
   | Role | Can change | Sees private data of |
@@ -514,11 +527,11 @@ is only read.
 
 ## API
 
-Reading koloms, families, members, worship types and services (`GET` on
-`/api/koloms`, `/api/families…`, `/api/members…`, `/api/worship-types`,
-`/api/services…`, `/api/calendar.ics` and `/api/bipra-categories`) and the Android update check are public; families and members come
-in the redacted public view unless signed in. Every other
-endpoint except `/api/health` and sign-in requires a session cookie, and
+Only the statistics summary (`GET /api/stats`), the Android update check,
+`/api/health`, `/api/version`, sign-in, and the calendar feed (which checks
+its own `token`) are public. Every other endpoint — every read of koloms,
+families, members, worship types, services and BIPRA categories too —
+requires a session cookie, and
 `/api/users` and `/api/admin/…` require the admin role. Errors are
 `{"error": "...", "code": "..."}`; `code` is `unauthenticated` (401),
 `password_change_required` (403), `forbidden` (403), `rate_limited` (429, with
@@ -530,11 +543,13 @@ user has proven who they are).
 | GET    | `/api/health`                          | `200` when MongoDB is reachable (public)  |
 | GET    | `/api/version`                         | `{version}`, e.g. `v3.1.0` (public; shown at the foot of the sidebar) |
 | GET    | `/api/app/android`                     | `{latestVersion, downloadUrl}` for the app's update check (public; empty when not configured) |
+| GET    | `/api/stats`                           | the whole congregation's summary for visitors: `{families, members, male, female, baptized, confirmed, maritalStatuses, categories (with count, male, female), birthMonths, familySizes}` — counts only (public) |
 | GET    | `/api/admin/android`                   | admin: the release in effect, `source` (`database`/`env`/`none`) and the `ANDROID_*` values |
 | PUT    | `/api/admin/android`                   | admin: `{latestVersion, downloadUrl}` (both empty = no update notice) |
 | DELETE | `/api/admin/android`                   | admin: back to the `ANDROID_*` settings |
 | GET    | `/api/admin/audit`                     | admin: log entries newest first; `?username=&category=&result=ok\|failed&from=&to=` (YYYY-MM-DD, `APP_TIMEZONE`), `before=<id>` for the next 50 |
 | GET    | `/api/admin/audit/meta`                | admin: the categories and usernames for the filters |
+| GET    | `/api/admin/logins[?date=YYYY-MM-DD]`  | admin: user statistics for a day (default today, `APP_TIMEZONE`): `{users, web, android, logins: [{username, role, koloms, bipraIds, source, at}], active: [who is signed in now, per source]}`; sign-ins are kept 90 days |
 | GET    | `/api/bipra-categories`                | the BIPRA categories and their rules, in order (public) |
 | POST   | `/api/admin/bipra`                     | admin: `{key, name, kind (main\|flag), color, minAge, maxAge, gender, marital ("", married, unmarried), orMarried}` |
 | PUT    | `/api/admin/bipra/{id}`                | admin: same fields                        |
@@ -555,6 +570,8 @@ user has proven who they are).
 | POST   | `/api/users`                           | admin: `{username, password, role, koloms, bipraIds}` — role `admin`, `user`, `scoped` (then `koloms`, kolom numbers, and/or `bipraIds`, BIPRA category ids, at least one in all) or `viewer` (`koloms`/`bipraIds` optional; none: sees everything) |
 | PUT    | `/api/users/{id}`                      | admin: `{username, role, koloms, bipraIds}` |
 | POST   | `/api/users/{id}/reset-password`       | admin: `{password, clearPasskeys}`; also unlocks |
+| POST   | `/api/users/{id}/logout`               | admin: `{reason}` (required, 3–200 characters; kept in the activity log) — ends all of the user's sessions, web and Android |
+| POST   | `/api/auth/calendar-token`             | `{reset?}` → `{token}`: the secret of the user's calendar feed link (created on first use; `reset` replaces it) |
 | DELETE | `/api/users/{id}`                      | admin                                     |
 | GET    | `/api/koloms`                          | public                                    |
 | POST   | `/api/koloms`                          | `{number}`                                |
@@ -578,7 +595,7 @@ user has proven who they are).
 | PUT    | `/api/services/{id}`                   |                                           |
 | DELETE | `/api/services/{id}`                   |                                           |
 | GET    | `/api/services/{id}/ics`               | one service as an `.ics` file (public)    |
-| GET    | `/api/calendar.ics[?kolom=&type=]`     | calendar feed to subscribe to (public)    |
+| GET    | `/api/calendar.ics?token=[&kolom=&type=]` | the user's calendar feed: the services of their data (public, but needs the secret `token` of their link) |
 
 Dates are sent as `YYYY-MM-DDT00:00:00Z`; `baptized`/`confirmed` are `true`,
 `false` or `null` (unknown).
@@ -605,7 +622,7 @@ internal/model          types (incl. User, Session) + derived values
 internal/importer       .xlsx import (members workbook, worship schedule)
 internal/ics            iCalendar (.ics) output for the schedule
 web/                    React app (web/embed.go embeds web/dist)
-android/                Android app (Kotlin, Jetpack Compose; public view + notifications)
+android/                Android app (Kotlin, Jetpack Compose; sign-in, data + notifications; statistics for visitors)
 .env.example            settings template (copy to .env)
 Dockerfile, compose.yaml, Makefile, .githooks/
 ```

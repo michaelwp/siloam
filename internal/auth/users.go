@@ -2,13 +2,16 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"siloam/internal/audit"
 	"siloam/internal/httpx"
 	"siloam/internal/model"
 	"siloam/internal/store"
@@ -279,4 +282,60 @@ func (s *Service) ResetUser(ctx context.Context, username string) (string, error
 		return "", err
 	}
 	return password, s.store.DeleteUserSessions(ctx, u.ID, "")
+}
+
+// calendarToken returns the secret token of the user's calendar feed link,
+// creating it on first use; {"reset": true} replaces it (the old link stops
+// working).
+func (s *Service) calendarToken(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Reset bool `json:"reset"`
+	}
+	if r.ContentLength != 0 && !httpx.Decode(w, r, &in) {
+		return
+	}
+	u := current(r).user
+	if u.CalendarToken == "" || in.Reset {
+		var err error
+		if u, err = s.store.SetCalendarToken(r.Context(), u.ID, base64.RawURLEncoding.EncodeToString(randomBytes(24))); err != nil {
+			httpx.ServerError(w, err)
+			return
+		}
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"token": u.CalendarToken})
+}
+
+// logoutUser ends every session of a user (web and Android) — e.g. a lost
+// phone or a shared computer. The admin must give the reason, which the
+// activity log keeps. The user can sign in again.
+func (s *Service) logoutUser(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Reason string `json:"reason"`
+	}
+	if !httpx.Decode(w, r, &in) {
+		return
+	}
+	reason := strings.Join(strings.Fields(in.Reason), " ")
+	if len([]rune(reason)) < 3 {
+		httpx.WriteError(w, http.StatusBadRequest, "alasan wajib diisi")
+		return
+	}
+	if len([]rune(reason)) > 200 {
+		httpx.WriteError(w, http.StatusBadRequest, "alasan terlalu panjang (maks. 200 karakter)")
+		return
+	}
+	u, ok := s.targetUser(w, r)
+	if !ok {
+		return
+	}
+	if u.ID == current(r).user.ID {
+		httpx.WriteError(w, http.StatusBadRequest, "untuk akun sendiri gunakan Keluar")
+		return
+	}
+	audit.SetDetail(r, "Alasan: "+reason)
+	if err := s.store.DeleteUserSessions(r.Context(), u.ID, ""); err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, u)
 }

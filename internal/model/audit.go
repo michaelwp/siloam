@@ -20,6 +20,7 @@ type AuditEntry struct {
 	Action   string         `bson:"action" json:"action"`     // e.g. "Ubah anggota"
 	Target   string         `bson:"target,omitempty" json:"target,omitempty"`
 	TargetID string         `bson:"targetId,omitempty" json:"targetId,omitempty"`
+	Detail   string         `bson:"detail,omitempty" json:"detail,omitempty"` // e.g. the reason an admin gave
 	Method   string         `bson:"method" json:"method"`
 	Path     string         `bson:"path" json:"path"`
 	Status   int            `bson:"status" json:"status"` // HTTP status: 2xx = done

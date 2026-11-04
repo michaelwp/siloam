@@ -1,15 +1,48 @@
-import { useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import type { Member, Service } from '../api'
 import { Link } from 'react-router-dom'
-import { ChartCard, ColumnChart, StackedBarChart } from '../components/charts'
+import { StatsView } from '../components/StatsView'
 import { BirthdaysByKolom, ByKolom, PageHeader, Status } from '../components/ui'
-import { useBipraScope } from '../auth'
+import { useAuth, useBipraScope } from '../auth'
 import { useData } from '../data'
-import { bipraRange, byText, dayMonth, daysUntil, inBipra, MARITAL_STATUSES, MONTHS, parts } from '../format'
+import { computeStats, statsApi, type Stats } from '../stats'
+import { byText, dayMonth, daysUntil, MONTHS, parts } from '../format'
 import { clock, serviceDayKey, serviceTitle, shortDay, upcomingServices, useSchedule, WEEK_AHEAD_DAYS } from '../schedule'
 
-/** Public homepage: totals plus this month's birthdays and wedding anniversaries. */
+/**
+ * Homepage. Signed in: today's services and birthdays, the statistics of the
+ * viewed data, and this month's birthdays and wedding anniversaries.
+ * Visitors: only the whole congregation's statistics summary.
+ */
 export default function Beranda() {
+  const { user } = useAuth()
+  return user ? <SignedInBeranda /> : <PublicBeranda />
+}
+
+/** Visitors: the statistics summary only (no names, no filters, no notifications). */
+function PublicBeranda() {
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [month] = useState(() => new Date().getMonth())
+  useEffect(() => {
+    statsApi.get().then(setStats, (e: Error) => setError(e.message))
+  }, [])
+  return (
+    <>
+      <PageHeader title="Beranda" subtitle="GMIM Siloam · Statistik jemaat" />
+      <p className="card public-note">
+        Data jemaat hanya dapat dilihat setelah masuk.{' '}
+        <Link to="/login" state={{ from: '/' }}>
+          Masuk
+        </Link>
+      </p>
+      <Status loading={!stats && !error} error={error} />
+      {stats && <StatsView stats={stats} month={month} />}
+    </>
+  )
+}
+
+function SignedInBeranda() {
   const { families, members, categories: allCategories, filterLabel, bipraFilter, loading, error } = useData()
   // a category chosen in the filter, or a BIPRA-only user's (scope): members,
   // families and statistics of those categories only
@@ -20,44 +53,7 @@ export default function Beranda() {
   const month = today.getMonth()
   const day = today.getDate()
 
-  const count = (pred: (m: (typeof members)[number]) => boolean) => members.filter(pred).length
-  // baptized / confirmed (sidi): those who are, with the not-yet and unknown below
-  const sacrament = (label: string, field: 'baptized' | 'confirmed') => {
-    const unknown = count((m) => m[field] === null)
-    return {
-      label,
-      value: count((m) => m[field] === true),
-      to: `/anggota?${field}=yes`,
-      note: `${count((m) => m[field] === false)} belum` + (unknown ? ` · ${unknown} tanpa data` : ''),
-    }
-  }
-  const tiles: { label: string; value: number; to: string; note?: string }[] = [
-    { label: 'Keluarga', value: families.length, to: scope ? '/anggota' : '/keluarga' },
-    { label: 'Jiwa', value: members.length, to: '/anggota' },
-    {
-      label: 'Laki-laki',
-      value: count((m) => m.gender === 'Laki Laki'),
-      to: '/anggota?gender=Laki+Laki',
-    },
-    {
-      label: 'Perempuan',
-      value: count((m) => m.gender === 'Perempuan'),
-      to: '/anggota?gender=Perempuan',
-    },
-    sacrament('Baptis', 'baptized'),
-    sacrament('Sidi', 'confirmed'),
-  ]
-  // marital statuses: the known ones, then any other the data has
-  const statuses = [
-    ...MARITAL_STATUSES,
-    ...new Set(members.map((m) => m.maritalStatus).filter((s) => s && !MARITAL_STATUSES.includes(s))),
-  ].map((s) => ({ label: s, value: count((m) => m.maritalStatus === s) }))
-  const bipra = categories.map((c) => ({
-    key: c.key,
-    label: c.name,
-    range: bipraRange(c),
-    value: count((m) => inBipra(m, c)),
-  }))
+  const stats = useMemo(() => computeStats(families, members, categories), [families, members, categories])
 
   // month/day are available to visitors; the year (age, years married) only when signed in
   const year = today.getFullYear()
@@ -90,118 +86,19 @@ export default function Beranda() {
             <TodayBirthdays members={members} today={today} />
           </div>
 
-          <div className="stats">
-            {tiles.map((t) => (
-              <Link key={t.label} to={t.to} className="stat">
-                <span className="stat-value">{t.value}</span>
-                <span className="stat-label">{t.label}</span>
-                {t.note && <span className="stat-range">{t.note}</span>}
-              </Link>
-            ))}
-          </div>
-
-          <h2 className="section-title">Status</h2>
-          <div className="stats">
-            {statuses.map((s) => (
-              <Link key={s.label} to={`/anggota?status=${encodeURIComponent(s.label)}`} className="stat">
-                <span className="stat-value">{s.value}</span>
-                <span className="stat-label">{s.label}</span>
-              </Link>
-            ))}
-          </div>
-
-          <h2 className="section-title">Kategorial BIPRA</h2>
-          <div className="stats">
-            {bipra.map((c) => (
-              <Link
-                key={c.label}
-                // a BIPRA-only user has no BIPRA page; Anggota is already their category
-                to={scope ? '/anggota' : `/bipra?kategori=${encodeURIComponent(c.key)}`}
-                className="stat"
-              >
-                <span className="stat-value">{c.value}</span>
-                <span className="stat-label">{c.label}</span>
-                <span className="stat-range">{c.range}</span>
-              </Link>
-            ))}
-          </div>
-
-          <h2 className="section-title">Statistik</h2>
-          <div className="chart-grid">
-            <ChartCard
-              title="Ulang tahun per bulan"
-              subtitle={`Jumlah jiwa yang berulang tahun tiap bulan · ${MONTHS[month]} disorot`}
-            >
-              <ColumnChart
-                data={MONTHS.map((name, i) => ({
-                  label: name,
-                  short: name.slice(0, 3),
-                  value: members.filter((m) => m.birthMonth === i + 1).length,
-                  emphasis: i === month,
-                }))}
-                unit="jiwa"
-                labelHead="Bulan"
-                emphasize
-              />
-            </ChartCard>
-            <ChartCard title="Kategorial BIPRA per jenis kelamin" subtitle="Jumlah jiwa per kategori">
-              <StackedBarChart
-                rowHead="Kategori"
-                series={[
-                  { name: 'Laki-laki', cls: 'viz-s1' },
-                  { name: 'Perempuan', cls: 'viz-s2' },
-                ]}
-                rows={categories
-                  .filter((c) => c.kind === 'main')
-                  .map((c) => {
-                    const inCat = members.filter((m) => m.category === c.key)
-                    return {
-                      label: c.name,
-                      values: [
-                        inCat.filter((m) => m.gender === 'Laki Laki').length,
-                        inCat.filter((m) => m.gender === 'Perempuan').length,
-                      ],
-                    }
-                  })}
-              />
-            </ChartCard>
-            <ChartCard title="Baptis & Sidi" subtitle="Jumlah jiwa yang sudah, belum, atau tanpa data">
-              <StackedBarChart
-                rowHead="Sakramen"
-                series={[
-                  { name: 'Sudah', cls: 'viz-s1' },
-                  { name: 'Belum', cls: 'viz-s2' },
-                  // unknown: recessive gray, not a third hue
-                  { name: 'Tanpa data', cls: 'viz-deemph' },
-                ]}
-                rows={(
-                  [
-                    ['Baptis', 'baptized'],
-                    ['Sidi', 'confirmed'],
-                  ] as const
-                ).map(([label, field]) => ({
-                  label,
-                  values: [true, false, null].map((v) => count((m) => m[field] === v)),
-                }))}
-              />
-            </ChartCard>
-            <ChartCard title="Ukuran keluarga" subtitle="Jumlah keluarga menurut banyaknya anggota">
-              <ColumnChart
-                data={Array.from(
-                  {
-                    length: Math.max(0, ...families.map((f) => f.memberCount)),
-                  },
-                  (_, i) => ({
-                    label: `${i + 1} jiwa`,
-                    short: String(i + 1),
-                    value: families.filter((f) => f.memberCount === i + 1).length,
-                  }),
-                )}
-                unit="keluarga"
-                labelHead="Anggota per keluarga"
-              />
-            </ChartCard>
-          </div>
+          <StatsView
+            stats={stats}
+            month={month}
+            links={{
+              families: scope ? '/anggota' : '/keluarga',
+              members: '/anggota',
+              gender: (g) => `/anggota?gender=${encodeURIComponent(g).replaceAll('%20', '+')}`,
+              sacrament: (field) => `/anggota?${field}=yes`,
+              status: (label) => `/anggota?status=${encodeURIComponent(label)}`,
+              // a BIPRA-only user has no BIPRA page; Anggota is already their category
+              category: (key) => (scope ? '/anggota' : `/bipra?kategori=${encodeURIComponent(key)}`),
+            }}
+          />
 
           <div className="home-grid">
             <section className="card">

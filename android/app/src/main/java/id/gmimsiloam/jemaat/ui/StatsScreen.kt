@@ -46,6 +46,7 @@ import id.gmimsiloam.jemaat.data.MONTHS
 import id.gmimsiloam.jemaat.data.MemberFilter
 import id.gmimsiloam.jemaat.data.Tri
 import id.gmimsiloam.jemaat.data.Snapshot
+import id.gmimsiloam.jemaat.data.Stats
 import id.gmimsiloam.jemaat.data.YesNo
 import id.gmimsiloam.jemaat.data.inCategory
 import id.gmimsiloam.jemaat.data.stats
@@ -61,32 +62,41 @@ fun StatsSection(data: Snapshot, filter: DataFilter, onCategory: (String) -> Uni
     val families = filter.families(data)
     // a category in the filter: its members only, so the other categories would all be 0
     val categories = filter.category(data)?.let { listOf(it) } ?: data.categories
-    val s = stats(members, families, categories)
+    StatsContent(stats(members, families, categories), categories, onCategory, onMembers)
+}
+
+/**
+ * The tiles and charts of [s]. Without [onCategory] / [onMembers] (a visitor's
+ * summary) the tiles do not open anything.
+ */
+@Composable
+fun StatsContent(s: Stats, categories: List<Category>, onCategory: ((String) -> Unit)? = null, onMembers: ((MemberFilter) -> Unit)? = null) {
     val month = remember { LocalDate.now().monthValue }
+    fun Modifier.opens(f: MemberFilter) = onMembers?.let { open -> clickable { open(f) } } ?: this
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         TileRow(listOf("Keluarga" to s.families, "Jiwa" to s.members))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            Tile("Laki-laki", s.male, null, Modifier.weight(1f).clickable { onMembers(MemberFilter(gender = GENDER_MALE)) })
-            Tile("Perempuan", s.female, null, Modifier.weight(1f).clickable { onMembers(MemberFilter(gender = GENDER_FEMALE)) })
+            Tile("Laki-laki", s.male, null, Modifier.weight(1f).opens(MemberFilter(gender = GENDER_MALE)))
+            Tile("Perempuan", s.female, null, Modifier.weight(1f).opens(MemberFilter(gender = GENDER_FEMALE)))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             // a tap opens the Jemaat tab with those members
-            Tile("Baptis", s.baptized.yes, s.baptized.note(), Modifier.weight(1f).clickable { onMembers(MemberFilter(baptized = Tri.YES)) })
-            Tile("Sidi", s.confirmed.yes, s.confirmed.note(), Modifier.weight(1f).clickable { onMembers(MemberFilter(confirmed = Tri.YES)) })
+            Tile("Baptis", s.baptized.yes, s.baptized.note(), Modifier.weight(1f).opens(MemberFilter(baptized = Tri.YES)))
+            Tile("Sidi", s.confirmed.yes, s.confirmed.note(), Modifier.weight(1f).opens(MemberFilter(confirmed = Tri.YES)))
         }
 
         Text("Status", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), maxItemsInEachRow = 2) {
             s.byStatus.forEach { (status, n) ->
-                Tile(status, n, null, Modifier.weight(1f).clickable { onMembers(MemberFilter(status = status)) })
+                Tile(status, n, null, Modifier.weight(1f).opens(MemberFilter(status = status)))
             }
         }
 
         Text("Kategorial BIPRA", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), maxItemsInEachRow = 3) {
             categories.forEach { c ->
-                Tile(c.label, s.bipra[c.key] ?: 0, c.range, Modifier.weight(1f).clickable { onCategory(c.key) })
+                Tile(c.label, s.bipra[c.key] ?: 0, c.range, Modifier.weight(1f).let { m -> onCategory?.let { m.clickable { it(c.key) } } ?: m })
             }
         }
         if (s.uncategorized > 0) {
