@@ -265,3 +265,15 @@ fun Pill(text: String, container: Color = MaterialTheme.colorScheme.surfaceVaria
         Text(text, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
     }
 }
+
+/** "Versi 1.9.0": this app's version, at the foot of Beranda and the sign-in pages. */
+@Composable
+fun AppVersion(modifier: Modifier = Modifier) {
+    Text(
+        "Versi ${id.gmimsiloam.jemaat.BuildConfig.VERSION_NAME}",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
+    )
+}

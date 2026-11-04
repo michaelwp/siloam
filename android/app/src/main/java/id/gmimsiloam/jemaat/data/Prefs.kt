@@ -131,6 +131,27 @@ class Prefs(context: Context) {
             putString("notifyBipraId", f.bipraId)
         }
 
+    /**
+     * What the screens show (the Kolom and BIPRA pickers in the top bar), apart
+     * from [filter], which the notifications follow. Until one is picked, the
+     * same as [filter].
+     */
+    var viewFilter: DataFilter
+        get() {
+            if (p.getString("viewMode", null) == null) return filter
+            return DataFilter(
+                kolom = p.getInt("viewKolom", 0).takeIf { it > 0 },
+                bipra = p.getString("viewBipra", "") ?: "",
+                bipraId = p.getString("viewBipraId", "") ?: "",
+            )
+        }
+        set(f) = p.edit {
+            putString("viewMode", "set")
+            putInt("viewKolom", f.kolom ?: 0)
+            putString("viewBipra", f.bipra)
+            putString("viewBipraId", f.bipraId)
+        }
+
     companion object {
         const val DEFAULT_SERVER = "https://siloam.fly.dev"
     }

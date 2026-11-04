@@ -152,6 +152,7 @@ fun HomeScreen(data: Snapshot, filter: DataFilter, error: String?, update: AppRe
         ) {
             StatsSection(data, filter, onCategory, onMembers)
         }
+        AppVersion()
     }
 
     selected?.let { ServiceSheet(it) { selected = null } }

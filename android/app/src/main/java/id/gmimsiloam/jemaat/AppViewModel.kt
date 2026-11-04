@@ -25,8 +25,10 @@ data class UiState(
     val refreshing: Boolean = false,
     /** the last refresh failed (the cached data, if any, is still shown) */
     val error: String? = null,
-    /** what the app shows and notifies about */
+    /** what the notifications are about (Pengaturan; default: all of the user's data) */
     val filter: DataFilter = DataFilter.all,
+    /** what the screens show (the Kolom and BIPRA pickers in the top bar) */
+    val view: DataFilter = DataFilter.all,
     /** a newer app version to offer, if the last check found one */
     val update: AppRelease? = null,
     /** signed in: the jemaat data; else (a visitor) only [publicStats] */
@@ -47,6 +49,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(
         UiState(
             filter = prefs.filter,
+            view = prefs.viewFilter,
             update = prefs.availableUpdate(BuildConfig.VERSION_NAME),
             signedIn = prefs.signedIn,
             account = prefs.account,
@@ -114,7 +117,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** The "filter data bawaan": the screens and the notifications follow it. */
+    /** What the screens show (the top bar's pickers); the notifications keep their own filter. */
+    fun setView(f: DataFilter) {
+        prefs.viewFilter = f
+        _state.update { it.copy(view = f) }
+    }
+
+    /** What the notifications are about (Pengaturan). */
     fun setFilter(f: DataFilter) {
         prefs.filter = f
         _state.update { it.copy(filter = f) }
@@ -178,7 +187,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun signedIn(account: String) {
-        _state.update { it.copy(loggingIn = false, signedIn = true, account = account, error = null, mustChange = null, loginError = null) }
+        _state.update {
+            it.copy(
+                loggingIn = false, signedIn = true, account = account, error = null, mustChange = null, loginError = null,
+                filter = prefs.filter, view = prefs.viewFilter,
+            )
+        }
         refresh(restart = true)
         DailyWorker.rescheduleReminders(getApplication())
     }

@@ -59,6 +59,9 @@ class Repository(private val context: Context) {
     private fun keep(prefs: Prefs, token: String, user: JSONObject): String {
         val account = user.optString("username") + " · " + roleLabel(user)
         prefs.scope = Scope.of(user)
+        // a new sign-in starts on all of the user's data, for the screens and the notifications
+        prefs.filter = DataFilter.all
+        prefs.viewFilter = DataFilter.all
         prefs.session = token
         prefs.account = account
         return account

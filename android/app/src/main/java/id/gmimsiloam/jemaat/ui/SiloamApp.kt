@@ -9,6 +9,10 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.foundation.layout.size
@@ -105,8 +109,9 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
             askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
-    // the "filter data bawaan" (a kolom or category that no longer exists: everything, see DataFilter)
-    val filter = state.filter
+    // what the screens show: the Kolom and BIPRA pickers (a kolom or category that no longer
+    // exists: everything, see DataFilter); the notifications have their own filter (Pengaturan)
+    val filter = state.view
 
     // Back from another tab returns to Beranda before leaving the app
     BackHandler(enabled = !settings && tab != Tab.Home) { tab = Tab.Home }
@@ -143,6 +148,7 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
 
     Scaffold(
         topBar = {
+            Column {
             TopAppBar(
                 title = {
                     Column {
@@ -151,13 +157,14 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
                     }
                 },
                 actions = {
-                    FilterMenu(filter, state.data, onPick = vm::setFilter)
                     IconButton(onClick = { settings = true }) { Icon(Icons.Filled.Settings, contentDescription = "Pengaturan") }
                     IconButton(onClick = { confirmClose = true }) {
                         Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Tutup aplikasi")
                     }
                 },
             )
+            Pickers(filter, state.data, onPick = vm::setView)
+            }
         },
         bottomBar = {
             NavigationBar {
@@ -220,43 +227,63 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
 }
 
 /**
- * The "filter data bawaan": a kolom (or all) and a BIPRA category (or all), each
- * picked on its own, so both together are possible. The screens and the
- * notifications follow it; it is also in Pengaturan.
+ * What the screens show, picked separately as on the web: a kolom (or all) and
+ * a BIPRA category (or all), so both can apply. A limited user's choices follow
+ * their role (see [Scope]): their koloms (every kolom with categories), and in
+ * one of their own koloms every category, elsewhere only their own.
  */
 @Composable
-private fun FilterMenu(filter: DataFilter, data: Snapshot?, onPick: (DataFilter) -> Unit) {
+private fun Pickers(filter: DataFilter, data: Snapshot?, onPick: (DataFilter) -> Unit) {
+    if (data == null) return
+    val scope = data.scope
+    val kolom = filter.kolomOf(data)
+    val category = filter.category(data)
+    val categories = scope.bipraChoices(data, kolom)
+    val ownOnly = categories.size < data.categories.size
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 6.dp),
+    ) {
+        Picker(
+            label = kolomLabel(kolom).let { if (kolom == null && scope.limited) "Semua Data Saya" else it },
+            fixed = scope.singleKolom != null,
+            modifier = Modifier.weight(1f),
+        ) { close ->
+            if (scope.singleKolom == null) {
+                MenuChoice(if (scope.limited) "Semua Data Saya" else "Semua Kolom", kolom == null) { onPick(filter.withKolom(null)); close() }
+            }
+            data.koloms.forEach { k ->
+                MenuChoice(kolomLabel(k.number), kolom == k.number) { onPick(filter.withKolom(k.number)); close() }
+            }
+        }
+        if (categories.isNotEmpty()) {
+            val all = if (ownOnly) "Semua BIPRA Saya" else "Semua BIPRA"
+            Picker(
+                label = category?.label ?: all,
+                // a single own category outside their koloms: nothing to pick
+                fixed = ownOnly && categories.size == 1,
+                modifier = Modifier.weight(1f),
+            ) { close ->
+                MenuChoice(all, category == null) { onPick(filter.withBipra(null)); close() }
+                categories.forEach { c ->
+                    MenuChoice(c.label, category == c) { onPick(filter.withBipra(c)); close() }
+                }
+            }
+        }
+    }
+}
+
+/** A dropdown button showing [label]; [fixed]: just the label, nothing to pick. */
+@Composable
+private fun Picker(label: String, fixed: Boolean, modifier: Modifier, items: @Composable (close: () -> Unit) -> Unit) {
     var open by remember { mutableStateOf(false) }
-    Box {
-        TextButton(onClick = { open = true }, modifier = Modifier.widthIn(max = 180.dp)) {
-            // a long category name must not push the title away
-            Text(filter.shortLabel(data), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+    Box(modifier) {
+        OutlinedButton(onClick = { open = true }, enabled = !fixed, modifier = Modifier.fillMaxWidth()) {
+            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (!fixed) Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            // a pick changes its own part only; the ticks show both
-            val kolom = data?.let { filter.kolomOf(it) }
-            val category = data?.let { filter.category(it) }
-            val scope = data?.scope ?: Scope.none
-            // a limited user: in one of their koloms any category, elsewhere only their own (see Scope)
-            val choices = data?.let { scope.bipraChoices(it, kolom) }
-            val ownOnly = data != null && choices != null && choices.size < data.categories.size
-            // the few categories first; the koloms (often a dozen) after
-            choices?.takeIf { it.isNotEmpty() }?.let { categories ->
-                MenuHeading("Kategori BIPRA")
-                MenuChoice(if (ownOnly) "Semua BIPRA Saya" else "Semua BIPRA", category == null) { onPick(filter.withBipra(null)); open = false }
-                categories.forEach { c ->
-                    MenuChoice(c.label, category == c) { onPick(filter.withBipra(c)); open = false }
-                }
-                HorizontalDivider()
-            }
-            MenuHeading("Kolom")
-            if (scope.singleKolom == null) {
-                MenuChoice(if (scope.limited) "Semua Data Saya" else "Semua Kolom", kolom == null) { onPick(filter.withKolom(null)); open = false }
-            }
-            data?.koloms?.forEach { k ->
-                MenuChoice(kolomLabel(k.number), kolom == k.number) { onPick(filter.withKolom(k.number)); open = false }
-            }
+            items { open = false }
         }
     }
 }
@@ -273,14 +300,5 @@ private fun MenuChoice(text: String, selected: Boolean, onClick: () -> Unit) {
     )
 }
 
-@Composable
-private fun MenuHeading(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-    )
-}
 
 fun kolomLabel(k: Int?) = if (k == null) "Semua Kolom" else "Kolom $k"

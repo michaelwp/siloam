@@ -13,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import android.app.Activity
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -55,6 +56,12 @@ fun PublicApp(state: UiState, vm: AppViewModel) {
         ChangeCredentialsScreen(it, state, vm)
         return
     }
+    // the sign-in form opens only from the Masuk button
+    var login by rememberSaveable { mutableStateOf(false) }
+    if (login) {
+        LoginScreen(state, vm, onBack = { login = false })
+        return
+    }
     val context = LocalContext.current
     var confirmClose by rememberSaveable { mutableStateOf(false) }
     if (confirmClose) {
@@ -81,6 +88,7 @@ fun PublicApp(state: UiState, vm: AppViewModel) {
                     }
                 },
                 actions = {
+                    TextButton(onClick = { login = true }) { Text("Masuk") }
                     IconButton(onClick = { confirmClose = true }) {
                         Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Tutup aplikasi")
                     }
@@ -98,7 +106,15 @@ fun PublicApp(state: UiState, vm: AppViewModel) {
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 state.update?.let { UpdateBanner(it) }
-                LoginCard(state, vm)
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            "Data jemaat, jadwal ibadah dan notifikasi hanya tersedia setelah masuk.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Button(onClick = { login = true }, modifier = Modifier.fillMaxWidth()) { Text("Masuk") }
+                    }
+                }
                 val stats = state.publicStats
                 when {
                     stats != null -> StatsContent(stats.stats, stats.categories)
@@ -108,7 +124,32 @@ fun PublicApp(state: UiState, vm: AppViewModel) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                AppVersion()
             }
+        }
+    }
+}
+
+/** The sign-in form, opened from the Masuk button; back returns to the statistics. */
+@Composable
+private fun LoginScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
+    androidx.activity.compose.BackHandler(onBack = onBack)
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Masuk") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali") }
+                },
+            )
+        },
+    ) { padding ->
+        Column(
+            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            LoginCard(state, vm)
+            AppVersion()
         }
     }
 }
@@ -225,6 +266,7 @@ private fun ChangeCredentialsScreen(username0: String, state: UiState, vm: AppVi
                 modifier = Modifier.fillMaxWidth(),
             ) { Text(if (state.loggingIn) "Menyimpan…" else "Simpan & Lanjutkan") }
             TextButton(onClick = vm::cancelChange) { Text("Keluar") }
+            AppVersion()
         }
     }
 }

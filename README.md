@@ -42,8 +42,9 @@ column may be headed "Pemimpin Ibadah" or "Khadim").
 
 A Kotlin (Jetpack Compose) app for the congregation. **Not signed in** it
 shows only the whole congregation's statistics summary (`/api/stats`: counts
-and charts, no names, no filters) and the sign-in form, and sends no
-notifications. **Signed in** (username + password, the same accounts as the
+and charts, no names, no filters) with a **Masuk** button that opens the
+sign-in form, and sends no notifications. The app's version is shown at the
+foot of Beranda and of the sign-in pages. **Signed in** (username + password, the same accounts as the
 web; a new or reset account first sets its own username and password on a
 *Perbarui Akun* screen, as on the web, with the same password rules shown
 live) it
@@ -52,10 +53,16 @@ and five tabs. *Pengaturan → Keluar* signs out and deletes the data from the
 phone; when the session ends (expired, or an admin used *Keluarkan*) the app
 returns to the visitor view. The app follows the user's role like the web: a
 *kelola kolom/BIPRA* user or a viewer with choices sees only their koloms'
-data plus their categories' members and services in every kolom; the filter
-offers *Semua Data Saya* and their koloms (fixed for a single kolom), and the
-BIPRA choices are every category inside their own koloms but only their own
-categories elsewhere. A BIPRA-only user has no BIPRA tab and no wedding
+data plus their categories' members and services in every kolom. As on the
+web, the top bar has two separate pickers for what the screens show: **Kolom**
+(*Semua Data Saya* and their koloms, every kolom when they have categories;
+fixed for a single kolom) and **BIPRA** (every category inside one of their own
+koloms, only their own categories — or *Semua BIPRA Saya* — elsewhere). The
+**notifications** have their own filter (*Pengaturan → Filter notifikasi*,
+limited the same way) and by default cover all of the user's data, whatever
+the screens show: e.g. Kolom 11 + Remaja + Pemuda is notified about Kolom 11
+and about Remaja and Pemuda in every kolom. A new sign-in resets both to all
+of the user's data. A BIPRA-only user has no BIPRA tab and no wedding
 anniversaries. The role is read again on every refresh, so an admin's change
 applies without signing in again. Sign-ins from the app are counted as *Android* in
 the admins' user statistics (header `X-Client: android`).
@@ -79,13 +86,13 @@ It also sends **background notifications**:
   "Kolom 11: Budi Umboh, Erwin Umboh");
 - a reminder before each of today's services (default 1 hour before).
 
-The **filter data bawaan** (the top bar's picker, also under Pengaturan) is
-*Semua Kolom*, a BIPRA category (its members, the families they are in, and
-the services of the jenis linked to it, in every kolom) or a kolom (its data,
-its services and the whole congregation's). Every screen and the
-notifications follow it, and the app opens on it; it starts as the kolom
-chosen before the filter existed. Beranda's Pemberitahuan lists the same per
-kolom, also the next birthdays ("Kolom 11: Budi Umboh (besok), …").
+The top bar's **Kolom** and **BIPRA** pickers choose what the screens show
+(a kolom: its data, its services and the whole congregation's; a category:
+its members, the families they are in, and the services of the jenis linked
+to it), each on its own so both can apply. The **notifications** follow their
+own filter, *Pengaturan → Filter notifikasi* (default: all of the user's
+data). Beranda's Pemberitahuan lists what the screens show per kolom, also
+the next birthdays ("Kolom 11: Budi Umboh (besok), …").
 
 A WorkManager job checks about every hour, also after a reboot, without the
 app being open. The times,

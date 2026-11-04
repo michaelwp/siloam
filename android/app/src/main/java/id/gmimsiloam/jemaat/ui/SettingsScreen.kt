@@ -197,8 +197,9 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
 }
 
 /**
- * The "filter data bawaan" (the same choice as the top bar): a kolom or all,
- * and a BIPRA category or all. The screens and the notifications follow it.
+ * What the notifications are about: a kolom or all, and a BIPRA category or
+ * all, limited by the user's role like the top bar's pickers (which only
+ * change what the screens show). Default: all of the user's data.
  */
 @Composable
 private fun DataFilterFields(state: UiState, onPick: (DataFilter) -> Unit) {
@@ -211,7 +212,7 @@ private fun DataFilterFields(state: UiState, onPick: (DataFilter) -> Unit) {
     val categories = data?.let { scope.bipraChoices(it, kolom) }.orEmpty()
     val ownOnly = data != null && categories.size < data.categories.size
 
-    Text("Filter data bawaan", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+    Text("Filter notifikasi", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
     Text("Kolom", style = MaterialTheme.typography.labelLarge)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (scope.singleKolom == null) {
@@ -240,13 +241,18 @@ private fun DataFilterFields(state: UiState, onPick: (DataFilter) -> Unit) {
     }
     Hint(
         when {
-            kolom == null && category == null -> "Semua data jemaat, ibadah dan notifikasi (dikelompokkan per kolom)."
-            category == null -> "Data Kolom $kolom, ibadahnya dan ibadah untuk seluruh jemaat, dan notifikasinya."
-            kolom == null -> "Anggota ${category.label} dan keluarganya, ibadah jenis kategori ini (di semua kolom), dan notifikasinya."
-            else -> "Anggota ${category.label} di Kolom $kolom dan keluarganya, ibadah jenis kategori ini di kolom ini (dan untuk seluruh jemaat), dan notifikasinya."
+            kolom == null && category == null && scope.limited ->
+                "Notifikasi untuk semua data Anda: " + listOfNotNull(
+                    scope.koloms.takeIf { it.isNotEmpty() }?.let { "Kolom " + it.joinToString(", ") },
+                    data?.let { scope.ownCategories(it) }?.takeIf { it.isNotEmpty() }?.let { cs -> cs.joinToString(" + ") { it.label } + " di semua kolom" },
+                ).joinToString(", dan ") + "."
+            kolom == null && category == null -> "Notifikasi untuk semua jemaat dan ibadah (dikelompokkan per kolom)."
+            category == null -> "Notifikasi untuk Kolom $kolom: ibadahnya, ibadah untuk seluruh jemaat, dan ulang tahun anggotanya."
+            kolom == null -> "Notifikasi untuk anggota ${category.label} dan ibadah jenis kategori ini (di semua kolom)."
+            else -> "Notifikasi untuk anggota ${category.label} di Kolom $kolom dan ibadah jenis kategori ini di kolom ini (dan untuk seluruh jemaat)."
         },
     )
-    Hint("Dipakai saat aplikasi dibuka dan untuk notifikasi; dapat juga diubah di bagian atas layar.")
+    Hint("Hanya untuk notifikasi. Data yang ditampilkan dipilih dengan pilihan Kolom dan BIPRA di bagian atas layar.")
 }
 
 @Composable
