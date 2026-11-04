@@ -298,7 +298,9 @@ reach the app (not signed in, not an admin) are not logged either.
 - **Kas Kolom** (sidebar): each kolom's cash book. *Semua Kolom* lists every
   kolom's cash in, cash out and balance; picking a kolom opens its book for a
   month (or *Semua bulan*): opening balance, cash in, cash out, closing
-  balance, and every entry with its running balance (*Unduh CSV* exports it).
+  balance, and every entry with its running balance. *Unduh Excel* saves it as
+  an .xlsx file (real dates and amounts, the opening balance and the period's
+  totals; written by the page itself, no library) and *Unduh CSV* as CSV.
   An entry is **kas masuk** or **kas keluar**: date, amount (whole rupiah) and
   either the **ibadah** of that kolom it came from (e.g. its offering) or was
   spent for, or another source/use told in the **keterangan** (required then).

@@ -7,6 +7,7 @@ import { kolomLabel, useData } from '../data'
 import { fromInputDate, localToday, longDate, MONTHS, rupiah, toInputDate } from '../format'
 import { useSchedule } from '../schedule'
 import { useLoad } from '../useLoad'
+import { xlsx, type Cell } from '../xlsx'
 
 /**
  * Kas Kolom: each kolom's cash book. Admins and the kolom's treasurers
@@ -90,10 +91,11 @@ type Dialog = { kind: 'add'; entryKind: KasKind } | { kind: 'edit' | 'delete'; e
 /** One kolom's cash book for a month (or all of it), with the running balance. */
 function KasKolom({ kolom }: { kolom: number }) {
   const { user } = useAuth()
-  const { allServices } = useSchedule()
-  const [reload, setReload] = useState(0)
+  const { allServices, loading: scheduleLoading, error: scheduleError } = useSchedule()
   const loadBook = useCallback(() => kasApi.book(kolom), [kolom])
-  const { data: book, error, loading } = useLoad<KasBook>(`${kolom}|${reload}`, loadBook)
+  const { data: book, error, status, loading, reload } = useLoad<KasBook>(String(kolom), loadBook)
+  // without the schedule, a linked ibadah cannot be told from a deleted one
+  const scheduleKnown = !scheduleLoading && !scheduleError
   const [period, setPeriod] = useState<Period>(() => localToday().slice(0, 7))
   const [dialog, setDialog] = useState<Dialog>(null)
   const canEdit = !!book?.canEdit && managesKas(user, kolom)
@@ -101,7 +103,7 @@ function KasKolom({ kolom }: { kolom: number }) {
 
   const view = useMemo(() => (book ? bookView(book.entries, period) : null), [book, period])
   const done = async () => {
-    setReload((n) => n + 1)
+    reload()
     setDialog(null)
   }
 
@@ -144,13 +146,22 @@ function KasKolom({ kolom }: { kolom: number }) {
           Semua bulan
         </label>
         {book && view && (
-          <button type="button" className="link" onClick={() => downloadCsv(kolom, period, view, services)}>
-            Unduh CSV
-          </button>
+          <>
+            <button type="button" className="link" onClick={() => downloadXlsx(kolom, period, view, services)}>
+              Unduh Excel
+            </button>
+            <button type="button" className="link" onClick={() => downloadCsv(kolom, period, view, services)}>
+              Unduh CSV
+            </button>
+          </>
         )}
       </fieldset>
 
-      <Status loading={loading} error={error} />
+      {status === 403 ? (
+        <p className="status">Anda tidak dapat melihat kas {kolomLabel(kolom)}. Pilih kolom Anda di menu samping.</p>
+      ) : (
+        <Status loading={loading} error={error} />
+      )}
       {book && view && (
         <>
           <div className="stats">
@@ -185,7 +196,11 @@ function KasKolom({ kolom }: { kolom: number }) {
                     <tr key={e.id}>
                       <td className="nowrap">{longDate(e.date)}</td>
                       <td>
-                        <EntryText entry={e} service={e.serviceId ? services.get(e.serviceId) : undefined} />
+                        <EntryText
+                          entry={e}
+                          service={e.serviceId ? services.get(e.serviceId) : undefined}
+                          scheduleKnown={scheduleKnown}
+                        />
                       </td>
                       <td className="num">{e.kind === 'in' ? rupiah(e.amount) : ''}</td>
                       <td className="num">{e.kind === 'out' ? rupiah(e.amount) : ''}</td>
@@ -244,7 +259,15 @@ function KasKolom({ kolom }: { kolom: number }) {
 }
 
 /** The ibadah (its current name, or the one saved if it was deleted), the description and who recorded it. */
-function EntryText({ entry: e, service }: { entry: KasEntry; service?: Service }) {
+function EntryText({
+  entry: e,
+  service,
+  scheduleKnown,
+}: {
+  entry: KasEntry
+  service?: Service
+  scheduleKnown: boolean
+}) {
   const ibadah = service ? serviceName(service) : e.serviceLabel
   return (
     <>
@@ -252,7 +275,7 @@ function EntryText({ entry: e, service }: { entry: KasEntry; service?: Service }
         <span className="strong block">
           {e.kind === 'in' ? 'Dari ' : 'Untuk '}
           {ibadah}
-          {!service && e.serviceId && <span className="muted"> (jadwal sudah dihapus)</span>}
+          {!service && e.serviceId && scheduleKnown && <span className="muted"> (jadwal sudah dihapus)</span>}
         </span>
       )}
       {e.description && <span className="block">{e.description}</span>}
@@ -297,43 +320,114 @@ function bookView(entries: KasEntry[], period: Period): BookView {
   return v
 }
 
-/** A CSV cell, quoted. */
-function cell(v: string | number) {
-  return `"${String(v).replaceAll('"', '""')}"`
+/** One exported line: an entry with its running balance, or the opening balance (entry null). */
+type ExportRow = {
+  date: string | null // YYYY-MM-DD
+  kind: string
+  ibadah: string
+  description: string
+  in: number | null
+  out: number | null
+  balance: number
+  by: string
 }
 
-function downloadCsv(kolom: number, period: Period, view: BookView, services: Map<string, Service>) {
-  const lines = [
-    ['Tanggal', 'Jenis', 'Ibadah', 'Keterangan', 'Masuk', 'Keluar', 'Saldo', 'Dicatat oleh'].map(cell).join(';'),
-  ]
-  if (period) lines.push(['', '', '', 'Saldo awal', '', '', view.opening, ''].map(cell).join(';'))
+/** The lines of the book as shown (the period, with its opening balance). */
+function exportRows(period: Period, view: BookView, services: Map<string, Service>): ExportRow[] {
+  const rows: ExportRow[] = []
+  if (period) {
+    rows.push({
+      date: null,
+      kind: '',
+      ibadah: '',
+      description: 'Saldo awal',
+      in: null,
+      out: null,
+      balance: view.opening,
+      by: '',
+    })
+  }
   for (const { entry: e, balance } of view.rows) {
     const s = e.serviceId ? services.get(e.serviceId) : undefined
-    lines.push(
-      [
-        toInputDate(e.date),
-        e.kind === 'in' ? 'Masuk' : 'Keluar',
-        s ? serviceName(s) : e.serviceLabel,
-        e.description,
-        e.kind === 'in' ? e.amount : '',
-        e.kind === 'out' ? e.amount : '',
-        balance,
-        e.createdBy,
-      ]
-        .map(cell)
-        .join(';'),
-    )
+    rows.push({
+      date: toInputDate(e.date),
+      kind: e.kind === 'in' ? 'Masuk' : 'Keluar',
+      ibadah: s ? serviceName(s) : e.serviceLabel,
+      description: e.description,
+      in: e.kind === 'in' ? e.amount : null,
+      out: e.kind === 'out' ? e.amount : null,
+      balance,
+      by: e.createdBy,
+    })
   }
-  // a BOM so spreadsheet apps read it as UTF-8
-  const blob = new Blob(['﻿' + lines.join('\r\n')], {
-    type: 'text/csv;charset=utf-8',
-  })
+  return rows
+}
+
+const EXPORT_HEADER = ['Tanggal', 'Jenis', 'Ibadah', 'Keterangan', 'Masuk', 'Keluar', 'Saldo', 'Dicatat oleh']
+
+function exportName(kolom: number, period: Period) {
+  return `kas-kolom-${kolom}${period ? `-${period}` : ''}`
+}
+
+/** Saves blob as a download named name. */
+function save(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `kas-kolom-${kolom}${period ? `-${period}` : ''}.csv`
+  a.download = name
   a.click()
-  URL.revokeObjectURL(url)
+  // later: revoking at once can cancel the download in some browsers
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+/**
+ * A CSV cell, quoted. Text that a spreadsheet would run as a formula
+ * (=, +, -, @, tab, CR first) gets a leading apostrophe: a description is
+ * typed by users, the file is opened by others.
+ */
+function cell(v: string | number | null) {
+  const s = typeof v === 'string' && /^[=+\-@\t\r]/.test(v) ? `'${v}` : String(v ?? '')
+  return `"${s.replaceAll('"', '""')}"`
+}
+
+function downloadCsv(kolom: number, period: Period, view: BookView, services: Map<string, Service>) {
+  const lines = [EXPORT_HEADER.map(cell).join(';')]
+  for (const r of exportRows(period, view, services)) {
+    lines.push([r.date, r.kind, r.ibadah, r.description, r.in, r.out, r.balance, r.by].map(cell).join(';'))
+  }
+  // a BOM so spreadsheet apps read it as UTF-8
+  save(
+    new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }),
+    `${exportName(kolom, period)}.csv`,
+  )
+}
+
+const money = (v: number | null): Cell => (v === null ? null : { v, style: 'money' })
+const total = (v: number): Cell => ({ v, style: 'moneyBold' })
+
+/**
+ * The book as an Excel file: a title, the header, the lines (real dates and
+ * amounts, so they can be summed and sorted) and the period's totals.
+ */
+function downloadXlsx(kolom: number, period: Period, view: BookView, services: Map<string, Service>) {
+  const rows: Cell[][] = [
+    [{ v: `Kas ${kolomLabel(kolom)} — ${periodLabel(period)}`, style: 'bold' }],
+    [],
+    EXPORT_HEADER.map((h) => ({ v: h, style: 'bold' })),
+    ...exportRows(period, view, services).map((r): Cell[] => [
+      r.date ? new Date(`${r.date}T00:00:00Z`) : null,
+      r.kind,
+      r.ibadah,
+      r.date ? r.description : { v: r.description, style: 'bold' },
+      money(r.in),
+      money(r.out),
+      r.date ? money(r.balance) : total(r.balance),
+      r.by,
+    ]),
+    [],
+    [null, null, null, { v: 'Jumlah', style: 'bold' }, total(view.in), total(view.out), total(view.closing)],
+  ]
+  save(xlsx(`Kas ${kolomLabel(kolom)}`, rows, [14, 10, 42, 42, 15, 15, 16, 16]), `${exportName(kolom, period)}.xlsx`)
 }
 
 /** Adds or changes an entry: cash in (from an ibadah or another source) or cash out. */
@@ -350,7 +444,7 @@ function KasForm({
   onClose: () => void
   onSaved: () => Promise<void>
 }) {
-  const { allServices } = useSchedule()
+  const { allServices, loading: scheduleLoading, error: scheduleError } = useSchedule()
   const [kind, setKind] = useState<KasKind>(kind0)
   const [date, setDate] = useState(entry ? toInputDate(entry.date) : localToday())
   const [amount, setAmount] = useState(entry ? String(entry.amount) : '')
@@ -366,7 +460,9 @@ function KasForm({
     const coming = own.filter((s) => toInputDate(s.date) > today).toSorted((a, b) => a.date.localeCompare(b.date))
     return { held, coming }
   }, [allServices, kolom, today])
+  // linked to an ibadah not in the schedule: deleted (or the schedule is not loaded: keep it selectable)
   const linkedMissing = !!entry?.serviceId && !allServices.some((s) => s.id === entry.serviceId)
+  const missingNote = scheduleLoading || scheduleError ? '' : ' (jadwal sudah dihapus)'
 
   const what = kind === 'in' ? 'Sumber kas' : 'Digunakan untuk'
   return (
@@ -436,7 +532,12 @@ function KasForm({
               }}
             >
               <option value="">— pilih ibadah {kolomLabel(kolom)} —</option>
-              {linkedMissing && <option value={entry.serviceId!}>{entry.serviceLabel} (jadwal sudah dihapus)</option>}
+              {linkedMissing && (
+                <option value={entry.serviceId!}>
+                  {entry.serviceLabel}
+                  {missingNote}
+                </option>
+              )}
               {choices.held.length > 0 && (
                 <optgroup label="Sudah berlangsung">
                   {choices.held.map((s) => (

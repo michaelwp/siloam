@@ -206,10 +206,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (!BuildConfig.DEBUG) return
         refreshJob?.cancel()
         viewModelScope.launch {
-            repo.switchServer(url)
+            val old = repo.switchServer(url)
             _state.update { it.copy(publicStats = null, mustChange = null, loginError = null) }
             pendingSession = null
             signedOut(null)
+            // the old server may be slow or gone: its sign-out does not hold up the switch
+            old?.let { (server, session) -> launch { repo.abandonAt(server, session) } }
         }
     }
 

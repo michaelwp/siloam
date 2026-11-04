@@ -81,15 +81,22 @@ class Repository(private val context: Context) {
 
     /**
      * Debug builds: talks to [url] from now on ("" = the built-in server). The
-     * session and the data were the old server's: signed out (best effort on
-     * the old server too) and forgotten, also the cached statistics.
+     * session and the data were the old server's: forgotten at once, also the
+     * cached statistics. Returns the old server and session (null: none), to
+     * end that session there without waiting for it ([abandonAt]).
      */
-    suspend fun switchServer(url: String) = withContext(Dispatchers.IO) {
+    suspend fun switchServer(url: String): Pair<String, String>? = withContext(Dispatchers.IO) {
         val prefs = Prefs(context)
-        if (prefs.signedIn) runCatching { api(prefs).post("/api/auth/logout") }
+        val old = prefs.session.takeIf { it.isNotEmpty() }?.let { prefs.serverUrl to it }
         forget(prefs)
         statsFile.delete()
         prefs.debugServer = url
+        old
+    }
+
+    /** Ends [session] on [server] (best effort; e.g. the old server after [switchServer]). */
+    suspend fun abandonAt(server: String, session: String) = withContext(Dispatchers.IO) {
+        runCatching { Api(server, session).post("/api/auth/logout") }
     }
 
     /** Signs out here (and on the server), and forgets the data on the device. */

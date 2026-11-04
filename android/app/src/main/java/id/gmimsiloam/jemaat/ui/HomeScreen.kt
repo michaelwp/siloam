@@ -197,8 +197,8 @@ private fun KasSection(kas: List<KasSummary>) {
             KasTile(if (kas.size > 1) "Total saldo" else "Saldo", kas.sumOf { it.balance }, null, Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            KasTile("Kas masuk", kas.sumOf { it.monthIn }, month, Modifier.weight(1f))
-            KasTile("Kas keluar", kas.sumOf { it.monthOut }, month, Modifier.weight(1f))
+            KasTile("Kas masuk", kas.sumOf { it.monthIn }, month.ifEmpty { null }, Modifier.weight(1f))
+            KasTile("Kas keluar", kas.sumOf { it.monthOut }, month.ifEmpty { null }, Modifier.weight(1f))
         }
         if (kas.size > 1) {
             kas.forEach { k ->
@@ -221,7 +221,7 @@ private fun KasSection(kas: List<KasSummary>) {
             }
         }
         Text(
-            "Catat dan lihat rincian kas di halaman Kas Kolom versi web.",
+            "Rincian kas ada di halaman Kas Kolom versi web.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
