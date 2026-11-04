@@ -50,7 +50,14 @@ live) it
 shows that user's data, with a kolom picker, an offline cache, notifications,
 and five tabs. *Pengaturan → Keluar* signs out and deletes the data from the
 phone; when the session ends (expired, or an admin used *Keluarkan*) the app
-returns to the visitor view. Sign-ins from the app are counted as *Android* in
+returns to the visitor view. The app follows the user's role like the web: a
+*kelola kolom/BIPRA* user or a viewer with choices sees only their koloms'
+data plus their categories' members and services in every kolom; the filter
+offers *Semua Data Saya* and their koloms (fixed for a single kolom), and the
+BIPRA choices are every category inside their own koloms but only their own
+categories elsewhere. A BIPRA-only user has no BIPRA tab and no wedding
+anniversaries. The role is read again on every refresh, so an admin's change
+applies without signing in again. Sign-ins from the app are counted as *Android* in
 the admins' user statistics (header `X-Client: android`).
 
 Older app versions (without sign-in) can no longer load data from this

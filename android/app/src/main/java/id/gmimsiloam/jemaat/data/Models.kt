@@ -76,6 +76,8 @@ data class Snapshot(
     /** the Kategorial BIPRA categories, in order */
     val categories: List<Category>,
     val fetchedAt: Long,
+    /** what the signed-in user may see (the data is already narrowed to it; see [Scope.apply]) */
+    val scope: Scope = Scope.none,
 )
 
 private fun JSONObject.str(key: String) = if (isNull(key)) "" else optString(key, "")

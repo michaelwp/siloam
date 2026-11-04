@@ -49,7 +49,8 @@ fun HomeScreen(data: Snapshot, filter: DataFilter, error: String?, update: AppRe
     val up = upcomingServices(services, today)
     val birthdays = birthdaysToday(members, today)
     val nextBirthdays = upcomingBirthdays(members, today)
-    val anniversaries = anniversariesToday(families, today)
+    // a BIPRA-only user has no family pages: no wedding anniversaries (as on the web)
+    val anniversaries = if (data.scope.bipraOnly) emptyList() else anniversariesToday(families, today)
     var selected by remember { mutableStateOf<Service?>(null) }
     // which accordions are open, kept on the device (survives tab switches and restarts)
     val context = LocalContext.current

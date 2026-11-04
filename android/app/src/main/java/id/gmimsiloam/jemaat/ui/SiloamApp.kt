@@ -60,6 +60,7 @@ import id.gmimsiloam.jemaat.AppViewModel
 import id.gmimsiloam.jemaat.data.Prefs
 import id.gmimsiloam.jemaat.data.DataFilter
 import id.gmimsiloam.jemaat.data.MemberFilter
+import id.gmimsiloam.jemaat.data.Scope
 import id.gmimsiloam.jemaat.data.Snapshot
 import id.gmimsiloam.jemaat.notify.DailyWorker
 import id.gmimsiloam.jemaat.notify.Notifier
@@ -160,7 +161,8 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
         },
         bottomBar = {
             NavigationBar {
-                Tab.entries.forEach { t ->
+                // a BIPRA-only user has no family pages: no BIPRA tab (as on the web)
+                Tab.entries.filterNot { it == Tab.Bipra && state.data?.scope?.bipraOnly == true }.forEach { t ->
                     NavigationBarItem(
                         selected = tab == t,
                         onClick = { tab = t },
@@ -183,11 +185,22 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
                     "Data belum dapat dimuat.\n${state.error ?: ""}\n\nPeriksa koneksi internet, lalu tarik ke bawah untuk mencoba lagi.",
                 )
                 else -> Box(Modifier.fillMaxSize()) {
-                    tabState.SaveableStateProvider(tab.key) {
-                        when (tab) {
+                    // a BIPRA-only user has no BIPRA tab: a category tap opens the Jemaat tab
+                    val bipraTab = !data.scope.bipraOnly
+                    val shown = if (tab == Tab.Bipra && !bipraTab) Tab.Home else tab
+                    tabState.SaveableStateProvider(shown.key) {
+                        when (shown) {
                             Tab.Home -> HomeScreen(
                                 data, filter, state.error, state.update,
-                                onCategory = { category = it; tab = Tab.Bipra },
+                                onCategory = {
+                                    if (bipraTab) {
+                                        category = it
+                                        tab = Tab.Bipra
+                                    } else {
+                                        membersOpened++
+                                        tab = Tab.Members
+                                    }
+                                },
                                 onMembers = {
                                     members = it.encode()
                                     membersOpened++
@@ -224,17 +237,23 @@ private fun FilterMenu(filter: DataFilter, data: Snapshot?, onPick: (DataFilter)
             // a pick changes its own part only; the ticks show both
             val kolom = data?.let { filter.kolomOf(it) }
             val category = data?.let { filter.category(it) }
+            val scope = data?.scope ?: Scope.none
+            // a limited user: in one of their koloms any category, elsewhere only their own (see Scope)
+            val choices = data?.let { scope.bipraChoices(it, kolom) }
+            val ownOnly = data != null && choices != null && choices.size < data.categories.size
             // the few categories first; the koloms (often a dozen) after
-            data?.categories?.takeIf { it.isNotEmpty() }?.let { categories ->
+            choices?.takeIf { it.isNotEmpty() }?.let { categories ->
                 MenuHeading("Kategori BIPRA")
-                MenuChoice("Semua BIPRA", category == null) { onPick(filter.withBipra(null)); open = false }
+                MenuChoice(if (ownOnly) "Semua BIPRA Saya" else "Semua BIPRA", category == null) { onPick(filter.withBipra(null)); open = false }
                 categories.forEach { c ->
                     MenuChoice(c.label, category == c) { onPick(filter.withBipra(c)); open = false }
                 }
                 HorizontalDivider()
             }
             MenuHeading("Kolom")
-            MenuChoice("Semua Kolom", kolom == null) { onPick(filter.withKolom(null)); open = false }
+            if (scope.singleKolom == null) {
+                MenuChoice(if (scope.limited) "Semua Data Saya" else "Semua Kolom", kolom == null) { onPick(filter.withKolom(null)); open = false }
+            }
             data?.koloms?.forEach { k ->
                 MenuChoice(kolomLabel(k.number), kolom == k.number) { onPick(filter.withKolom(k.number)); open = false }
             }

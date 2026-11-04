@@ -58,6 +58,7 @@ class Repository(private val context: Context) {
 
     private fun keep(prefs: Prefs, token: String, user: JSONObject): String {
         val account = user.optString("username") + " · " + roleLabel(user)
+        prefs.scope = Scope.of(user)
         prefs.session = token
         prefs.account = account
         return account
@@ -74,6 +75,7 @@ class Repository(private val context: Context) {
     private suspend fun forget(prefs: Prefs) {
         prefs.session = ""
         prefs.account = ""
+        prefs.scope = Scope.none
         cacheLock.withLock { cacheFile.delete() }
     }
 
@@ -103,7 +105,7 @@ class Repository(private val context: Context) {
                 members = o.getString("members"),
                 services = o.getString("services"),
                 categories = if (o.has("categories")) o.getString("categories") else null,
-            ).parse(o.getLong("fetchedAt"))
+            ).parse(o.getLong("fetchedAt")).let(Prefs(context).scope::apply)
         }.getOrNull()
     }
 
@@ -119,13 +121,17 @@ class Repository(private val context: Context) {
         if (!prefs.signedIn) throw NotSignedInException("Belum masuk")
         val server = prefs.serverUrl
         val raw = try {
+            // the user's role and scope first: an admin may have changed them
+            val me = JSONObject(api(prefs).get("/api/auth/me"))
+            prefs.scope = Scope.of(me)
+            prefs.account = me.optString("username") + " · " + roleLabel(me)
             api(prefs).fetchAll()
         } catch (e: NotSignedInException) {
             forget(prefs) // the session ended (expired, or an admin signed this device out)
             throw e
         }
         val now = System.currentTimeMillis()
-        val snapshot = raw.parse(now) // parse before caching: never cache a bad body
+        val snapshot = raw.parse(now).let(prefs.scope::apply) // parse before caching: never cache a bad body
         val o = JSONObject()
             .put("koloms", raw.koloms)
             .put("types", raw.types)

@@ -46,6 +46,7 @@ import id.gmimsiloam.jemaat.AppViewModel
 import id.gmimsiloam.jemaat.BuildConfig
 import id.gmimsiloam.jemaat.UiState
 import id.gmimsiloam.jemaat.data.DataFilter
+import id.gmimsiloam.jemaat.data.Scope
 import id.gmimsiloam.jemaat.data.Prefs
 import id.gmimsiloam.jemaat.notify.DailyWorker
 import id.gmimsiloam.jemaat.notify.Notifier
@@ -203,15 +204,23 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
 private fun DataFilterFields(state: UiState, onPick: (DataFilter) -> Unit) {
     val f = state.filter
     val data = state.data
-    val categories = data?.categories.orEmpty()
-    val koloms = data?.koloms.orEmpty().map { it.number }
+    val koloms = data?.koloms.orEmpty().map { it.number } // a limited user's: theirs (see Scope)
     val kolom = data?.let { f.kolomOf(it) } ?: f.kolom
     val category = data?.let { f.category(it) }
+    val scope = data?.scope ?: Scope.none
+    val categories = data?.let { scope.bipraChoices(it, kolom) }.orEmpty()
+    val ownOnly = data != null && categories.size < data.categories.size
 
     Text("Filter data bawaan", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
     Text("Kolom", style = MaterialTheme.typography.labelLarge)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        FilterChip(selected = kolom == null, onClick = { onPick(f.withKolom(null)) }, label = { Text("Semua Kolom") })
+        if (scope.singleKolom == null) {
+            FilterChip(
+                selected = kolom == null,
+                onClick = { onPick(f.withKolom(null)) },
+                label = { Text(if (scope.limited) "Semua Data Saya" else "Semua Kolom") },
+            )
+        }
         koloms.forEach { k ->
             FilterChip(selected = kolom == k, onClick = { onPick(f.withKolom(k)) }, label = { Text("Kolom $k") })
         }
@@ -219,7 +228,11 @@ private fun DataFilterFields(state: UiState, onPick: (DataFilter) -> Unit) {
     if (categories.isNotEmpty()) {
         Text("Kategori BIPRA", style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = category == null, onClick = { onPick(f.withBipra(null)) }, label = { Text("Semua BIPRA") })
+            FilterChip(
+                selected = category == null,
+                onClick = { onPick(f.withBipra(null)) },
+                label = { Text(if (ownOnly) "Semua BIPRA Saya" else "Semua BIPRA") },
+            )
             categories.forEach { c ->
                 FilterChip(selected = category == c, onClick = { onPick(f.withBipra(c)) }, label = { Text(c.label) })
             }

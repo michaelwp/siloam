@@ -102,7 +102,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             _state.update { s ->
                 result.fold(
-                    onSuccess = { s.copy(data = it, refreshing = false, error = null, update = prefs.availableUpdate(BuildConfig.VERSION_NAME)) },
+                    // the account line follows a role change made by an admin
+                    onSuccess = {
+                        s.copy(data = it, refreshing = false, error = null, account = prefs.account, update = prefs.availableUpdate(BuildConfig.VERSION_NAME))
+                    },
                     onFailure = { e ->
                         s.copy(refreshing = false, error = e.message ?: "Gagal memuat data", update = prefs.availableUpdate(BuildConfig.VERSION_NAME))
                     },

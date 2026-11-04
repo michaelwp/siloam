@@ -18,6 +18,11 @@ class Prefs(context: Context) {
 
     val signedIn get() = session.isNotEmpty()
 
+    /** What the signed-in user may see ([Scope.encode]; "" = everything). */
+    var scope: Scope
+        get() = Scope.decode(p.getString("scope", "") ?: "")
+        set(v) = p.edit { putString("scope", v.encode()) }
+
     /** Who is signed in, as shown in Pengaturan ("budi · Kelola Kolom 11"). */
     var account: String
         get() = p.getString("account", "") ?: ""

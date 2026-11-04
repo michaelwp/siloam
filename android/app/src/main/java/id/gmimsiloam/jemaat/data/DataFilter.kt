@@ -28,11 +28,16 @@ data class DataFilter(val kolom: Int? = null, val bipra: String = "", val bipraI
         (bipra.isNotEmpty() || bipraId.isNotEmpty()) &&
             if (bipraId.isNotEmpty() && c.id.isNotEmpty()) c.id == bipraId else c.key == bipra
 
-    /** The category this filter is about, if one is chosen and exists. */
-    fun category(data: Snapshot): Category? = data.categories.firstOrNull { isCategory(it) }
+    /**
+     * The category this filter is about, if one is chosen, exists, and may be
+     * picked in the viewed kolom (a limited user outside their koloms: only
+     * their own; see [Scope.bipraChoices]).
+     */
+    fun category(data: Snapshot): Category? =
+        data.scope.bipraChoices(data, kolomOf(data)).firstOrNull { isCategory(it) }
 
-    /** The kolom this filter is about, if one is chosen and exists. */
-    fun kolomOf(data: Snapshot): Int? = data.effectiveKolom(kolom)
+    /** The kolom this filter is about, if one is chosen and exists (a single-kolom user: always theirs). */
+    fun kolomOf(data: Snapshot): Int? = data.effectiveKolom(kolom) ?: data.scope.singleKolom
 
     /**
      * The services: of the kolom (and the whole congregation's, kolom 0), and of a
@@ -77,8 +82,10 @@ data class DataFilter(val kolom: Int? = null, val bipra: String = "", val bipraI
     fun label(data: Snapshot?): String {
         val k = if (data == null) kolom else kolomOf(data)
         val c = if (data == null) bipra.ifEmpty { null } else category(data)?.label
+        // a limited user's "all": their koloms plus their categories' members everywhere
+        val all = if (data?.scope?.limited == true) "Semua Data Saya" else "Semua Kolom"
         return when {
-            c == null -> k?.let { "Kolom $it" } ?: "Semua Kolom"
+            c == null -> k?.let { "Kolom $it" } ?: all
             k == null -> c
             else -> "Kolom $k · $c"
         }
