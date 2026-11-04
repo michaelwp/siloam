@@ -612,11 +612,22 @@ function Subscribe({
   const [tokenError, setTokenError] = useState<string | null>(null)
   const [renewed, setRenewed] = useState(false)
   useEffect(() => {
+    // the server creates it once (two requests at once get the same token); ignore an answer after closing
+    let live = true
     authApi.calendarToken().then(
-      (r) => setToken(r.token),
-      (e: Error) => setTokenError(e.message),
+      (r) => {
+        if (live) setToken(r.token)
+      },
+      (e: Error) => {
+        if (live) setTokenError(e.message)
+      },
     )
+    return () => {
+      live = false
+    }
   }, [])
+  const [renewing, setRenewing] = useState(false)
+  const [renewError, setRenewError] = useState<string | null>(null)
   const url = token ? feedUrl(token, kolom, types?.map((t) => t.id)) : ''
   const webcal = url.replace(/^https?:/, 'webcal:')
   const [copy, setCopy] = useState<'idle' | 'done' | 'manual'>('idle')
@@ -692,17 +703,30 @@ function Subscribe({
             <button
               type="button"
               className="link"
+              disabled={renewing}
               onClick={async () => {
-                const r = await authApi.calendarToken(true)
-                setToken(r.token)
-                setRenewed(true)
-                setCopy('idle')
+                // every calendar subscribed with the old link stops updating
+                if (!window.confirm('Buat link baru? Link lama tidak berlaku lagi, dan kalender yang sudah berlangganan harus ditambahkan ulang.'))
+                  return
+                setRenewing(true)
+                setRenewError(null)
+                try {
+                  const r = await authApi.calendarToken(true)
+                  setToken(r.token)
+                  setRenewed(true)
+                  setCopy('idle')
+                } catch (e) {
+                  setRenewError(e instanceof Error ? e.message : 'gagal')
+                } finally {
+                  setRenewing(false)
+                }
               }}
             >
-              Buat link baru
+              {renewing ? 'Membuat link baru…' : 'Buat link baru'}
             </button>
           )}
           {renewed && ' — link lama tidak berlaku lagi; tambahkan ulang kalender Anda dengan link baru.'}
+          {renewError && <span className="form-error block">Gagal membuat link baru ({renewError}); link lama masih berlaku.</span>}
         </p>
         <p className="muted small">Ingin menambahkan satu ibadah saja? Klik ibadahnya di kalender.</p>
       </div>

@@ -22,7 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.DateRange
@@ -83,6 +83,7 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
     var settings by rememberSaveable { mutableStateOf(false) }
     var confirmClose by rememberSaveable { mutableStateOf(false) }
+    var confirmLogout by rememberSaveable { mutableStateOf(false) }
     var category by rememberSaveable { mutableStateOf<String?>(null) } // BIPRA tab's filter
     var members by rememberSaveable { mutableStateOf(MemberFilter.none.encode()) } // Jemaat tab's filters
     var membersOpened by rememberSaveable { mutableIntStateOf(0) } // a tile opened the Jemaat tab: a fresh search
@@ -141,6 +142,10 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
         return
     }
 
+    if (confirmLogout) {
+        ConfirmLogoutDialog(onConfirm = { confirmLogout = false; vm.logout() }, onDismiss = { confirmLogout = false })
+    }
+
     if (settings) {
         SettingsScreen(state = state, vm = vm, onBack = { settings = false })
         return
@@ -158,8 +163,9 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
                 },
                 actions = {
                     IconButton(onClick = { settings = true }) { Icon(Icons.Filled.Settings, contentDescription = "Pengaturan") }
+                    IconButton(onClick = { confirmLogout = true }) { Icon(Icons.Filled.Logout, contentDescription = "Keluar (logout)") }
                     IconButton(onClick = { confirmClose = true }) {
-                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Tutup aplikasi")
+                        Icon(Icons.Filled.Close, contentDescription = "Tutup aplikasi")
                     }
                 },
             )
@@ -213,6 +219,8 @@ fun SiloamApp(requestedTab: String?, onTabHandled: () -> Unit, vm: AppViewModel 
                                     membersOpened++
                                     tab = Tab.Members
                                 },
+                                account = state.account,
+                                onLogout = { confirmLogout = true },
                             )
                             Tab.Schedule -> ScheduleScreen(data, filter)
                             Tab.Birthdays -> BirthdaysScreen(data, filter)

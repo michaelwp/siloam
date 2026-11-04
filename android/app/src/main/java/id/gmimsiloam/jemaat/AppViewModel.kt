@@ -59,6 +59,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         viewModelScope.launch {
+            // signed in to a server address typed in an older version: sign in again here
+            if (repo.dropOldServer()) {
+                _state.update { it.copy(signedIn = false, account = "", error = "Alamat server aplikasi diperbarui. Silakan masuk lagi.") }
+            }
             repo.cached()?.let { cached -> _state.update { it.copy(data = cached) } }
             refresh()
         }
@@ -66,7 +70,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private var refreshJob: Job? = null
 
-    /** Loads fresh data; [restart] drops a running load (e.g. it is from the old server). */
+    /** Loads fresh data; [restart] drops a running load (e.g. one started before signing in or out). */
     fun refresh(restart: Boolean = false) {
         if (_state.value.refreshing && !restart) return
         refreshJob?.cancel()
@@ -212,10 +216,4 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         refresh(restart = true)
     }
 
-    fun serverUrl() = prefs.serverUrl
-
-    fun setServerUrl(url: String) {
-        prefs.serverUrl = url
-        refresh(restart = true)
-    }
 }

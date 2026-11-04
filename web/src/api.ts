@@ -1,3 +1,4 @@
+import { localDayRange } from './format'
 import type {
   AuthenticationResponseJSON,
   PublicKeyCredentialCreationOptionsJSON,
@@ -275,7 +276,9 @@ export const adminApi = {
     request<AndroidReleaseView>('PUT', '/api/admin/android', body),
   clearAndroid: () => request<AndroidReleaseView>('DELETE', '/api/admin/android'),
   audit: (f: AuditFilter) => {
-    const q = new URLSearchParams(Object.entries(f).filter((e): e is [string, string] => !!e[1]))
+    // the date filters are days in the viewer's time zone: sent as UTC instants (to exclusive)
+    const g = { ...f, from: f.from && localDayRange(f.from).from, to: f.to && localDayRange(f.to).to }
+    const q = new URLSearchParams(Object.entries(g).filter((e): e is [string, string] => typeof e[1] === 'string' && !!e[1]))
     return request<AuditEntry[]>('GET', `/api/admin/audit?${q}`)
   },
   createBipra: (body: BipraInput) => request<BipraCategory>('POST', '/api/admin/bipra', body),
@@ -302,7 +305,9 @@ export type Login = {
 
 /** The admins' user statistics for one day, and who is signed in now. */
 export type LoginStats = {
-  date: string
+  /** the period asked for (UTC instants; to exclusive) */
+  from: string
+  to: string
   users: number
   web: number
   android: number
@@ -320,8 +325,11 @@ export type LoginStats = {
 }
 
 export const loginsApi = {
-  /** date: YYYY-MM-DD (default today) */
-  get: (date?: string) => request<LoginStats>('GET', `/api/admin/logins${date ? `?date=${date}` : ''}`),
+  /** day: YYYY-MM-DD, a day in the viewer's time zone (sent as UTC instants) */
+  get: (day: string) => {
+    const { from, to } = localDayRange(day)
+    return request<LoginStats>('GET', `/api/admin/logins?${new URLSearchParams({ from, to })}`)
+  },
 }
 
 export const usersApi = {

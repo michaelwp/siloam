@@ -23,6 +23,8 @@ android {
             "versionName must be like 1.2.0 (major.minor.patch; minor and patch up to 99), not \"$versionName\""
         }
         versionCode = parts[0] * 10_000 + parts[1] * 100 + parts[2]
+        // the server the app talks to (not changeable in the app)
+        buildConfigField("String", "SERVER_URL", "\"https://siloam.fly.dev\"")
     }
 
     // The release key, from android/keystore.properties (never committed; see
@@ -52,6 +54,9 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            // another server for testing: ./gradlew -PsiloamServer=http://10.0.2.2:8080 … (the emulator's view of
+            // this computer; debug builds allow plain HTTP)
+            (project.findProperty("siloamServer") as String?)?.let { buildConfigField("String", "SERVER_URL", "\"$it\"") }
         }
         release {
             if (keystore != null) signingConfig = signingConfigs.getByName("release")

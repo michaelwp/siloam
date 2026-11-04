@@ -56,7 +56,7 @@ func (s *Service) beginCeremony(w http.ResponseWriter, r *http.Request, data *we
 		return err
 	}
 	id := base64.RawURLEncoding.EncodeToString(randomBytes(24))
-	if err := s.store.PutCeremony(r.Context(), id, b, time.Now().Add(ceremonyTTL)); err != nil {
+	if err := s.store.PutCeremony(r.Context(), id, b, time.Now().UTC().Add(ceremonyTTL)); err != nil {
 		return err
 	}
 	s.setCookie(w, ceremonyCookie, id, "/api/auth", ceremonyTTL)
@@ -71,7 +71,7 @@ func (s *Service) finishCeremony(w http.ResponseWriter, r *http.Request) (webaut
 	if err != nil {
 		return data, false
 	}
-	b, err := s.store.TakeCeremony(r.Context(), c.Value, time.Now())
+	b, err := s.store.TakeCeremony(r.Context(), c.Value, time.Now().UTC())
 	if err != nil {
 		if !errors.Is(err, store.ErrNotFound) {
 			log.Printf("passkey ceremony: %v", err)

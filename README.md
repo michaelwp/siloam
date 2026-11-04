@@ -33,7 +33,14 @@ the same. Both list them per kolom, always with the kolom's name ("Semua
 kolom:" first, then "Kolom 1:", "Kolom 2:", …): today's and this week's
 services together (today's with the time only, the others with the day), and
 the birthdays as one line per kolom ("Kolom 11: Budi Umboh, Erwin Umboh").
-Service times are in `APP_TIMEZONE` (default `Asia/Makassar`, WITA). Load a
+**Times.** Every moment the app stores (sign-ins, sessions, locks, the
+activity log, created/updated times) is saved in UTC (GMT+0), and the web and
+Android apps show it in the viewer's own time zone (the browser's or the
+phone's); the admin pages' date filters mean the viewer's local day. Calendar
+dates — birth dates, wedding dates, a service's date — are days, not moments,
+and are shown as they are. Service times are the church's local time,
+`APP_TIMEZONE` (default `Asia/Makassar`, WITA), as entered (calendar apps
+convert the `.ics` events to the device's zone). Load a
 schedule spreadsheet with
 `siloam -import-jadwal jadwal.xlsx [-kolom 11] [-replace]` (the leader's
 column may be headed "Pemimpin Ibadah" or "Khadim").
@@ -95,11 +102,14 @@ data). Beranda's Pemberitahuan lists what the screens show per kolom, also
 the next birthdays ("Kolom 11: Budi Umboh (besok), …").
 
 A WorkManager job checks about every hour, also after a reboot, without the
-app being open. The times,
-reminders and server address are under **Pengaturan**. The server defaults to
-`https://siloam.fly.dev`; debug builds also allow plain HTTP, e.g.
-`http://10.0.2.2:8080` (your computer, seen from the Android emulator);
-release builds only accept `https://` addresses.
+app being open. The times and
+reminders are under **Pengaturan**. The server address is not shown anywhere
+in the app: it is fixed when the app is built (`https://siloam.fly.dev`). A
+debug build can be pointed at another server with
+`./gradlew -PsiloamServer=http://10.0.2.2:8080 assembleDebug` (your computer,
+seen from the Android emulator; debug builds allow plain HTTP). A phone that
+had another address saved by an older version is signed out once after the
+update, with a message, and signs in again on the built-in server.
 
 Needs JDK 17+ and the Android SDK (`android/local.properties` →
 `sdk.dir=…`, or `ANDROID_HOME`):
@@ -212,7 +222,7 @@ and filterable by user, kind, result and date. Request contents are never
 stored, so passwords cannot end up in the log; a failed sign-in records the
 username only if that account exists (what was typed may be a password).
 The log is kept in files, not in MongoDB: one file per day in `AUDIT_LOG_DIR`
-(`audit-2026-10-25.jsonl`, one JSON object per line, by `APP_TIMEZONE`),
+(`audit-2026-10-25.jsonl`, one JSON object per line, by UTC day),
 written in the background so a request never waits for it. Day files older
 than `AUDIT_RETENTION_DAYS` (default 90, about 3 months) are deleted. On a
 host whose disk is wiped on restart (Fly.io without a volume) the log only
@@ -240,7 +250,8 @@ reach the app (not signed in, not an admin) are not logged either.
 - **Statistik Pengguna** (on *Pengguna*): for a chosen day (default today) how
   many users signed in, how many sign-ins came from the web and from Android,
   the list of sign-ins (time, username, role, source), and who is signed in
-  now (per device type, with *Keluarkan*). Sign-ins are kept 90 days.
+  now (per device type, with *Keluarkan*). The day is the viewer's local day,
+  and the sign-in log is kept (no expiry).
 - **Roles:**
 
   | Role | Can change | Sees private data of |
@@ -563,9 +574,9 @@ user has proven who they are).
 | GET    | `/api/admin/android`                   | admin: the release in effect, `source` (`database`/`env`/`none`) and the `ANDROID_*` values |
 | PUT    | `/api/admin/android`                   | admin: `{latestVersion, downloadUrl}` (both empty = no update notice) |
 | DELETE | `/api/admin/android`                   | admin: back to the `ANDROID_*` settings |
-| GET    | `/api/admin/audit`                     | admin: log entries newest first; `?username=&category=&result=ok\|failed&from=&to=` (YYYY-MM-DD, `APP_TIMEZONE`), `before=<id>` for the next 50 |
+| GET    | `/api/admin/audit`                     | admin: log entries newest first; `?username=&category=&result=ok\|failed&from=&to=` (RFC 3339 instants — the page sends the viewer's local day; `to` exclusive — or YYYY-MM-DD in `APP_TIMEZONE`), `before=<id>` for the next 50 |
 | GET    | `/api/admin/audit/meta`                | admin: the categories and usernames for the filters |
-| GET    | `/api/admin/logins[?date=YYYY-MM-DD]`  | admin: user statistics for a day (default today, `APP_TIMEZONE`): `{users, web, android, logins: [{username, role, koloms, bipraIds, source, at}], active: [who is signed in now, per source]}`; sign-ins are kept 90 days |
+| GET    | `/api/admin/logins?from=&to=`          | admin: user statistics for a period (RFC 3339 instants, `to` exclusive, at most 48 h — the page sends the viewer's local day; or `?date=YYYY-MM-DD` in `APP_TIMEZONE`, default today): `{from, to, users, web, android, logins: [{username, role, koloms, bipraIds, source, at}], active: [who is signed in now, per source]}`; the sign-in log is kept (no expiry) |
 | GET    | `/api/bipra-categories`                | the BIPRA categories and their rules, in order (public) |
 | POST   | `/api/admin/bipra`                     | admin: `{key, name, kind (main\|flag), color, minAge, maxAge, gender, marital ("", married, unmarried), orMarried}` |
 | PUT    | `/api/admin/bipra/{id}`                | admin: same fields                        |

@@ -2,14 +2,28 @@ package id.gmimsiloam.jemaat.data
 
 import android.content.Context
 import androidx.core.content.edit
+import id.gmimsiloam.jemaat.BuildConfig
 
 /** The user's settings, stored on the device. */
 class Prefs(context: Context) {
     private val p = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
-    var serverUrl: String
-        get() = p.getString("serverUrl", DEFAULT_SERVER) ?: DEFAULT_SERVER
-        set(v) = p.edit { putString("serverUrl", v.trim().trimEnd('/')) }
+    /**
+     * The server, fixed when the app is built ([BuildConfig.SERVER_URL]; a debug
+     * build may be given another, see app/build.gradle.kts). Not shown in the app.
+     */
+    val serverUrl: String get() = BuildConfig.SERVER_URL.trimEnd('/')
+
+    /**
+     * Older versions let the user type a server address. Forgets a saved one
+     * and reports whether it was another server than [serverUrl] (then a
+     * session saved for it is no good here).
+     */
+    fun dropSavedServer(): Boolean {
+        val saved = p.getString("serverUrl", null) ?: return false
+        p.edit { remove("serverUrl") }
+        return saved.trim().trimEnd('/') != serverUrl
+    }
 
     /** The sign-in session (the server's cookie value); "" = not signed in (a visitor). */
     var session: String
@@ -152,7 +166,4 @@ class Prefs(context: Context) {
             putString("viewBipraId", f.bipraId)
         }
 
-    companion object {
-        const val DEFAULT_SERVER = "https://siloam.fly.dev"
-    }
 }

@@ -128,6 +128,36 @@ export function humanDuration(seconds: number) {
 }
 
 /** "14.05" — local time of an API timestamp */
+// Times: the server stores and sends every moment in UTC; the pages show it in
+// the viewer's own time zone (the browser's). Date-only values (birth dates,
+// wedding dates, service dates) are calendar days, not moments: longDate()
+// shows them as they are, never shifted.
+
+/** "2026-11-05": today in the viewer's time zone. */
+export function localToday() {
+  return localDayKey(new Date())
+}
+
+function localDayKey(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** A day ("2026-11-05") in the viewer's time zone as UTC instants: its start and the next day's start. */
+export function localDayRange(day: string) {
+  const [y, m, d] = day.split('-').map(Number)
+  return { from: new Date(y, m - 1, d).toISOString(), to: new Date(y, m - 1, d + 1).toISOString() }
+}
+
+/** "5 November 2026": a moment's date in the viewer's time zone. */
+export function localDate(iso: string) {
+  return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+/** "5 November 2026, 06.30": a moment (e.g. a sign-in) in the browser's local time, date and time alike. */
+export function localDateTime(iso: string) {
+  return `${localDate(iso)}, ${clockTime(iso)}`
+}
+
 export function clockTime(iso: string) {
   return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
 }

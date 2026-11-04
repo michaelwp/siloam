@@ -14,7 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import android.app.Activity
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -90,7 +90,7 @@ fun PublicApp(state: UiState, vm: AppViewModel) {
                 actions = {
                     TextButton(onClick = { login = true }) { Text("Masuk") }
                     IconButton(onClick = { confirmClose = true }) {
-                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Tutup aplikasi")
+                        Icon(Icons.Filled.Close, contentDescription = "Tutup aplikasi")
                     }
                 },
             )
@@ -158,7 +158,6 @@ private fun LoginScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
 private fun LoginCard(state: UiState, vm: AppViewModel) {
     var username by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
-    var server by rememberSaveable { mutableStateOf<String?>(null) } // shown only when asked for
     val submit = { if (username.isNotBlank() && password.isNotEmpty()) vm.login(username, password) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -192,23 +191,6 @@ private fun LoginCard(state: UiState, vm: AppViewModel) {
                 enabled = !state.loggingIn && username.isNotBlank() && password.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth(),
             ) { Text(if (state.loggingIn) "Masuk…" else "Masuk") }
-            val current = server
-            if (current == null) {
-                TextButton(onClick = { server = vm.serverUrl() }) { Text("Alamat server") }
-            } else {
-                OutlinedTextField(
-                    value = current,
-                    onValueChange = { server = it },
-                    label = { Text("Alamat server") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                TextButton(onClick = {
-                    vm.setServerUrl(current)
-                    server = null
-                }) { Text("Simpan alamat server") }
-            }
         }
     }
 }

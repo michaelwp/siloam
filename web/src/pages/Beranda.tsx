@@ -47,15 +47,18 @@ function SignedInBeranda() {
   // a category chosen in the filter, or a BIPRA-only user's (scope): members,
   // families and statistics of those categories only
   const scope = useBipraScope()
-  const shown = bipraFilter ? [bipraFilter] : scope
-  const categories = shown ?? allCategories
+  // memoized: a new array on every render would recompute the statistics each time
+  const categories = useMemo(
+    () => (bipraFilter ? [bipraFilter] : (scope ?? allCategories)),
+    [bipraFilter, scope, allCategories],
+  )
   const [today] = useState(() => new Date())
   const month = today.getMonth()
   const day = today.getDate()
 
   const stats = useMemo(() => computeStats(families, members, categories), [families, members, categories])
 
-  // month/day are available to visitors; the year (age, years married) only when signed in
+  // a limited user's members outside their scope come without the year (age, years married)
   const year = today.getFullYear()
   const birthdays = members
     .filter((m) => m.birthMonth === month + 1)

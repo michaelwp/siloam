@@ -1,5 +1,7 @@
 package id.gmimsiloam.jemaat.ui
 
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -270,10 +272,22 @@ fun Pill(text: String, container: Color = MaterialTheme.colorScheme.surfaceVaria
 @Composable
 fun AppVersion(modifier: Modifier = Modifier) {
     Text(
-        "Versi ${id.gmimsiloam.jemaat.BuildConfig.VERSION_NAME}",
+        "Versi ${BuildConfig.VERSION_NAME}",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        textAlign = TextAlign.Center,
         modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
+    )
+}
+
+/** "Keluar?" before signing out: the data is deleted from the phone. Every Keluar button asks with this. */
+@Composable
+fun ConfirmLogoutDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Keluar?") },
+        text = { Text("Data jemaat dihapus dari perangkat ini dan notifikasi berhenti sampai Anda masuk lagi.") },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Keluar") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Batal") } },
     )
 }

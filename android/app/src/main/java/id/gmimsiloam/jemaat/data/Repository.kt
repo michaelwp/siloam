@@ -67,6 +67,18 @@ class Repository(private val context: Context) {
         return account
     }
 
+    /**
+     * After updating from a version where another server address was saved: the
+     * session (and data) from that server are no good here, so they are
+     * forgotten. Returns whether that happened (the user must sign in again).
+     */
+    suspend fun dropOldServer(): Boolean = withContext(Dispatchers.IO) {
+        val prefs = Prefs(context)
+        if (!prefs.dropSavedServer() || !prefs.signedIn) return@withContext false
+        forget(prefs)
+        true
+    }
+
     /** Signs out here (and on the server), and forgets the data on the device. */
     suspend fun logout() = withContext(Dispatchers.IO) {
         val prefs = Prefs(context)
@@ -116,13 +128,11 @@ class Repository(private val context: Context) {
      * Fetches fresh data from the server and caches it; throws on failure.
      * The screens and the background check may load at the same time, and a
      * cancelled load still finishes its (blocking) download: the cache is
-     * written under one lock, and only while [Prefs.serverUrl] is still the
-     * server the data came from.
+     * written under one lock, and only while still signed in.
      */
     suspend fun refresh(): Snapshot = withContext(Dispatchers.IO) {
         val prefs = Prefs(context)
         if (!prefs.signedIn) throw NotSignedInException("Belum masuk")
-        val server = prefs.serverUrl
         val raw = try {
             // the user's role and scope first: an admin may have changed them
             val me = JSONObject(api(prefs).get("/api/auth/me"))
@@ -144,7 +154,6 @@ class Repository(private val context: Context) {
             .apply { raw.categories?.let { put("categories", it) } }
             .put("fetchedAt", now)
         cacheLock.withLock {
-            if (Prefs(context).serverUrl != server) throw IOException("Alamat server berubah saat memuat data")
             if (!Prefs(context).signedIn) throw NotSignedInException("Sudah keluar")
             val tmp = File.createTempFile("snapshot", ".tmp", context.filesDir)
             try {

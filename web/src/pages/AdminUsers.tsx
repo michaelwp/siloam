@@ -4,7 +4,7 @@ import { roleLabel, useAuth } from '../auth'
 import { PasswordStrength } from '../components/PasswordStrength'
 import { Badge, ConfirmDelete, Field, FormShell, Modal, PageHeader, Status } from '../components/ui'
 import { useData } from '../data'
-import { clockTime, longDate } from '../format'
+import { clockTime, localDateTime, localToday, longDate } from '../format'
 import { generatePassword, MIN_PASSWORD_LENGTH, passwordValid } from '../password'
 
 type Dialog =
@@ -99,7 +99,7 @@ export default function AdminUsers() {
                     <td>
                       {u.lastLoginAt ? (
                         <>
-                          {longDate(u.lastLoginAt)}, {clockTime(u.lastLoginAt)}
+                          {localDateTime(u.lastLoginAt)}
                           {u.lastLoginSource && <span className="muted"> · {SOURCE_LABELS[u.lastLoginSource]}</span>}
                         </>
                       ) : (
@@ -132,7 +132,7 @@ export default function AdminUsers() {
         </div>
       )}
 
-      <UserStats key={statsKey} onLogout={(user) => setDialog({ kind: 'logout', user })} />
+      <UserStats reload={statsKey} onLogout={(user) => setDialog({ kind: 'logout', user })} />
 
       {dialog?.kind === 'add' && (
         <AddUser
@@ -164,7 +164,7 @@ export default function AdminUsers() {
           user={dialog.user}
           onClose={close}
           onDone={() => {
-            setStatsKey((k) => k + 1) // the "signed in now" list changed
+            setStatsKey((k) => k + 1) // the "signed in now" list changed (the chosen date stays)
             close()
           }}
         />
@@ -509,11 +509,6 @@ function ResetPassword({
 
 const SOURCE_LABELS: Record<LoginSource, string> = { web: 'Web', android: 'Android' }
 
-function today() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
 /** Ends all of a user's sessions; the reason is required and kept in the activity log. */
 function LogoutUser({ user, onClose, onDone }: { user: { id: string; username: string }; onClose: () => void; onDone: () => void }) {
   const [reason, setReason] = useState('')
@@ -541,36 +536,40 @@ function LogoutUser({ user, onClose, onDone }: { user: { id: string; username: s
 }
 
 /** Who signed in on a day (with source and role), and who is signed in now. */
-function UserStats({ onLogout }: { onLogout: (u: { id: string; username: string }) => void }) {
+function UserStats({ reload, onLogout }: { reload: number; onLogout: (u: { id: string; username: string }) => void }) {
   const { user: me } = useAuth()
   const { categories } = useData()
-  const [date, setDate] = useState(today)
-  const [stats, setStats] = useState<LoginStats | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  // a day in the viewer's time zone (the server keeps every sign-in in UTC)
+  const [date, setDate] = useState(localToday)
+  // a result with the request it answers, so a slower answer for another date is never shown under this one
+  const [result, setResult] = useState<{ key: string; stats?: LoginStats; error?: string } | null>(null)
+  const key = `${date}|${reload}`
   useEffect(() => {
     let live = true
     loginsApi.get(date).then(
       (s) => {
-        if (!live) return
-        setStats(s)
-        setError(null)
+        if (live) setResult({ key, stats: s })
       },
       (e: Error) => {
-        if (live) setError(e.message)
+        if (live) setResult({ key, error: e.message })
       },
     )
     return () => {
       live = false
     }
-  }, [date])
-  const isToday = date === today()
+  }, [date, key])
+  const current = result?.key === key ? result : null
+  const stats = current?.stats ?? null
+  const error = current?.error ?? null
+  const today = localToday()
+  const isToday = date === today
   return (
     <section className="user-stats">
       <header className="family-head">
         <h2 className="section-title">Statistik Pengguna</h2>
         <label className="inline-field">
           <span className="muted small">Tanggal</span>
-          <input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value || today())} />
+          <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value || today)} />
         </label>
       </header>
       <Status loading={!stats && !error} error={error} />
@@ -579,7 +578,7 @@ function UserStats({ onLogout }: { onLogout: (u: { id: string; username: string 
           <div className="stats">
             <div className="stat">
               <span className="stat-value">{stats.users}</span>
-              <span className="stat-label">Pengguna masuk {isToday ? 'hari ini' : `(${longDate(stats.date)})`}</span>
+              <span className="stat-label">Pengguna masuk {isToday ? 'hari ini' : `(${longDate(date)})`}</span>
             </div>
             <div className="stat">
               <span className="stat-value">{stats.web}</span>
@@ -595,7 +594,7 @@ function UserStats({ onLogout }: { onLogout: (u: { id: string; username: string 
             </div>
           </div>
 
-          <h3 className="subsection-title">Daftar masuk {isToday ? 'hari ini' : longDate(stats.date)}</h3>
+          <h3 className="subsection-title">Daftar masuk {isToday ? 'hari ini' : longDate(date)}</h3>
           {stats.logins.length ? (
             <div className="table-wrap">
               <table>
@@ -646,9 +645,7 @@ function UserStats({ onLogout }: { onLogout: (u: { id: string; username: string 
                       <td>
                         {[a.web && `${a.web} web`, a.android && `${a.android} Android`].filter(Boolean).join(' · ')}
                       </td>
-                      <td>
-                        {longDate(a.since)}, {clockTime(a.since)}
-                      </td>
+                      <td>{localDateTime(a.since)}</td>
                       <td className="actions">
                         {a.userId !== me?.id && (
                           <button className="link" onClick={() => onLogout({ id: a.userId, username: a.username })}>

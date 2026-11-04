@@ -1,5 +1,5 @@
 import { browserSupportsWebAuthn, startAuthentication, startRegistration, WebAuthnError } from '@simplewebauthn/browser'
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useMemo } from 'react'
 import { authApi, type BipraCategory, type Role, type Service, type User, type WorshipType } from './api'
 import { useData } from './data'
 
@@ -87,9 +87,9 @@ export function roleLabel(u: Pick<User, 'role' | 'koloms' | 'bipraIds'>, categor
 export function useBipraScope(): BipraCategory[] | null {
   const { user } = useAuth()
   const { categories } = useData()
-  if (!bipraOnly(user)) return null
-  const ids = ownBipraIds(user)
-  return categories.filter((c) => ids.includes(c.id))
+  const ids = bipraOnly(user) ? ownBipraIds(user).join(',') : ''
+  // the same array while nothing changes (callers memoize on it)
+  return useMemo(() => (ids ? categories.filter((c) => ids.split(',').includes(c.id)) : null), [ids, categories])
 }
 
 /**

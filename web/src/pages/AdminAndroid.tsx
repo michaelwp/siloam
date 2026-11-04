@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { adminApi, type AndroidReleaseView } from '../api'
 import { Field, FormShell, PageHeader, Status } from '../components/ui'
-import { clockTime, longDate } from '../format'
+import { localDateTime } from '../format'
 
 const SOURCE: Record<AndroidReleaseView['source'], string> = {
   database: 'Diatur di halaman ini',
@@ -60,7 +60,7 @@ export default function AdminAndroid() {
                 {view.source === 'database' && view.updatedAt && (
                   <span className="muted">
                     {' '}
-                    · {view.updatedBy || 'admin'}, {longDate(view.updatedAt)} {clockTime(view.updatedAt)}
+                    · {view.updatedBy || 'admin'}, {localDateTime(view.updatedAt)}
                   </span>
                 )}
               </dd>

@@ -182,15 +182,28 @@ func (s *Store) RecordLogin(ctx context.Context, id bson.ObjectID, now time.Time
 	return u, err
 }
 
-// loginRetention is how long the sign-in log is kept.
-const loginRetention = 90 * 24 * time.Hour
-
 func (s *Store) logins() *mongo.Collection { return s.users.Database().Collection("logins") }
 
+// ensureLoginIndexes indexes the sign-in log by time. The log is kept (no
+// expiry): an expiring index from an earlier version is replaced.
 func (s *Store) ensureLoginIndexes(ctx context.Context) error {
-	_, err := s.logins().Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.D{{Key: "at", Value: -1}}, Options: options.Index().SetExpireAfterSeconds(int32(loginRetention.Seconds())),
-	})
+	cur, err := s.logins().Indexes().List(ctx)
+	if err != nil {
+		return err
+	}
+	var idx []bson.M
+	if err := cur.All(ctx, &idx); err != nil {
+		return err
+	}
+	for _, ix := range idx {
+		if _, ttl := ix["expireAfterSeconds"]; ttl {
+			name, _ := ix["name"].(string)
+			if err := s.logins().Indexes().DropOne(ctx, name); err != nil {
+				return err
+			}
+		}
+	}
+	_, err = s.logins().Indexes().CreateOne(ctx, mongo.IndexModel{Keys: bson.D{{Key: "at", Value: -1}}})
 	return err
 }
 
@@ -244,6 +257,19 @@ func (s *Store) GetUserByCalendarToken(ctx context.Context, token string) (*mode
 // SetCalendarToken gives the user a new calendar feed link (the old one stops working).
 func (s *Store) SetCalendarToken(ctx context.Context, id bson.ObjectID, token string) (*model.User, error) {
 	return s.modifyUser(ctx, byID(id), set(bson.D{{Key: "calendarToken", Value: token}}))
+}
+
+// EnsureCalendarToken gives the user token as their calendar feed secret
+// unless they already have one, in one atomic step (two first requests at
+// once cannot leave two different tokens), and returns the user.
+func (s *Store) EnsureCalendarToken(ctx context.Context, id bson.ObjectID, token string) (*model.User, error) {
+	u, err := s.modifyUser(ctx,
+		bson.D{{Key: "_id", Value: id}, {Key: "calendarToken", Value: bson.D{{Key: "$exists", Value: false}}}},
+		set(bson.D{{Key: "calendarToken", Value: token}}))
+	if errors.Is(err, ErrNotFound) { // already has one (or is gone: GetUser tells)
+		return s.GetUser(ctx, id)
+	}
+	return u, err
 }
 
 func (s *Store) SetUsername(ctx context.Context, id bson.ObjectID, username string) (*model.User, error) {

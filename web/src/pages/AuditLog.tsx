@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { adminApi, type AuditEntry, type AuditFilter } from '../api'
 import { Badge, PageHeader, Status } from '../components/ui'
-import { clockTime, longDate } from '../format'
+import { clockTime, localDate } from '../format'
 
 const PAGE = 50
 const NO_FILTER: AuditFilter = { username: '', category: '', result: '', from: '', to: '' }
@@ -113,7 +113,7 @@ export default function AuditLog() {
               {entries.map((e) => (
                 <tr key={e.id}>
                   <td className="nowrap">
-                    {longDate(e.at)} <span className="muted">{clockTime(e.at)}</span>
+                    {localDate(e.at)} <span className="muted">{clockTime(e.at)}</span>
                   </td>
                   <td className="strong">{e.username || <span className="muted">(tidak dikenal)</span>}</td>
                   <td>

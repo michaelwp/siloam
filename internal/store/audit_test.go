@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"siloam/internal/model"
 )
@@ -102,5 +104,51 @@ func TestMigrateUserScopes(t *testing.T) {
 		bson.D{{Key: "bipraId", Value: bson.D{{Key: "$exists", Value: true}}}},
 	}}}); n != 0 {
 		t.Errorf("%d users keep the old fields", n)
+	}
+}
+
+func TestEnsureCalendarTokenOnce(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	u := newUser(t, s, "budi", model.RoleUser)
+	a, err := s.EnsureCalendarToken(ctx, u.ID, "first")
+	if err != nil || a.CalendarToken != "first" {
+		t.Fatalf("first: %+v %v", a, err)
+	}
+	b, err := s.EnsureCalendarToken(ctx, u.ID, "second")
+	if err != nil || b.CalendarToken != "first" {
+		t.Fatalf("second request keeps the first token: %+v %v", b, err)
+	}
+	c, err := s.SetCalendarToken(ctx, u.ID, "reset")
+	if err != nil || c.CalendarToken != "reset" {
+		t.Fatalf("reset: %+v %v", c, err)
+	}
+}
+
+// The sign-in log is kept: an expiring index from an earlier version goes.
+func TestLoginLogIsKept(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	if err := s.logins().Indexes().DropAll(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.logins().Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "at", Value: -1}}, Options: options.Index().SetExpireAfterSeconds(90 * 24 * 3600),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ensureLoginIndexes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	cur, _ := s.logins().Indexes().List(ctx)
+	var idx []bson.M
+	_ = cur.All(ctx, &idx)
+	for _, ix := range idx {
+		if _, ttl := ix["expireAfterSeconds"]; ttl {
+			t.Errorf("an expiring index is left: %v", ix)
+		}
+	}
+	if len(idx) != 2 { // _id and at
+		t.Errorf("indexes: %v", idx)
 	}
 }

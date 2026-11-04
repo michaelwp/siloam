@@ -25,7 +25,8 @@ const (
 )
 
 // FileLog appends entries to one JSON-lines file per day
-// (audit-2026-10-25.jsonl, by the app's time zone) in a directory, and
+// (audit-2026-10-25.jsonl, by UTC day; older files may be by the app's time
+// zone) in a directory, and
 // deletes the day files older than the retention when it opens and when the
 // day changes.
 type FileLog struct {
@@ -120,17 +121,19 @@ func (l *FileLog) List(f Filter) ([]model.AuditEntry, error) {
 		return nil, err
 	}
 	// only the days that can hold a match (an entry's id is made after its time)
+	// (a day either side: files written before the days were by UTC were by
+	// the app's time zone, which is up to a day off; match() filters exactly)
 	last, first := "", ""
 	if !f.To.IsZero() {
-		last = f.To.Add(-time.Nanosecond).In(l.loc).Format(time.DateOnly)
+		last = f.To.Add(-time.Nanosecond).Add(24 * time.Hour).In(l.loc).Format(time.DateOnly)
 	}
 	if !f.Before.IsZero() {
-		if b := f.Before.Timestamp().In(l.loc).Format(time.DateOnly); last == "" || b < last {
+		if b := f.Before.Timestamp().Add(24 * time.Hour).In(l.loc).Format(time.DateOnly); last == "" || b < last {
 			last = b
 		}
 	}
 	if !f.From.IsZero() {
-		first = f.From.In(l.loc).Format(time.DateOnly)
+		first = f.From.Add(-24 * time.Hour).In(l.loc).Format(time.DateOnly)
 	}
 	out := []model.AuditEntry{}
 	for i := len(days) - 1; i >= 0 && len(out) < limit; i-- {

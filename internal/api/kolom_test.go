@@ -620,4 +620,23 @@ func TestLoginStats(t *testing.T) {
 	if len(s.Active) != 1 || s.Active[0].Username != "budi" || s.Active[0].Android != 1 {
 		t.Errorf("active: %+v", s.Active)
 	}
+
+	// the viewer's own day, as UTC instants (e.g. a browser in UTC-5): the two sign-ins are in it
+	from := now.Add(-time.Hour).Format(time.RFC3339)
+	to := now.Add(time.Hour).Format(time.RFC3339)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/admin/logins?from="+from+"&to="+to, nil))
+	s = LoginStats{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &s)
+	if rec.Code != 200 || len(s.Logins) != 2 || !s.From.Equal(now.Add(-time.Hour).Truncate(time.Second)) {
+		t.Errorf("instants: %d %+v", rec.Code, s)
+	}
+	// earlier: none
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/admin/logins?from="+now.Add(-5*time.Hour).Format(time.RFC3339)+"&to="+now.Add(-2*time.Hour).Format(time.RFC3339), nil))
+	s = LoginStats{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &s)
+	if len(s.Logins) != 0 {
+		t.Errorf("before them: %+v", s.Logins)
+	}
 }

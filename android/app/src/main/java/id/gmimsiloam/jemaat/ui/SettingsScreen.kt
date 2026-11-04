@@ -65,7 +65,6 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
     var birthdays by remember { mutableStateOf(prefs.notifyBirthdays) }
     var remind by remember { mutableIntStateOf(prefs.remindBeforeMinutes) }
     var dailyAt by remember { mutableIntStateOf(prefs.dailyAtMinutes) }
-    var server by remember { mutableStateOf(prefs.serverUrl) }
     val allowed = Notifier.canPost(context)
 
     androidx.activity.compose.BackHandler(onBack = onBack)
@@ -85,10 +84,18 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
         ) {
             Text("Akun", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text("Masuk sebagai ${state.account}", style = MaterialTheme.typography.bodyMedium)
-            OutlinedButton(onClick = {
-                vm.logout()
-                onBack()
-            }) { Text("Keluar") }
+            var confirmLogout by remember { mutableStateOf(false) }
+            if (confirmLogout) {
+                ConfirmLogoutDialog(
+                    onConfirm = {
+                        confirmLogout = false
+                        vm.logout()
+                        onBack()
+                    },
+                    onDismiss = { confirmLogout = false },
+                )
+            }
+            OutlinedButton(onClick = { confirmLogout = true }) { Text("Keluar") }
             Hint("Setelah keluar, data jemaat dihapus dari perangkat ini dan notifikasi berhenti.")
             HorizontalDivider()
             DataFilterFields(state, vm::setFilter)
@@ -154,23 +161,7 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, onBack: () -> Unit) {
             }, enabled = allowed && state.data != null) { Text("Tampilkan notifikasi hari ini sekarang") }
 
             HorizontalDivider()
-            Text("Server", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            // release builds only talk HTTPS (network_security_config); debug builds
-            // may use http:// for a computer on the network or the emulator
-            val serverError = serverUrlError(server.trim())
-            OutlinedTextField(
-                value = server,
-                onValueChange = { server = it },
-                label = { Text("Alamat server") },
-                singleLine = true,
-                isError = serverError != null,
-                supportingText = serverError?.let { { Text(it) } },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { vm.setServerUrl(server.trim()) }, enabled = serverError == null) { Text("Simpan & muat ulang") }
-                OutlinedButton(onClick = { server = Prefs.DEFAULT_SERVER; vm.setServerUrl(Prefs.DEFAULT_SERVER) }) { Text("Bawaan") }
-            }
+            Text("Data", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             state.data?.let {
                 Text(
                     "Data terakhir diperbarui: " + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it.fetchedAt)),
@@ -268,17 +259,5 @@ private fun Toggle(title: String, subtitle: String, checked: Boolean, onChange: 
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Switch(checked = checked, onCheckedChange = onChange)
-    }
-}
-
-/** Why [url] cannot be used as the server address, or null when it can. */
-internal fun serverUrlError(url: String, debug: Boolean = BuildConfig.DEBUG): String? {
-    val ok = url.startsWith("https://") || (debug && url.startsWith("http://"))
-    return when {
-        url.isEmpty() -> "Isi alamat server"
-        !ok && url.startsWith("http://") -> "Gunakan alamat https:// (koneksi tanpa enkripsi tidak diizinkan)"
-        !ok -> "Alamat harus diawali https://"
-        url.removePrefix("https://").removePrefix("http://").isBlank() -> "Alamat server belum lengkap"
-        else -> null
     }
 }

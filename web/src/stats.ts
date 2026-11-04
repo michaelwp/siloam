@@ -35,9 +35,12 @@ function yesNo(values: (boolean | null)[]): YesNo {
 /** The same summary as /api/stats, for the data a signed-in user has loaded (and filtered). */
 export function computeStats(families: Family[], members: Member[], categories: BipraCategory[]): Stats {
   const count = (pred: (m: Member) => boolean) => members.filter(pred).length
+  // the known ones in order, then any other the data has sorted, as /api/stats lists them
   const statuses = [
     ...MARITAL_STATUSES,
-    ...new Set(members.map((m) => m.maritalStatus).filter((s) => s && !MARITAL_STATUSES.includes(s))),
+    ...[...new Set(members.map((m) => m.maritalStatus).filter((s) => s && !MARITAL_STATUSES.includes(s)))].toSorted((a, b) =>
+      a < b ? -1 : a > b ? 1 : 0,
+    ),
   ]
   const maxSize = Math.max(0, ...families.map((f) => f.memberCount))
   return {

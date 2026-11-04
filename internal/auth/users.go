@@ -295,12 +295,16 @@ func (s *Service) calendarToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u := current(r).user
-	if u.CalendarToken == "" || in.Reset {
-		var err error
-		if u, err = s.store.SetCalendarToken(r.Context(), u.ID, base64.RawURLEncoding.EncodeToString(randomBytes(24))); err != nil {
-			httpx.ServerError(w, err)
-			return
-		}
+	token := base64.RawURLEncoding.EncodeToString(randomBytes(24))
+	var err error
+	if in.Reset {
+		u, err = s.store.SetCalendarToken(r.Context(), u.ID, token)
+	} else {
+		u, err = s.store.EnsureCalendarToken(r.Context(), u.ID, token)
+	}
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]string{"token": u.CalendarToken})
 }

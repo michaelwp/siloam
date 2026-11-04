@@ -1,5 +1,7 @@
 package id.gmimsiloam.jemaat.ui
 
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,7 +43,16 @@ import java.time.LocalDate
 import java.util.Date
 
 @Composable
-fun HomeScreen(data: Snapshot, filter: DataFilter, error: String?, update: AppRelease?, onCategory: (String) -> Unit, onMembers: (MemberFilter) -> Unit) {
+fun HomeScreen(
+    data: Snapshot,
+    filter: DataFilter,
+    error: String?,
+    update: AppRelease?,
+    onCategory: (String) -> Unit,
+    onMembers: (MemberFilter) -> Unit,
+    account: String = "",
+    onLogout: () -> Unit = {},
+) {
     val today = rememberToday()
     val services = filter.services(data)
     val members = filter.members(data)
@@ -152,9 +163,21 @@ fun HomeScreen(data: Snapshot, filter: DataFilter, error: String?, update: AppRe
         ) {
             StatsSection(data, filter, onCategory, onMembers)
         }
+        LogoutRow(account, onLogout)
         AppVersion()
     }
 
     selected?.let { ServiceSheet(it) { selected = null } }
 }
 
+
+/** Who is signed in, and Keluar ([onLogout] asks first, see ConfirmLogoutDialog). */
+@Composable
+private fun LogoutRow(account: String, onLogout: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        if (account.isNotEmpty()) {
+            Text("Masuk sebagai $account", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        OutlinedButton(onClick = onLogout) { Text("Keluar") }
+    }
+}

@@ -95,8 +95,9 @@ func (a *API) clearAndroid(w http.ResponseWriter, r *http.Request) {
 // ---- audit log ----
 
 // listAudit pages through the log, newest first:
-// ?username=&category=&result=ok|failed&from=YYYY-MM-DD&to=YYYY-MM-DD&before=<id>&limit=
-// (dates are in APP_TIMEZONE; "to" includes that day).
+// ?username=&category=&result=ok|failed&from=&to=&before=<id>&limit=
+// from/to: RFC 3339 instants (the page sends the viewer's local midnights; to
+// is exclusive), or YYYY-MM-DD in APP_TIMEZONE ("to" includes that day).
 func (a *API) listAudit(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	f := audit.Filter{Username: q.Get("username"), Category: q.Get("category"), Limit: 50}
@@ -108,27 +109,15 @@ func (a *API) listAudit(w http.ResponseWriter, r *http.Request) {
 		failed := true
 		f.Failed = &failed
 	}
-	day := func(key string) (time.Time, bool) {
-		v := q.Get(key)
-		if v == "" {
-			return time.Time{}, true
-		}
-		t, err := time.ParseInLocation("2006-01-02", v, a.loc)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "tanggal tidak valid: "+v)
-			return time.Time{}, false
-		}
-		return t, true
-	}
-	var ok bool
-	if f.From, ok = day("from"); !ok {
+	var ok, instant bool
+	if f.From, _, ok = a.boundary(w, q.Get("from")); !ok {
 		return
 	}
-	if f.To, ok = day("to"); !ok {
+	if f.To, instant, ok = a.boundary(w, q.Get("to")); !ok {
 		return
 	}
-	if !f.To.IsZero() {
-		f.To = f.To.AddDate(0, 0, 1)
+	if !f.To.IsZero() && !instant {
+		f.To = f.To.AddDate(0, 0, 1) // a date: up to the end of that day
 	}
 	if v := q.Get("before"); v != "" {
 		id, err := bson.ObjectIDFromHex(v)
@@ -163,9 +152,27 @@ func (a *API) auditMeta(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"categories": audit.Categories, "usernames": names})
 }
 
-// LoginStats is the admins' user statistics for one day (APP_TIMEZONE).
+// boundary parses a time filter: an RFC 3339 instant (instant true), a
+// YYYY-MM-DD date at midnight in APP_TIMEZONE, or "" (zero). It answers 400 itself.
+func (a *API) boundary(w http.ResponseWriter, v string) (t time.Time, instant, ok bool) {
+	if v == "" {
+		return time.Time{}, false, true
+	}
+	if t, err := time.Parse(time.RFC3339, v); err == nil {
+		return t.UTC(), true, true
+	}
+	t, err := time.ParseInLocation(time.DateOnly, v, a.loc)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "tanggal tidak valid: "+v)
+		return time.Time{}, false, false
+	}
+	return t, false, true
+}
+
+// LoginStats is the admins' user statistics for one period (a day of the viewer).
 type LoginStats struct {
-	Date    string        `json:"date"`    // YYYY-MM-DD
+	From    time.Time     `json:"from"` // the period, UTC (to exclusive)
+	To      time.Time     `json:"to"`
 	Users   int           `json:"users"`   // distinct users who signed in that day
 	Web     int           `json:"web"`     // sign-ins from the web app
 	Android int           `json:"android"` // sign-ins from the Android app
@@ -185,24 +192,42 @@ type ActiveUser struct {
 	Since    time.Time       `json:"since"`   // the newest of those sign-ins
 }
 
-// loginStats: GET /api/admin/logins?date=YYYY-MM-DD (default today).
+// loginStats: GET /api/admin/logins?from=&to= — the page sends the viewer's
+// local day as RFC 3339 instants (to exclusive); or ?date=YYYY-MM-DD (a day in
+// APP_TIMEZONE; default: today there).
 func (a *API) loginStats(w http.ResponseWriter, r *http.Request) {
-	now := a.now().In(a.loc)
-	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, a.loc)
-	if v := r.URL.Query().Get("date"); v != "" {
-		t, err := time.ParseInLocation("2006-01-02", v, a.loc)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "tanggal tidak valid: "+v)
-			return
-		}
-		day = t
+	q := r.URL.Query()
+	from, _, ok := a.boundary(w, q.Get("from"))
+	if !ok {
+		return
 	}
-	logins, err := a.store.ListLogins(r.Context(), day.UTC(), day.AddDate(0, 0, 1).UTC())
+	to, _, ok := a.boundary(w, q.Get("to"))
+	if !ok {
+		return
+	}
+	if from.IsZero() || to.IsZero() {
+		now := a.now().In(a.loc)
+		day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, a.loc)
+		if v := q.Get("date"); v != "" {
+			t, err := time.ParseInLocation(time.DateOnly, v, a.loc)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "tanggal tidak valid: "+v)
+				return
+			}
+			day = t
+		}
+		from, to = day.UTC(), day.AddDate(0, 0, 1).UTC()
+	}
+	if !to.After(from) || to.Sub(from) > 48*time.Hour {
+		writeError(w, http.StatusBadRequest, "rentang waktu tidak valid")
+		return
+	}
+	logins, err := a.store.ListLogins(r.Context(), from, to)
 	if err != nil {
 		serverError(w, err)
 		return
 	}
-	out := LoginStats{Date: day.Format("2006-01-02"), Logins: logins, Active: []ActiveUser{}}
+	out := LoginStats{From: from, To: to, Logins: logins, Active: []ActiveUser{}}
 	seen := map[bson.ObjectID]bool{}
 	for _, l := range logins {
 		seen[l.UserID] = true

@@ -158,7 +158,7 @@ const (
 	LoginAndroid = "android"
 )
 
-// Login is one successful sign-in, for the admins' user statistics (kept 90 days).
+// Login is one successful sign-in, for the admins' user statistics (kept; times in UTC).
 type Login struct {
 	ID       bson.ObjectID   `bson:"_id,omitempty" json:"id"`
 	UserID   bson.ObjectID   `bson:"userId" json:"userId"`

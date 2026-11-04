@@ -3,7 +3,7 @@ import { authApi, type Passkey } from '../api'
 import { passkeyError, passkeysSupported, registerPasskey, roleLabel, useAuth } from '../auth'
 import { CredentialsForm } from '../components/CredentialsForm'
 import { ConfirmDelete, Field, FormShell, Modal, PageHeader } from '../components/ui'
-import { longDate } from '../format'
+import { localDate } from '../format'
 import { useData } from '../data'
 import { KeyIcon } from './Login'
 
@@ -53,7 +53,7 @@ function Passkeys({ passkeys }: { passkeys: Passkey[] }) {
               <div className="grow">
                 <strong>{p.name}</strong>
                 <span className="muted small">
-                  Dibuat {longDate(p.createdAt)} · {p.lastUsedAt ? `terakhir dipakai ${longDate(p.lastUsedAt)}` : 'belum pernah dipakai'}
+                  Dibuat {localDate(p.createdAt)} · {p.lastUsedAt ? `terakhir dipakai ${localDate(p.lastUsedAt)}` : 'belum pernah dipakai'}
                 </span>
               </div>
               <button className="link" onClick={() => setRenaming(p)}>

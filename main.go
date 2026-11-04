@@ -161,7 +161,8 @@ func run() error {
 	// the audit log keeps user activities for AUDIT_RETENTION_DAYS (default
 	// about 3 months) in day files in AUDIT_LOG_DIR (not in MongoDB)
 	auditDir := env("AUDIT_LOG_DIR", "logs/audit")
-	auditLog, err := audit.OpenFileLog(auditDir, time.Duration(envInt("AUDIT_RETENTION_DAYS", 90))*24*time.Hour, loc)
+	// day files by UTC day: every stored time is UTC; the pages show them in the viewer's local time
+	auditLog, err := audit.OpenFileLog(auditDir, time.Duration(envInt("AUDIT_RETENTION_DAYS", 90))*24*time.Hour, time.UTC)
 	if err != nil {
 		return err
 	}
