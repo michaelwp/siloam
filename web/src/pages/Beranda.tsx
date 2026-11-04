@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import type { Member, Service } from '../api'
 import { Link } from 'react-router-dom'
+import { KasStatus } from '../components/KasStatus'
 import { StatsView } from '../components/StatsView'
 import { BirthdaysByKolom, ByKolom, PageHeader, Status } from '../components/ui'
 import { useAuth, useBipraScope } from '../auth'
@@ -102,6 +103,8 @@ function SignedInBeranda() {
               category: (key) => (scope ? '/anggota' : `/bipra?kategori=${encodeURIComponent(key)}`),
             }}
           />
+
+          <KasStatus />
 
           <div className="home-grid">
             <section className="card">

@@ -34,6 +34,15 @@ func (s *Service) roleScope(r *http.Request, role string, koloms []int, bipras [
 	if role == model.RoleScoped && len(koloms) == 0 && len(bipras) == 0 {
 		return nil, nil, errors.New("pilih minimal satu kolom atau kategori BIPRA yang dikelola pengguna ini")
 	}
+	// a treasurer keeps the kas of koloms (no categories)
+	if role == model.RoleTreasurer {
+		if len(bipras) > 0 {
+			return nil, nil, errors.New("bendahara kolom tidak memiliki kategori BIPRA")
+		}
+		if len(koloms) == 0 {
+			return nil, nil, errors.New("pilih minimal satu kolom yang kasnya dikelola bendahara ini")
+		}
+	}
 	var ks []int
 	for _, k := range koloms {
 		if k <= 0 {

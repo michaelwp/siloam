@@ -195,6 +195,44 @@ func TestViewerChangesOnlyTheirAccount(t *testing.T) {
 	}
 }
 
+// A treasurer changes only kas (the API checks the kolom) and their own account.
+func TestTreasurerChangesOnlyKas(t *testing.T) {
+	svc, st := testService(t)
+	h := svc.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	u := &model.User{Username: "bendahara", Role: model.RoleTreasurer, Koloms: []int{3}, WebAuthnID: []byte("bendahara")}
+	if err := st.CreateUser(context.Background(), u); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if err := st.CreateSession(context.Background(), model.Session{ID: hashToken("b"), UserID: u.ID, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		method, path string
+		want         int
+	}{
+		{http.MethodGet, "/api/families", http.StatusNoContent},
+		{http.MethodPost, "/api/families", http.StatusForbidden},
+		{http.MethodPost, "/api/services", http.StatusForbidden},
+		{http.MethodPost, "/api/koloms", http.StatusForbidden},
+		{http.MethodPost, "/api/kas", http.StatusNoContent},
+		{http.MethodPut, "/api/kas/abc", http.StatusNoContent},
+		{http.MethodDelete, "/api/kas/abc", http.StatusNoContent},
+		{http.MethodGet, "/api/users", http.StatusForbidden},
+		{http.MethodPost, "/api/auth/change-credentials", http.StatusNoContent},
+	} {
+		r := httptest.NewRequest(c.method, c.path, nil)
+		r.Header.Set("Origin", "http://example.com")
+		r.Host = "example.com"
+		r.AddCookie(&http.Cookie{Name: sessionCookie, Value: "b"})
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, r)
+		if rec.Code != c.want {
+			t.Errorf("%s %s: %d, want %d", c.method, c.path, rec.Code, c.want)
+		}
+	}
+}
+
 // A user manages (or sees) koloms and/or BIPRA categories.
 func TestRoleScope(t *testing.T) {
 	svc, st := testService(t)
@@ -222,6 +260,9 @@ func TestRoleScope(t *testing.T) {
 		{"viewer of both", model.RoleViewer, []int{3}, []string{cat}, true},
 		{"a kolom that does not exist", model.RoleScoped, []int{99}, nil, false},
 		{"viewer of everything", model.RoleViewer, nil, nil, true},
+		{"treasurer", model.RoleTreasurer, []int{3}, nil, true},
+		{"treasurer without a kolom", model.RoleTreasurer, nil, nil, false},
+		{"treasurer with a category", model.RoleTreasurer, []int{3}, []string{cat}, false},
 	} {
 		if _, _, err := svc.roleScope(r, c.role, c.koloms, c.bipras); (err == nil) != c.ok {
 			t.Errorf("%s: %v", c.what, err)

@@ -174,6 +174,23 @@ func adminOnly(path string) bool {
 	return path == "/api/users" || strings.HasPrefix(path, "/api/users/") || strings.HasPrefix(path, "/api/admin/")
 }
 
+// kasPath: the kolom cash books (the API checks whose kolom).
+func kasPath(path string) bool { return path == "/api/kas" || strings.HasPrefix(path, "/api/kas/") }
+
+// mayChange reports whether u may write to path at all (the API checks the
+// data): a viewer changes nothing but their own account (sign-in, password,
+// passkeys), a treasurer also the kas (of their koloms).
+func mayChange(u *model.User, path string) bool {
+	switch {
+	case strings.HasPrefix(path, "/api/auth/"):
+		return true
+	case u.IsTreasurer():
+		return kasPath(path)
+	default:
+		return !u.IsViewer()
+	}
+}
+
 // managesAllOnly: writes only admins and regular users may make.
 func managesAllOnly(path string) bool {
 	return path == "/api/koloms" || strings.HasPrefix(path, "/api/koloms/") ||
@@ -240,9 +257,7 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 			httpx.WriteError(w, http.StatusForbidden, "hanya admin yang dapat mengakses halaman ini", "forbidden")
 			return
 		}
-		// a viewer changes nothing but their own account (sign-in,
-		// password, passkeys)
-		if isUnsafe(r.Method) && u.IsViewer() && !strings.HasPrefix(path, "/api/auth/") {
+		if isUnsafe(r.Method) && !mayChange(u, path) {
 			httpx.WriteError(w, http.StatusForbidden, u.Scope(), "forbidden")
 			return
 		}

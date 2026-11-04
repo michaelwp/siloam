@@ -181,9 +181,62 @@ export function memberToInput(m: Member): MemberInput {
   }
 }
 
+// ---- kas kolom (cash book) ----
+
+export type KasKind = 'in' | 'out'
+
+/** One line of a kolom's cash book; amounts are whole rupiah. */
+export type KasEntry = {
+  id: string
+  kolom: number
+  kind: KasKind
+  date: string // midnight UTC of the local date
+  amount: number
+  serviceId: string | null // the ibadah the cash came from (or was spent for)
+  serviceLabel: string // that ibadah's name when saved (kept if it is deleted)
+  description: string
+  createdBy: string
+  updatedBy?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type KasInput = Pick<KasEntry, 'kolom' | 'kind' | 'date' | 'amount' | 'description'> & { serviceId: string }
+
+/** A kolom's cash book: its entries (oldest first), totals, and whether the user may change it. */
+export type KasBook = {
+  kolom: number
+  in: number
+  out: number
+  balance: number
+  entries: KasEntry[]
+  canEdit: boolean
+}
+
+/** A kolom's cash totals (every kolom whose kas the user may read). */
+export type KasSummary = {
+  kolom: number
+  in: number
+  out: number
+  count: number
+  last: string | null
+  month: string // "2026-11"
+  monthIn: number
+  monthOut: number
+}
+
+export const kasApi = {
+  book: (kolom: number) => request<KasBook>('GET', `/api/kas?kolom=${kolom}`),
+  /** month: "2026-11", the viewer's month (its totals as monthIn/monthOut) */
+  summary: (month: string) => request<KasSummary[]>('GET', `/api/kas/summary?month=${month}`),
+  create: (e: KasInput) => request<KasEntry>('POST', '/api/kas', e),
+  update: (id: string, e: KasInput) => request<KasEntry>('PUT', `/api/kas/${id}`, e),
+  remove: (id: string) => request<void>('DELETE', `/api/kas/${id}`),
+}
+
 // ---- auth & users ----
 
-export type Role = 'admin' | 'user' | 'scoped' | 'viewer'
+export type Role = 'admin' | 'user' | 'scoped' | 'viewer' | 'treasurer'
 
 export type Passkey = {
   id: string
@@ -196,7 +249,7 @@ export type User = {
   id: string
   username: string
   role: Role
-  koloms?: number[] // role 'scoped': the koloms they manage; 'viewer': see (none: all)
+  koloms?: number[] // role 'scoped': the koloms they manage; 'viewer': see (none: all); 'treasurer': keep the kas of
   bipraIds?: string[] // role 'scoped': the BIPRA categories they manage; 'viewer': see
   mustChangePassword: boolean
   failedLogins: number

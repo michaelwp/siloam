@@ -33,6 +33,8 @@ func (s *Store) AuditLabel(ctx context.Context, kind string, id bson.ObjectID) s
 		coll = s.users
 	case "bipra":
 		coll = s.bipra()
+	case "kas":
+		coll = s.kas()
 	default:
 		return ""
 	}
@@ -42,6 +44,9 @@ func (s *Store) AuditLabel(ctx context.Context, kind string, id bson.ObjectID) s
 		Username string    `bson:"username"`
 		Host     string    `bson:"host"`
 		Date     time.Time `bson:"date"`
+		Kolom    int       `bson:"kolom"`
+		Kind     string    `bson:"kind"`
+		Amount   int64     `bson:"amount"`
 	}
 	if err := coll.FindOne(ctx, bson.D{{Key: "_id", Value: id}}).Decode(&doc); err != nil {
 		return ""
@@ -53,6 +58,8 @@ func (s *Store) AuditLabel(ctx context.Context, kind string, id bson.ObjectID) s
 		return "Kel. " + doc.Name
 	case "users":
 		return doc.Username
+	case "kas":
+		return model.KasLabel(doc.Kolom, doc.Kind, doc.Amount, doc.Date.Format("2006-01-02"))
 	case "services":
 		label := doc.Date.Format("2006-01-02")
 		if doc.Host != "" {

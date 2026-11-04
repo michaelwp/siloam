@@ -22,6 +22,11 @@ const (
 	// whole congregation; with some (User.Koloms, User.BipraIDs), only of
 	// those koloms and of those categories' members.
 	RoleViewer = "viewer"
+	// RoleTreasurer ("Bendahara Kolom") keeps the cash book (kas) of some
+	// koloms (User.Koloms, at least one): adds, changes and removes its cash
+	// in and out. They see those koloms' data like a viewer and change no
+	// other jemaat data.
+	RoleTreasurer = "treasurer"
 	// LegacyRoleKolom and LegacyRoleBipra were the one-kolom and
 	// one-category roles (fields "kolom" and "bipraId"); the store moves them
 	// to RoleScoped at startup.
@@ -31,11 +36,14 @@ const (
 
 // ValidRole reports whether role is one of the roles above (not the legacy ones).
 func ValidRole(role string) bool {
-	return role == RoleAdmin || role == RoleUser || role == RoleScoped || role == RoleViewer
+	return role == RoleAdmin || role == RoleUser || role == RoleScoped || role == RoleViewer || role == RoleTreasurer
 }
 
-// HasScope reports whether role keeps a list of koloms and BIPRA categories.
-func HasScope(role string) bool { return role == RoleScoped || role == RoleViewer }
+// HasScope reports whether role keeps a list of koloms (and, except a
+// treasurer, BIPRA categories).
+func HasScope(role string) bool {
+	return role == RoleScoped || role == RoleViewer || role == RoleTreasurer
+}
 
 // User is an account that can sign in to the app.
 type User struct {
@@ -43,7 +51,7 @@ type User struct {
 	Username           string          `bson:"username" json:"username"`
 	PasswordHash       string          `bson:"passwordHash" json:"-"`
 	Role               string          `bson:"role" json:"role"`
-	Koloms             []int           `bson:"koloms,omitempty" json:"koloms,omitempty"`     // RoleScoped: the koloms they manage; RoleViewer: see
+	Koloms             []int           `bson:"koloms,omitempty" json:"koloms,omitempty"`     // RoleScoped: the koloms they manage; RoleViewer: see; RoleTreasurer: keep the kas of
 	BipraIDs           []bson.ObjectID `bson:"bipraIds,omitempty" json:"bipraIds,omitempty"` // RoleScoped: the categories they manage; RoleViewer: see
 	MustChangePassword bool            `bson:"mustChangePassword" json:"mustChangePassword"`
 	FailedLogins       int             `bson:"failedLogins" json:"failedLogins"` // consecutive wrong passwords
@@ -78,21 +86,34 @@ func (u *User) ManagesKolom(k int) bool {
 // IsViewer reports whether the user may only look (never change jemaat data).
 func (u *User) IsViewer() bool { return u.Role == RoleViewer }
 
+// IsTreasurer reports whether the user keeps the kas of their koloms.
+func (u *User) IsTreasurer() bool { return u.Role == RoleTreasurer }
+
 // SeesKolom reports whether the user sees the private data of all of kolom
-// k: who manages it, or a viewer whose koloms include it (a viewer with no
-// koloms or categories: every kolom).
+// k: who manages it, or a viewer or treasurer whose koloms include it (a
+// viewer with no koloms or categories: every kolom).
 func (u *User) SeesKolom(k int) bool {
 	if u.ManagesKolom(k) {
 		return true
 	}
-	if u.Role != RoleViewer {
+	if u.Role != RoleViewer && u.Role != RoleTreasurer {
 		return false
 	}
-	if len(u.Koloms) == 0 && len(u.BipraIDs) == 0 {
+	if u.Role == RoleViewer && len(u.Koloms) == 0 && len(u.BipraIDs) == 0 {
 		return true
 	}
 	return k > 0 && slices.Contains(u.Koloms, k)
 }
+
+// ManagesKas reports whether the user may add, change and remove the cash
+// in and out of kolom k: admins, and the treasurers of that kolom.
+func (u *User) ManagesKas(k int) bool {
+	return u.IsAdmin() || (u.Role == RoleTreasurer && k > 0 && slices.Contains(u.Koloms, k))
+}
+
+// SeesKas reports whether the user may read the cash book of kolom k: who
+// keeps it, and who sees all of that kolom's data (its managers and viewers).
+func (u *User) SeesKas(k int) bool { return u.ManagesKas(k) || u.SeesKolom(k) }
 
 // SeesBipra reports whether the user sees the private data of the members of
 // BIPRA category id (in every kolom) because it is one of theirs.
@@ -128,6 +149,13 @@ func (u *User) SeesService(k int, t WorshipType) bool {
 func (u *User) Scope() string {
 	if u.Role == RoleViewer {
 		return "Akun Anda hanya dapat melihat data"
+	}
+	if u.Role == RoleTreasurer {
+		ks := make([]string, len(u.Koloms))
+		for i, k := range u.Koloms {
+			ks[i] = fmt.Sprint(k)
+		}
+		return "Anda hanya dapat mengelola kas Kolom " + strings.Join(ks, ", ")
 	}
 	if u.Role != RoleScoped {
 		return "Anda tidak dapat mengubah data ini"

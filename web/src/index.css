@@ -104,6 +104,12 @@ a:hover {
   position: sticky;
   top: 0;
   height: 100vh;
+  /* scrolls on its own when its links do not fit, without moving the page */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.sidebar > * {
+  flex-shrink: 0; /* overflow scrolls instead of squeezing the nav */
 }
 .brand {
   display: flex;
@@ -494,6 +500,7 @@ tr.highlight {
   .sidebar {
     position: static;
     height: auto;
+    overflow-y: visible;
     padding: 12px 16px;
     border-right: 0;
     border-bottom: 1px solid var(--border);
@@ -2287,4 +2294,27 @@ textarea {
 .subsection-title {
   margin: 20px 0 8px;
   font-size: 1rem;
+}
+
+/* ---- kas kolom ---- */
+.block {
+  display: block;
+}
+.negative {
+  color: var(--danger);
+}
+.stat.static {
+  cursor: default;
+}
+.stat.static:hover {
+  border-color: var(--border);
+}
+.kas-table td.num {
+  white-space: nowrap;
+}
+.kas-status {
+  margin-bottom: 16px;
+}
+.kas-status .stats {
+  margin-bottom: 8px;
 }

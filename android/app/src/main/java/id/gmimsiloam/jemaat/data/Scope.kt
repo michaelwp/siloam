@@ -15,7 +15,7 @@ data class Scope(val koloms: List<Int> = emptyList(), val bipraIds: List<String>
 
         /** From the signed-in user's JSON (role, koloms, bipraIds). */
         fun of(user: org.json.JSONObject): Scope {
-            if (user.optString("role") !in setOf("scoped", "viewer")) return none
+            if (user.optString("role") !in setOf("scoped", "viewer", "treasurer")) return none
             val ks = user.optJSONArray("koloms")?.let { a -> (0 until a.length()).map { a.optInt(it) } } ?: emptyList()
             val bs = user.optJSONArray("bipraIds")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
             return Scope(ks.filter { it > 0 }.sorted(), bs.filter { it.isNotEmpty() })

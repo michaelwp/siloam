@@ -75,6 +75,8 @@ data class Snapshot(
     val services: List<Service>,
     /** the Kategorial BIPRA categories, in order */
     val categories: List<Category>,
+    /** the kas (cash) totals of the koloms whose kas the user may read (the server decides) */
+    val kas: List<KasSummary> = emptyList(),
     val fetchedAt: Long,
     /** what the signed-in user may see (the data is already narrowed to it; see [Scope.apply]) */
     val scope: Scope = Scope.none,

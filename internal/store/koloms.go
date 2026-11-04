@@ -123,11 +123,18 @@ func (s *Store) DeleteKolom(ctx context.Context, id bson.ObjectID) error {
 			return err
 		}
 	}
+	if n == 0 {
+		// its cash book is kept
+		n, err = s.kas().CountDocuments(ctx, bson.D{{Key: "kolom", Value: k.Number}})
+		if err != nil {
+			return err
+		}
+	}
 	if n > 0 {
 		return ErrKolomInUse
 	}
-	// a scoped user manages it, or a viewer sees it
-	if n, err = s.users.CountDocuments(ctx, bson.D{{Key: "role", Value: bson.D{{Key: "$in", Value: bson.A{model.RoleScoped, model.RoleViewer}}}}, {Key: "koloms", Value: k.Number}}); err != nil {
+	// a scoped user manages it, a viewer sees it, or a treasurer keeps its kas
+	if n, err = s.users.CountDocuments(ctx, bson.D{{Key: "role", Value: bson.D{{Key: "$in", Value: bson.A{model.RoleScoped, model.RoleViewer, model.RoleTreasurer}}}}, {Key: "koloms", Value: k.Number}}); err != nil {
 		return err
 	}
 	if n > 0 {

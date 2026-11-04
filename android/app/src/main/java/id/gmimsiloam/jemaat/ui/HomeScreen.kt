@@ -4,6 +4,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -23,6 +24,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import id.gmimsiloam.jemaat.data.DataFilter
+import id.gmimsiloam.jemaat.data.KasSummary
+import id.gmimsiloam.jemaat.data.monthLabel
+import id.gmimsiloam.jemaat.data.rupiah
 import id.gmimsiloam.jemaat.data.AppRelease
 import id.gmimsiloam.jemaat.data.MONTHS
 import id.gmimsiloam.jemaat.data.MemberFilter
@@ -163,6 +167,19 @@ fun HomeScreen(
         ) {
             StatsSection(data, filter, onCategory, onMembers)
         }
+        // the kas of the viewed kolom (or of all the koloms the user may read); none: no card
+        val kolom = filter.kolomOf(data)
+        val kas = data.kas.filter { kolom == null || it.kolom == kolom }
+        if (kas.isNotEmpty()) {
+            Accordion(
+                "💰 Kas Kolom",
+                (if (kas.size > 1) "Total saldo " else "Saldo ") + rupiah(kas.sumOf { it.balance }),
+                open = "kas" in open,
+                onToggle = { toggle("kas") },
+            ) {
+                KasSection(kas)
+            }
+        }
         LogoutRow(account, onLogout)
         AppVersion()
     }
@@ -170,6 +187,62 @@ fun HomeScreen(
     selected?.let { ServiceSheet(it) { selected = null } }
 }
 
+
+/** The balance and this month's cash in and out, in total and per kolom (several koloms). */
+@Composable
+private fun KasSection(kas: List<KasSummary>) {
+    val month = monthLabel(kas.first().month)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            KasTile(if (kas.size > 1) "Total saldo" else "Saldo", kas.sumOf { it.balance }, null, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            KasTile("Kas masuk", kas.sumOf { it.monthIn }, month, Modifier.weight(1f))
+            KasTile("Kas keluar", kas.sumOf { it.monthOut }, month, Modifier.weight(1f))
+        }
+        if (kas.size > 1) {
+            kas.forEach { k ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(kolomHeading(k.kolom), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "$month: +${rupiah(k.monthIn)} / −${rupiah(k.monthOut)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        rupiah(k.balance),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (k.balance < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+        }
+        Text(
+            "Catat dan lihat rincian kas di halaman Kas Kolom versi web.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun KasTile(label: String, value: Long, note: String?, modifier: Modifier) {
+    Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surface, tonalElevation = 1.dp, modifier = modifier) {
+        Column(Modifier.padding(12.dp)) {
+            Text(
+                rupiah(value),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = if (value < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+            )
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+            if (note != null) Text(note, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
 
 /** Who is signed in, and Keluar ([onLogout] asks first, see ConfirmLogoutDialog). */
 @Composable

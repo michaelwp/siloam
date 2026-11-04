@@ -72,6 +72,8 @@ class Api(private val baseUrl: String, private val session: String? = null) {
         services = get("/api/services"),
         // older servers have fixed categories (no endpoint): the defaults
         categories = runCatching { get("/api/bipra-categories") }.getOrNull(),
+        // the kolom cash totals the user may read, with this month's (the phone's); none on older servers
+        kas = runCatching { get("/api/kas/summary?month=" + java.time.YearMonth.now()) }.getOrNull(),
     )
 
     companion object {
@@ -88,6 +90,8 @@ data class RawData(
     val services: String,
     /** null: the server has no editable categories (DEFAULT_CATEGORIES apply) */
     val categories: String?,
+    /** the Kas Kolom summary; null: none (an older server, or it failed) */
+    val kas: String? = null,
 ) {
     fun parse(fetchedAt: Long) = Snapshot(
         koloms = Parse.koloms(koloms),
@@ -96,6 +100,8 @@ data class RawData(
         members = Parse.members(members),
         services = Parse.services(services),
         categories = categories?.let(Parse::categories) ?: DEFAULT_CATEGORIES,
+        // never fails the load: the kas card is left out instead
+        kas = kas?.let { runCatching { parseKas(it) }.getOrNull() } ?: emptyList(),
         fetchedAt = fetchedAt,
     )
 }

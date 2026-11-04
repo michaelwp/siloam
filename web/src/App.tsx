@@ -22,6 +22,7 @@ import HutJemaat from './pages/HutJemaat'
 import HutPernikahan from './pages/HutPernikahan'
 import JadwalIbadah from './pages/JadwalIbadah'
 import JenisIbadah from './pages/JenisIbadah'
+import Kas from './pages/Kas'
 import KategorialBipra from './pages/KategorialBipra'
 import Kolom from './pages/Kolom'
 import Login from './pages/Login'
@@ -37,6 +38,7 @@ const PAGES = [
   { path: '/hut-pernikahan', label: 'Daftar HUT Pernikahan', element: <HutPernikahan />, noBipra: true },
   { path: '/anggota', label: 'Daftar Anggota Jemaat', element: <AnggotaJemaat /> },
   { path: '/bipra', label: 'Kategorial BIPRA', element: <KategorialBipra />, noBipra: true },
+  { path: '/kas', label: 'Kas Kolom', element: <Kas />, noBipra: true },
 ]
 
 export default function App() {

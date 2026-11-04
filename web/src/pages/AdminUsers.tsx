@@ -82,7 +82,7 @@ export default function AdminUsers() {
                       {u.username} {self && <span className="muted">(Anda)</span>}
                     </td>
                     <td>
-                      <Badge tone={u.role === 'admin' ? 'pkb' : u.role === 'scoped' ? 'pemuda' : u.role === 'viewer' ? 'amber' : undefined}>
+                      <Badge tone={u.role === 'admin' ? 'pkb' : u.role === 'scoped' ? 'pemuda' : u.role === 'viewer' ? 'amber' : u.role === 'treasurer' ? 'green' : undefined}>
                         {roleLabel(u, categories)}
                       </Badge>
                     </td>
@@ -271,7 +271,7 @@ function AddUser({ onClose, onCreated }: { onClose: () => void; onCreated: (u: U
               username,
               password,
               role,
-              ...(role === 'scoped' || role === 'viewer' ? { koloms, bipraIds } : {}),
+              ...scopeOf(role, koloms, bipraIds),
             }),
             password,
           )
@@ -321,7 +321,7 @@ function EditUser({
           await usersApi.update(user.id, {
             username,
             role,
-            ...(role === 'scoped' || role === 'viewer' ? { koloms, bipraIds } : {}),
+            ...scopeOf(role, koloms, bipraIds),
           })
           await onSaved()
           onClose()
@@ -348,6 +348,14 @@ function EditUser({
 function requireScope(role: Role, koloms: number[], bipraIds: string[]) {
   if (role === 'scoped' && !koloms.length && !bipraIds.length)
     throw new Error('Pilih minimal satu kolom atau kategori BIPRA yang dikelola pengguna ini')
+  if (role === 'treasurer' && !koloms.length) throw new Error('Pilih minimal satu kolom yang kasnya dikelola bendahara ini')
+}
+
+/** What the role is limited to, as sent to the server (a treasurer: koloms only). */
+function scopeOf(role: Role, koloms: number[], bipraIds: string[]) {
+  if (role === 'scoped' || role === 'viewer') return { koloms, bipraIds }
+  if (role === 'treasurer') return { koloms }
+  return {}
 }
 
 /** Adds or removes v from list. */
@@ -377,7 +385,7 @@ function RoleFields({
   onBipras: (ids: string[]) => void
 }) {
   const { koloms, categories } = useData()
-  const verb = role === 'viewer' ? 'dilihat' : 'dikelola'
+  const verb = role === 'viewer' ? 'dilihat' : role === 'treasurer' ? 'kasnya dikelola' : 'dikelola'
   return (
     <>
       <Field label="Role" wide>
@@ -385,10 +393,11 @@ function RoleFields({
           <option value="user">Pengguna — kelola data semua kolom</option>
           <option value="scoped">Pengguna – kelola kolom/BIPRA — kolom dan/atau kategori BIPRA yang dipilih</option>
           <option value="viewer">Pengguna – hanya lihat — tidak dapat mengubah data</option>
+          <option value="treasurer">Bendahara Kolom — kelola kas masuk/keluar kolom yang dipilih</option>
           <option value="admin">Admin — juga kelola pengguna</option>
         </select>
       </Field>
-      {(role === 'scoped' || role === 'viewer') && (
+      {(role === 'scoped' || role === 'viewer' || role === 'treasurer') && (
         <>
           <fieldset className="wide check-group" disabled={disabled}>
             <legend>Kolom yang {verb} (boleh lebih dari satu)</legend>
@@ -403,20 +412,29 @@ function RoleFields({
               </label>
             ))}
           </fieldset>
-          <fieldset className="wide check-group" disabled={disabled}>
-            <legend>Kategori BIPRA yang {verb} (boleh lebih dari satu)</legend>
-            {categories.map((c) => (
-              <label key={c.id} className="check">
-                <input
-                  type="checkbox"
-                  checked={bipraIds.includes(c.id)}
-                  onChange={(e) => onBipras(toggle(bipraIds, c.id, e.target.checked))}
-                />
-                {c.name}
-              </label>
-            ))}
-          </fieldset>
+          {role !== 'treasurer' && (
+            <fieldset className="wide check-group" disabled={disabled}>
+              <legend>Kategori BIPRA yang {verb} (boleh lebih dari satu)</legend>
+              {categories.map((c) => (
+                <label key={c.id} className="check">
+                  <input
+                    type="checkbox"
+                    checked={bipraIds.includes(c.id)}
+                    onChange={(e) => onBipras(toggle(bipraIds, c.id, e.target.checked))}
+                  />
+                  {c.name}
+                </label>
+              ))}
+            </fieldset>
+          )}
         </>
+      )}
+      {role === 'treasurer' && (
+        <p className="wide muted small">
+          Pilih minimal satu kolom. Dapat mencatat, mengubah dan menghapus <b>kas masuk</b> (mis. persembahan ibadah,
+          atau sumber lain) dan <b>kas keluar</b> kolom tersebut di halaman Kas Kolom, dengan keterangan sumber atau
+          penggunaannya. Data jemaat kolom tersebut hanya dapat dilihat, tidak diubah.
+        </p>
       )}
       {role === 'viewer' && (
         <p className="wide muted small">

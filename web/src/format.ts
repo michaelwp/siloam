@@ -191,3 +191,8 @@ export function daysUntil(month: number, day: number, today: Date) {
   if (next < start) next = anniversaryIn(today.getFullYear() + 1, month, day)
   return Math.round((next.getTime() - start.getTime()) / DAY_MS)
 }
+
+/** "Rp 1.250.000" (whole rupiah; "-Rp 300.000" below zero) */
+export function rupiah(n: number) {
+  return `${n < 0 ? '-' : ''}Rp ${Math.abs(n).toLocaleString('id-ID')}`
+}

@@ -25,19 +25,25 @@ export const ROLE_LABELS: Record<Role, string> = {
   user: 'Pengguna',
   scoped: 'Pengguna – kelola kolom/BIPRA',
   viewer: 'Pengguna – hanya lihat',
+  treasurer: 'Bendahara Kolom',
 }
 
-/** Roles limited to some koloms and/or BIPRA categories. */
+/** Roles limited to some koloms and/or BIPRA categories (a treasurer: koloms). */
 function hasScope(u: Pick<User, 'role'> | null) {
-  return u?.role === 'scoped' || u?.role === 'viewer'
+  return u?.role === 'scoped' || u?.role === 'viewer' || u?.role === 'treasurer'
 }
 
-/** A viewer only looks: they change no jemaat data. */
-export function isViewer(u: Pick<User, 'role'> | null) {
-  return u?.role === 'viewer'
+/** A viewer or treasurer changes no jemaat data (a treasurer only their koloms' kas). */
+export function readsOnly(u: Pick<User, 'role'> | null) {
+  return u?.role === 'viewer' || u?.role === 'treasurer'
 }
 
-/** The koloms a scoped user manages, or a viewer sees (others: none). */
+/** Whether u may add, change and remove the kas of kolom k: admins, and that kolom's treasurers. */
+export function managesKas(u: Pick<User, 'role' | 'koloms'> | null, k: number) {
+  return u?.role === 'admin' || (u?.role === 'treasurer' && ownKoloms(u).includes(k))
+}
+
+/** The koloms a scoped user manages, a viewer sees, or a treasurer keeps the kas of (others: none). */
 export function ownKoloms(u: Pick<User, 'role' | 'koloms'> | null): number[] {
   return hasScope(u) ? (u?.koloms ?? []) : []
 }
@@ -65,7 +71,7 @@ export function bipraOnly(u: Pick<User, 'role' | 'koloms' | 'bipraIds'> | null) 
   return hasScope(u) && !ownKoloms(u).length && ownBipraIds(u).length > 0
 }
 
-/** "Admin", "Pengguna", "Kelola Kolom 3, 5", "Kelola Kolom 3 · BIPRA Pemuda, Remaja", "Lihat Kolom 3", "Hanya lihat" */
+/** "Admin", "Pengguna", "Kelola Kolom 3, 5", "Kelola Kolom 3 · BIPRA Pemuda, Remaja", "Lihat Kolom 3", "Hanya lihat", "Bendahara Kolom 3" */
 export function roleLabel(u: Pick<User, 'role' | 'koloms' | 'bipraIds'>, categories: BipraCategory[] = []) {
   if (!hasScope(u)) return ROLE_LABELS[u.role]
   const parts: string[] = []
@@ -77,6 +83,7 @@ export function roleLabel(u: Pick<User, 'role' | 'koloms' | 'bipraIds'>, categor
     parts.push(`BIPRA ${names.join(', ')}`.trim())
   }
   if (u.role === 'viewer') return parts.length ? `Lihat ${parts.join(' · ')}` : 'Hanya lihat'
+  if (u.role === 'treasurer') return `Bendahara ${parts.join(' · ')}`.trim()
   return parts.length ? `Kelola ${parts.join(' · ')}` : ROLE_LABELS.scoped
 }
 
@@ -128,7 +135,7 @@ export function useFullView() {
   const { view } = useData()
   const { user } = useAuth()
   if (view !== 'full') return false
-  return !hasScope(user) || isViewer(user) || limited(user)
+  return !hasScope(user) || readsOnly(user) || limited(user)
 }
 
 /**
@@ -141,7 +148,7 @@ export function useCanEdit() {
   const { user } = useAuth()
   const { kolom } = useData()
   const full = useFullView()
-  if (!user || user.mustChangePassword || !full || isViewer(user)) return false
+  if (!user || user.mustChangePassword || !full || readsOnly(user)) return false
   if (!hasScope(user)) return true
   if (!ownKoloms(user).length) return false
   return kolom !== null ? ownKoloms(user).includes(kolom) : !ownBipraIds(user).length
@@ -151,7 +158,7 @@ export function useCanEdit() {
 export function useCanAddServices() {
   const { user } = useAuth()
   const full = useFullView()
-  if (!user || user.mustChangePassword || isViewer(user)) return false
+  if (!user || user.mustChangePassword || readsOnly(user)) return false
   return ownBipraIds(user).length > 0 || full
 }
 

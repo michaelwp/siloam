@@ -120,6 +120,7 @@ class Repository(private val context: Context) {
                 members = o.getString("members"),
                 services = o.getString("services"),
                 categories = if (o.has("categories")) o.getString("categories") else null,
+                kas = if (o.has("kas")) o.getString("kas") else null,
             ).parse(o.getLong("fetchedAt")).let(Prefs(context).scope::apply)
         }.getOrNull()
     }
@@ -152,6 +153,7 @@ class Repository(private val context: Context) {
             .put("members", raw.members)
             .put("services", raw.services)
             .apply { raw.categories?.let { put("categories", it) } }
+            .apply { raw.kas?.let { put("kas", it) } }
             .put("fetchedAt", now)
         cacheLock.withLock {
             if (!Prefs(context).signedIn) throw NotSignedInException("Sudah keluar")
@@ -184,7 +186,7 @@ class Repository(private val context: Context) {
     suspend fun refreshOrCached(): Snapshot? = runCatching { refresh() }.getOrElse { cached() }
 }
 
-/** "Admin", "Pengguna", "Kelola Kolom 3, 5 · BIPRA (2)", "Hanya lihat", as on the web (category names are not known yet). */
+/** "Admin", "Pengguna", "Kelola Kolom 3, 5 · BIPRA (2)", "Hanya lihat", "Bendahara Kolom 3", as on the web (category names are not known yet). */
 private fun roleLabel(user: JSONObject): String {
     val koloms = user.optJSONArray("koloms")?.let { a -> (0 until a.length()).map { a.optInt(it) } } ?: emptyList()
     val bipras = user.optJSONArray("bipraIds")?.length() ?: 0
@@ -196,6 +198,7 @@ private fun roleLabel(user: JSONObject): String {
         "admin" -> "Admin"
         "user" -> "Pengguna"
         "viewer" -> if (parts.isEmpty()) "Hanya lihat" else "Lihat " + parts.joinToString(" · ")
+        "treasurer" -> ("Bendahara " + parts.joinToString(" · ")).trim()
         else -> "Kelola " + parts.joinToString(" · ")
     }
 }

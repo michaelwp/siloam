@@ -68,6 +68,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/members/{id}", a.deleteMember)
 
 	a.registerSchedule(mux)
+	a.registerKas(mux)
 
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "endpoint not found")
@@ -131,7 +132,7 @@ func (a *API) deleteKolom(w http.ResponseWriter, r *http.Request) {
 	}
 	err := a.store.DeleteKolom(r.Context(), id)
 	if errors.Is(err, store.ErrKolomInUse) {
-		writeError(w, http.StatusConflict, "kolom masih memiliki keluarga atau jadwal ibadah; pindahkan atau hapus terlebih dahulu")
+		writeError(w, http.StatusConflict, "kolom masih memiliki keluarga, jadwal ibadah atau catatan kas; pindahkan atau hapus terlebih dahulu")
 		return
 	}
 	if errors.Is(err, store.ErrKolomHasUsers) {

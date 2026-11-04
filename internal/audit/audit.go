@@ -41,6 +41,7 @@ var Categories = []Category{
 	{"jadwal", "Jadwal ibadah"},
 	{"android", "Aplikasi Android"},
 	{"bipra", "Kategori BIPRA"},
+	{"kas", "Kas kolom"},
 }
 
 type route struct{ category, action string }
@@ -80,6 +81,9 @@ var routes = map[string]route{
 	"PUT /api/admin/bipra/{id}":               {"bipra", "Ubah kategori BIPRA"},
 	"DELETE /api/admin/bipra/{id}":            {"bipra", "Hapus kategori BIPRA"},
 	"PUT /api/admin/bipra/order":              {"bipra", "Ubah urutan kategori BIPRA"},
+	"POST /api/kas":                           {"kas", "Tambah kas"},
+	"PUT /api/kas/{id}":                       {"kas", "Ubah kas"},
+	"DELETE /api/kas/{id}":                    {"kas", "Hapus kas"},
 }
 
 // Store names documents before they are deleted (the MongoDB store; a fake in tests).
@@ -319,6 +323,9 @@ func labelFromBody(kind string, body []byte) string {
 		Host          string `json:"host"`
 		Date          string `json:"date"`
 		LatestVersion string `json:"latestVersion"`
+		Kolom         int    `json:"kolom"`
+		Kind          string `json:"kind"`
+		Amount        int64  `json:"amount"`
 	}
 	if json.Unmarshal(body, &v) != nil {
 		return ""
@@ -343,6 +350,11 @@ func labelFromBody(kind string, body []byte) string {
 		return label
 	case "users":
 		return v.Username
+	case "kas":
+		if v.Kolom > 0 && len(v.Date) >= 10 {
+			return model.KasLabel(v.Kolom, v.Kind, v.Amount, v.Date[:10])
+		}
+		return ""
 	case "android":
 		if v.LatestVersion != "" {
 			return "Versi " + v.LatestVersion
